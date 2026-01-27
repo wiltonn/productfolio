@@ -5,6 +5,7 @@ import {
   InitiativeFiltersSchema,
   StatusTransitionSchema,
   BulkUpdateSchema,
+  BulkDeleteSchema,
   CsvImportSchema,
   CsvExportSchema,
 } from '../schemas/initiatives.schema.js';
@@ -119,6 +120,42 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   }>('/api/initiatives/bulk', async (request, reply) => {
     const validatedData = BulkUpdateSchema.parse(request.body);
     const result = await initiativesService.bulkUpdate(validatedData);
+    return reply.send(result);
+  });
+
+  /**
+   * POST /api/initiatives/bulk-delete
+   * Bulk delete initiatives
+   */
+  fastify.post<{
+    Body: { ids: string[] };
+  }>('/api/initiatives/bulk-delete', async (request, reply) => {
+    const validatedData = BulkDeleteSchema.parse(request.body);
+    const result = await initiativesService.bulkDelete(validatedData);
+    return reply.send(result);
+  });
+
+  /**
+   * DELETE /api/initiatives/bulk
+   * Bulk delete initiatives (alternative endpoint)
+   */
+  fastify.delete<{
+    Body: { ids: string[] };
+  }>('/api/initiatives/bulk', async (request, reply) => {
+    // For DELETE with body, manually parse if body is a string
+    let body = request.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return reply.status(400).send({ error: 'Invalid JSON body' });
+      }
+    }
+    if (!body || !body.ids) {
+      return reply.status(400).send({ error: 'Missing ids in request body' });
+    }
+    const validatedData = BulkDeleteSchema.parse(body);
+    const result = await initiativesService.bulkDelete(validatedData);
     return reply.send(result);
   });
 

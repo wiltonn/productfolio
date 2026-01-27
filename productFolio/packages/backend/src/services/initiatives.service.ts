@@ -11,6 +11,7 @@ import {
   UpdateInitiativeInput,
   InitiativeFiltersInput,
   BulkUpdateInput,
+  BulkDeleteInput,
   CsvRowInput,
   CsvRowSchema,
 } from '../schemas/initiatives.schema.js';
@@ -332,6 +333,48 @@ export async function bulkUpdate(data: BulkUpdateInput): Promise<BulkUpdateResul
       await prisma.initiative.update({
         where: { id },
         data: updateData,
+      });
+
+      results.updated++;
+    } catch (error) {
+      results.failed++;
+      results.errors.push({
+        id,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Bulk delete initiatives
+ */
+export async function bulkDelete(data: BulkDeleteInput): Promise<BulkUpdateResult> {
+  const results: BulkUpdateResult = {
+    updated: 0,
+    failed: 0,
+    errors: [],
+  };
+
+  for (const id of data.ids) {
+    try {
+      const initiative = await prisma.initiative.findUnique({
+        where: { id },
+      });
+
+      if (!initiative) {
+        results.failed++;
+        results.errors.push({
+          id,
+          message: 'Initiative not found',
+        });
+        continue;
+      }
+
+      await prisma.initiative.delete({
+        where: { id },
       });
 
       results.updated++;

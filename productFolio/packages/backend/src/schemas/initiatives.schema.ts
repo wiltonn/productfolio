@@ -166,6 +166,20 @@ export const BulkUpdateSchema = z.object({
 export type BulkUpdateInput = z.infer<typeof BulkUpdateSchema>;
 
 /**
+ * Schema for bulk delete
+ */
+export const BulkDeleteSchema = z.object({
+  ids: z
+    .array(uuidSchema, {
+      errorMap: () => ({ message: 'ids must be an array of valid UUIDs' }),
+    })
+    .min(1, 'At least one id is required')
+    .max(100, 'Cannot delete more than 100 items at once'),
+});
+
+export type BulkDeleteInput = z.infer<typeof BulkDeleteSchema>;
+
+/**
  * Schema for CSV row validation
  */
 export const CsvRowSchema = z.object({

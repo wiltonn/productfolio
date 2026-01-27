@@ -24,13 +24,14 @@ export function registerErrorHandler(fastify: FastifyInstance): void {
       statusCode: 500,
     };
 
-    // Handle Zod validation errors
+    // Handle Zod validation errors (Zod v4 uses .issues, v3 uses .errors)
     if (error instanceof ZodError) {
       response.error = 'Validation Error';
       response.message = 'Request validation failed';
       response.statusCode = 400;
-      response.details = error.errors.map((e) => ({
-        path: e.path.join('.'),
+      const issues = (error as any).issues || (error as any).errors || [];
+      response.details = issues.map((e: any) => ({
+        path: Array.isArray(e.path) ? e.path.join('.') : String(e.path || ''),
         message: e.message,
       }));
       return reply.status(400).send(response);

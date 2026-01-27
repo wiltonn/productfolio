@@ -191,7 +191,7 @@ export function useBulkDeleteInitiatives() {
 
   return useMutation({
     mutationFn: (ids: string[]) =>
-      api.delete<BulkUpdateResult>('/initiatives/bulk', { data: { ids } }),
+      api.post<BulkUpdateResult>('/initiatives/bulk-delete', { ids }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: initiativeKeys.all });
       toast.success(`Deleted ${result.updated} initiatives`);
