@@ -9,6 +9,7 @@ import {
   CsvExportSchema,
 } from '../schemas/initiatives.schema.js';
 import * as initiativesService from '../services/initiatives.service.js';
+import { enqueueCsvImport } from '../jobs/index.js';
 
 export async function initiativesRoutes(fastify: FastifyInstance) {
   /**
@@ -122,13 +123,36 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   /**
    * POST /api/initiatives/import
    * Import initiatives from CSV
+   * For large imports (>100 rows), processes asynchronously via background job
    */
   fastify.post<{
-    Body: typeof CsvImportSchema;
+    Body: { data: Array<Record<string, string>>; async?: boolean; fileName?: string };
   }>('/api/initiatives/import', async (request, reply) => {
     const validatedData = CsvImportSchema.parse(request.body);
-    const result = await initiativesService.importFromCsv(validatedData.data);
-    return reply.status(202).send(result);
+    const rows = validatedData.data as Array<Record<string, string>>;
+
+    // Use async processing for large imports (>100 rows) or when explicitly requested
+    const useAsync = rows.length > 100 || request.body.async === true;
+
+    if (useAsync) {
+      // Queue the import job for background processing
+      const jobId = await enqueueCsvImport(
+        rows,
+        'system', // TODO: get from auth context
+        request.body.fileName || `import-${Date.now()}.csv`
+      );
+
+      return reply.status(202).send({
+        message: 'Import job queued for processing',
+        jobId,
+        totalRows: rows.length,
+        async: true,
+      });
+    }
+
+    // Process synchronously for small imports
+    const result = await initiativesService.importFromCsv(rows);
+    return reply.status(202).send({ ...result, async: false });
   });
 
   /**

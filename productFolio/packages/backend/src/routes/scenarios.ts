@@ -8,8 +8,10 @@ import {
   compareQuerySchema,
   paginationSchema,
 } from '../schemas/scenarios.schema.js';
+import { calculatorQuerySchema } from '../schemas/calculator.schema.js';
 import { scenariosService } from '../services/scenarios.service.js';
 import { allocationService } from '../services/allocation.service.js';
+import { scenarioCalculatorService } from '../services/scenario-calculator.service.js';
 
 export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // GET /api/scenarios - List scenarios
@@ -130,6 +132,32 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
       });
       const comparisons = await allocationService.compareScenarios(query.scenarioIds);
       return reply.code(200).send(comparisons);
+    }
+  );
+
+  // GET /api/scenarios/:id/calculator - Calculate demand vs capacity with caching
+  fastify.get<{ Params: { id: string }; Querystring: Record<string, unknown> }>(
+    '/api/scenarios/:id/calculator',
+    async (request, reply) => {
+      const options = calculatorQuerySchema.parse({
+        skipCache: request.query.skipCache,
+        includeBreakdown: request.query.includeBreakdown,
+      });
+      const results = await scenarioCalculatorService.calculate(
+        request.params.id,
+        options
+      );
+      reply.header('X-Cache', results.cacheHit ? 'HIT' : 'MISS');
+      return reply.code(200).send(results);
+    }
+  );
+
+  // POST /api/scenarios/:id/calculator/invalidate - Invalidate cache
+  fastify.post<{ Params: { id: string } }>(
+    '/api/scenarios/:id/calculator/invalidate',
+    async (request, reply) => {
+      await scenarioCalculatorService.invalidateCache(request.params.id);
+      return reply.code(204).send();
     }
   );
 }

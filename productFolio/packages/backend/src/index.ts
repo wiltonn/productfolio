@@ -6,6 +6,8 @@ import { initiativesRoutes } from './routes/initiatives.js';
 import { scopingRoutes } from './routes/scoping.js';
 import { resourcesRoutes } from './routes/resources.js';
 import { scenariosRoutes } from './routes/scenarios.js';
+import { jobsRoutes } from './routes/jobs.js';
+import { getWorkerStatus } from './jobs/index.js';
 
 const fastify = Fastify({
   logger: true,
@@ -18,7 +20,10 @@ await fastify.register(cors, {
 registerErrorHandler(fastify);
 
 fastify.get('/health', async () => {
-  return { status: 'ok' };
+  return {
+    status: 'ok',
+    workers: getWorkerStatus(),
+  };
 });
 
 // Register API routes
@@ -26,6 +31,7 @@ await fastify.register(initiativesRoutes);
 await fastify.register(scopingRoutes);
 await fastify.register(resourcesRoutes);
 await fastify.register(scenariosRoutes);
+await fastify.register(jobsRoutes);
 
 const start = async () => {
   try {

@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { scenarioCalculatorService } from './scenario-calculator.service.js';
+import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateAllocation, UpdateAllocation } from '../schemas/scenarios.schema.js';
 import type { CapacityDemandResult, ScenarioComparison, SkillDemand, QuarterDistribution } from '../types/index.js';
 
@@ -119,6 +121,11 @@ export class AllocationService {
       },
     });
 
+    // Invalidate calculator cache and enqueue background recomputation
+    await scenarioCalculatorService.invalidateCache(scenarioId);
+    await enqueueScenarioRecompute(scenarioId, 'allocation_change');
+    await enqueueViewRefresh('all', 'allocation_change', [scenarioId]);
+
     return {
       id: allocation.id,
       scenarioId: allocation.scenarioId,
@@ -180,6 +187,11 @@ export class AllocationService {
       },
     });
 
+    // Invalidate calculator cache and enqueue background recomputation
+    await scenarioCalculatorService.invalidateCache(updated.scenarioId);
+    await enqueueScenarioRecompute(updated.scenarioId, 'allocation_change');
+    await enqueueViewRefresh('all', 'allocation_change', [updated.scenarioId]);
+
     return {
       id: updated.id,
       scenarioId: updated.scenarioId,
@@ -207,6 +219,11 @@ export class AllocationService {
     await prisma.allocation.delete({
       where: { id },
     });
+
+    // Invalidate calculator cache and enqueue background recomputation
+    await scenarioCalculatorService.invalidateCache(allocation.scenarioId);
+    await enqueueScenarioRecompute(allocation.scenarioId, 'allocation_change');
+    await enqueueViewRefresh('all', 'allocation_change', [allocation.scenarioId]);
   }
 
   async calculateCapacityDemand(scenarioId: string): Promise<CapacityDemandResult[]> {

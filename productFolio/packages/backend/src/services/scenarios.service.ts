@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { scenarioCalculatorService } from './scenario-calculator.service.js';
+import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateScenario, UpdateScenario, UpdatePriorities, Pagination, PriorityRanking } from '../schemas/scenarios.schema.js';
 import type { PaginatedResponse } from '../types/index.js';
 
@@ -128,6 +130,11 @@ export class ScenariosService {
       },
     });
 
+    // Invalidate calculator cache and enqueue background recomputation
+    await scenarioCalculatorService.invalidateCache(id);
+    await enqueueScenarioRecompute(id, 'priority_change');
+    await enqueueViewRefresh('all', 'allocation_change', [id]);
+
     return {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
@@ -162,6 +169,11 @@ export class ScenariosService {
         },
       },
     });
+
+    // Invalidate calculator cache and enqueue background recomputation
+    await scenarioCalculatorService.invalidateCache(id);
+    await enqueueScenarioRecompute(id, 'priority_change');
+    await enqueueViewRefresh('all', 'allocation_change', [id]);
 
     return {
       ...scenario,

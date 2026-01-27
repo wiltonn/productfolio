@@ -19,6 +19,20 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: redis:7-alpine
+    container_name: productfolio-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - productfolio_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # Optional: nice web UI for your DB
   pgadmin:
     image: dpage/pgadmin4:8
@@ -38,3 +52,4 @@ services:
 volumes:
   productfolio_pgdata:
   productfolio_pgadmin:
+  productfolio_redis:

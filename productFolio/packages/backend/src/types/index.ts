@@ -126,3 +126,121 @@ export interface ApiErrorResponse {
   statusCode: number;
   details?: unknown;
 }
+
+// Scenario Calculator Types
+export interface DemandBySkillQuarter {
+  quarter: string;
+  skill: string;
+  totalHours: number;
+  initiativeBreakdown: Array<{
+    initiativeId: string;
+    initiativeTitle: string;
+    hours: number;
+    rank: number;
+  }>;
+}
+
+export interface CapacityBySkillQuarter {
+  quarter: string;
+  skill: string;
+  totalHours: number;
+  effectiveHours: number;
+  employeeBreakdown: Array<{
+    employeeId: string;
+    employeeName: string;
+    baseHours: number;
+    proficiency: number;
+    effectiveHours: number;
+    allocationPercentage: number;
+  }>;
+}
+
+export interface Shortage {
+  quarter: string;
+  skill: string;
+  demandHours: number;
+  capacityHours: number;
+  shortageHours: number;
+  shortagePercentage: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  affectedInitiatives: Array<{
+    initiativeId: string;
+    initiativeTitle: string;
+    demandHours: number;
+  }>;
+}
+
+export interface Overallocation {
+  employeeId: string;
+  employeeName: string;
+  quarter: string;
+  totalAllocationPercentage: number;
+  overallocationPercentage: number;
+  allocations: Array<{
+    initiativeId: string | null;
+    initiativeTitle: string | null;
+    percentage: number;
+    startDate: Date;
+    endDate: Date;
+  }>;
+}
+
+export interface SkillMismatch {
+  employeeId: string;
+  employeeName: string;
+  initiativeId: string;
+  initiativeTitle: string;
+  requiredSkills: string[];
+  employeeSkills: string[];
+  missingSkills: string[];
+}
+
+export interface ScenarioAssumptions {
+  allocationCapPercentage?: number;
+  bufferPercentage?: number;
+  proficiencyWeightEnabled?: boolean;
+  includeContractors?: boolean;
+  hoursPerQuarter?: number;
+}
+
+export interface CalculatorResult {
+  scenarioId: string;
+  scenarioName: string;
+  quarterRange: string;
+  calculatedAt: Date;
+  demandBySkillQuarter: DemandBySkillQuarter[];
+  capacityBySkillQuarter: CapacityBySkillQuarter[];
+  gapAnalysis: Array<{
+    quarter: string;
+    skill: string;
+    demandHours: number;
+    capacityHours: number;
+    gap: number;
+    utilizationPercentage: number;
+  }>;
+  issues: {
+    shortages: Shortage[];
+    overallocations: Overallocation[];
+    skillMismatches: SkillMismatch[];
+  };
+  summary: {
+    totalDemandHours: number;
+    totalCapacityHours: number;
+    overallGap: number;
+    overallUtilization: number;
+    totalShortages: number;
+    totalOverallocations: number;
+    totalSkillMismatches: number;
+    quarterCount: number;
+    skillCount: number;
+    employeeCount: number;
+    initiativeCount: number;
+  };
+  cacheHit: boolean;
+  cacheExpiry?: Date;
+}
+
+export interface CalculatorOptions {
+  skipCache?: boolean;
+  includeBreakdown?: boolean;
+}
