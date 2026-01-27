@@ -1,160 +1,1084 @@
-const mockEmployees = [
-  { id: '1', name: 'Sarah Chen', role: 'Senior Frontend Engineer', skills: ['Frontend', 'React'], capacity: 80, allocated: 65 },
-  { id: '2', name: 'Mike Johnson', role: 'Backend Lead', skills: ['Backend', 'Go', 'PostgreSQL'], capacity: 100, allocated: 90 },
-  { id: '3', name: 'Alex Rivera', role: 'Full Stack Developer', skills: ['Frontend', 'Backend', 'React'], capacity: 80, allocated: 40 },
-  { id: '4', name: 'Emily Watson', role: 'Data Engineer', skills: ['Backend', 'Python', 'Data'], capacity: 100, allocated: 75 },
-  { id: '5', name: 'James Lee', role: 'UI Designer', skills: ['Design', 'Figma'], capacity: 100, allocated: 85 },
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { SearchInput, Checkbox } from '../components/ui';
+
+// Types
+interface Skill {
+  name: string;
+  proficiency: number; // 1-5
+}
+
+interface CapacityEmployee {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  skills: Skill[];
+  hoursPerWeek: number;
+  status: 'ACTIVE' | 'ON_LEAVE' | 'CONTRACTOR';
+  avatarColor: string;
+  ptoHours: number;
+}
+
+interface CapacitySettings {
+  defaultHoursPerWeek: number;
+  ktloPercentage: number;
+  meetingOverheadPercentage: number;
+  holidays: Date[];
+}
+
+interface Holiday {
+  date: Date;
+  name: string;
+}
+
+// Mock Data
+const SKILL_OPTIONS = [
+  'Frontend', 'Backend', 'React', 'TypeScript', 'Go', 'Python',
+  'PostgreSQL', 'Redis', 'AWS', 'DevOps', 'Design', 'Data', 'ML/AI'
 ];
 
-const mockSkills = [
-  { name: 'Frontend', employees: 8, totalCapacity: 640, utilized: 520 },
-  { name: 'Backend', employees: 12, totalCapacity: 960, utilized: 780 },
-  { name: 'Design', employees: 4, totalCapacity: 320, utilized: 280 },
-  { name: 'Data', employees: 3, totalCapacity: 240, utilized: 180 },
-  { name: 'DevOps', employees: 2, totalCapacity: 160, utilized: 140 },
+const AVATAR_COLORS = [
+  'from-rose-400 to-rose-600',
+  'from-amber-400 to-amber-600',
+  'from-emerald-400 to-emerald-600',
+  'from-cyan-400 to-cyan-600',
+  'from-violet-400 to-violet-600',
+  'from-fuchsia-400 to-fuchsia-600',
 ];
 
-export function Capacity() {
+const mockEmployees: CapacityEmployee[] = [
+  {
+    id: '1',
+    name: 'Sarah Chen',
+    email: 'sarah.chen@company.com',
+    role: 'Senior Frontend Engineer',
+    department: 'Engineering',
+    skills: [{ name: 'Frontend', proficiency: 5 }, { name: 'React', proficiency: 5 }, { name: 'TypeScript', proficiency: 4 }],
+    hoursPerWeek: 40,
+    status: 'ACTIVE',
+    avatarColor: AVATAR_COLORS[0],
+    ptoHours: 16,
+  },
+  {
+    id: '2',
+    name: 'Mike Johnson',
+    email: 'mike.johnson@company.com',
+    role: 'Backend Lead',
+    department: 'Engineering',
+    skills: [{ name: 'Backend', proficiency: 5 }, { name: 'Go', proficiency: 5 }, { name: 'PostgreSQL', proficiency: 4 }],
+    hoursPerWeek: 40,
+    status: 'ACTIVE',
+    avatarColor: AVATAR_COLORS[1],
+    ptoHours: 0,
+  },
+  {
+    id: '3',
+    name: 'Alex Rivera',
+    email: 'alex.rivera@company.com',
+    role: 'Full Stack Developer',
+    department: 'Engineering',
+    skills: [{ name: 'Frontend', proficiency: 4 }, { name: 'Backend', proficiency: 3 }, { name: 'React', proficiency: 4 }],
+    hoursPerWeek: 32,
+    status: 'ACTIVE',
+    avatarColor: AVATAR_COLORS[2],
+    ptoHours: 8,
+  },
+  {
+    id: '4',
+    name: 'Emily Watson',
+    email: 'emily.watson@company.com',
+    role: 'Data Engineer',
+    department: 'Data',
+    skills: [{ name: 'Python', proficiency: 5 }, { name: 'Data', proficiency: 5 }, { name: 'ML/AI', proficiency: 3 }],
+    hoursPerWeek: 40,
+    status: 'ON_LEAVE',
+    avatarColor: AVATAR_COLORS[3],
+    ptoHours: 40,
+  },
+  {
+    id: '5',
+    name: 'James Lee',
+    email: 'james.lee@company.com',
+    role: 'UI Designer',
+    department: 'Design',
+    skills: [{ name: 'Design', proficiency: 5 }, { name: 'Frontend', proficiency: 2 }],
+    hoursPerWeek: 40,
+    status: 'ACTIVE',
+    avatarColor: AVATAR_COLORS[4],
+    ptoHours: 0,
+  },
+  {
+    id: '6',
+    name: 'Priya Patel',
+    email: 'priya.patel@company.com',
+    role: 'DevOps Engineer',
+    department: 'Infrastructure',
+    skills: [{ name: 'DevOps', proficiency: 5 }, { name: 'AWS', proficiency: 4 }, { name: 'Python', proficiency: 3 }],
+    hoursPerWeek: 40,
+    status: 'CONTRACTOR',
+    avatarColor: AVATAR_COLORS[5],
+    ptoHours: 0,
+  },
+];
+
+const mockHolidays: Holiday[] = [
+  { date: new Date(2026, 0, 1), name: "New Year's Day" },
+  { date: new Date(2026, 0, 19), name: 'MLK Day' },
+  { date: new Date(2026, 1, 16), name: "Presidents' Day" },
+  { date: new Date(2026, 4, 25), name: 'Memorial Day' },
+  { date: new Date(2026, 6, 3), name: 'Independence Day (Observed)' },
+  { date: new Date(2026, 8, 7), name: 'Labor Day' },
+  { date: new Date(2026, 10, 26), name: 'Thanksgiving' },
+  { date: new Date(2026, 11, 25), name: 'Christmas' },
+];
+
+// Slider Component
+function Slider({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  label,
+  suffix = '%',
+  showValue = true,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  label?: string;
+  suffix?: string;
+  showValue?: boolean;
+}) {
+  const percentage = ((value - min) / (max - min)) * 100;
+
   return (
-    <div className="animate-fade-in">
-      <div className="page-header flex items-center justify-between">
-        <div>
-          <h1 className="page-title">Capacity Planning</h1>
-          <p className="page-subtitle">Manage team members, skills, and availability</p>
+    <div className="space-y-2">
+      {(label || showValue) && (
+        <div className="flex items-center justify-between">
+          {label && <span className="text-sm font-medium text-surface-700">{label}</span>}
+          {showValue && (
+            <span className="text-sm font-mono font-semibold text-accent-700 tabular-nums">
+              {value}{suffix}
+            </span>
+          )}
         </div>
-        <button className="btn-primary">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
-          </svg>
-          Add Employee
+      )}
+      <div className="relative h-2 group">
+        <div className="absolute inset-0 bg-surface-200 rounded-full" />
+        <div
+          className="absolute inset-y-0 left-0 bg-gradient-to-r from-accent-500 to-accent-400 rounded-full transition-all"
+          style={{ width: `${percentage}%` }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="absolute inset-0 w-full opacity-0 cursor-pointer"
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-accent-500 rounded-full shadow-md transition-all group-hover:scale-110 pointer-events-none"
+          style={{ left: `calc(${percentage}% - 8px)` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Star Rating Component
+function StarRating({
+  value,
+  onChange,
+  max = 5,
+  readonly = false,
+  size = 'md',
+}: {
+  value: number;
+  onChange?: (v: number) => void;
+  max?: number;
+  readonly?: boolean;
+  size?: 'sm' | 'md';
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const displayValue = hovered ?? value;
+  const sizeClass = size === 'sm' ? 'w-3.5 h-3.5' : 'w-5 h-5';
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: max }, (_, i) => {
+        const starValue = i + 1;
+        const isFilled = starValue <= displayValue;
+
+        return (
+          <button
+            key={i}
+            type="button"
+            disabled={readonly}
+            onClick={() => onChange?.(starValue)}
+            onMouseEnter={() => !readonly && setHovered(starValue)}
+            onMouseLeave={() => setHovered(null)}
+            className={`${readonly ? '' : 'cursor-pointer hover:scale-110'} transition-transform`}
+          >
+            <svg
+              className={`${sizeClass} transition-colors ${
+                isFilled
+                  ? 'text-amber-400'
+                  : 'text-surface-300'
+              }`}
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Slide-over Panel Component
+function SlideOver({
+  isOpen,
+  onClose,
+  title,
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = '';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-surface-900/40 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl animate-slide-in-right">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-surface-200">
+          <h2 className="text-lg font-display font-semibold text-surface-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-2 -mr-2 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-surface-100 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto h-[calc(100%-73px)]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Employee Form Component
+function EmployeeForm({
+  employee,
+  onSave,
+  onCancel,
+}: {
+  employee?: CapacityEmployee | null;
+  onSave: (data: Partial<CapacityEmployee>) => void;
+  onCancel: () => void;
+}) {
+  const [formData, setFormData] = useState<Partial<CapacityEmployee>>({
+    name: employee?.name || '',
+    email: employee?.email || '',
+    role: employee?.role || '',
+    department: employee?.department || '',
+    hoursPerWeek: employee?.hoursPerWeek || 40,
+    status: employee?.status || 'ACTIVE',
+    skills: employee?.skills || [],
+    ptoHours: employee?.ptoHours || 0,
+  });
+
+  const [newSkill, setNewSkill] = useState('');
+
+  const addSkill = (skillName: string) => {
+    if (skillName && !formData.skills?.find(s => s.name === skillName)) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...(prev.skills || []), { name: skillName, proficiency: 3 }]
+      }));
+    }
+    setNewSkill('');
+  };
+
+  const removeSkill = (skillName: string) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills?.filter(s => s.name !== skillName) || []
+    }));
+  };
+
+  const updateSkillProficiency = (skillName: string, proficiency: number) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills?.map(s =>
+        s.name === skillName ? { ...s, proficiency } : s
+      ) || []
+    }));
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Basic Info */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Basic Information</h3>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Full Name</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              className="input"
+              placeholder="Jane Doe"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              className="input"
+              placeholder="jane@company.com"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Role</label>
+            <input
+              type="text"
+              value={formData.role}
+              onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))}
+              className="input"
+              placeholder="Senior Engineer"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Department</label>
+            <input
+              type="text"
+              value={formData.department}
+              onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+              className="input"
+              placeholder="Engineering"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Hours/Week</label>
+            <input
+              type="number"
+              value={formData.hoursPerWeek}
+              onChange={(e) => setFormData(prev => ({ ...prev, hoursPerWeek: Number(e.target.value) }))}
+              className="input font-mono"
+              min={0}
+              max={60}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">Status</label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as CapacityEmployee['status'] }))}
+              className="input"
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="ON_LEAVE">On Leave</option>
+              <option value="CONTRACTOR">Contractor</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Skills */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Skills & Proficiency</h3>
+
+        {/* Add Skill */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={newSkill}
+              onChange={(e) => setNewSkill(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addSkill(newSkill)}
+              className="input"
+              placeholder="Add a skill..."
+              list="skill-suggestions"
+            />
+            <datalist id="skill-suggestions">
+              {SKILL_OPTIONS.filter(s => !formData.skills?.find(fs => fs.name === s)).map(skill => (
+                <option key={skill} value={skill} />
+              ))}
+            </datalist>
+          </div>
+          <button
+            type="button"
+            onClick={() => addSkill(newSkill)}
+            className="btn-secondary"
+          >
+            Add
+          </button>
+        </div>
+
+        {/* Quick Add */}
+        <div className="flex flex-wrap gap-1.5">
+          {SKILL_OPTIONS.filter(s => !formData.skills?.find(fs => fs.name === s)).slice(0, 6).map(skill => (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => addSkill(skill)}
+              className="px-2 py-1 text-xs font-medium text-surface-600 bg-surface-100 rounded-md hover:bg-surface-200 transition-colors"
+            >
+              + {skill}
+            </button>
+          ))}
+        </div>
+
+        {/* Skills List */}
+        {formData.skills && formData.skills.length > 0 && (
+          <div className="space-y-3 pt-2">
+            {formData.skills.map(skill => (
+              <div
+                key={skill.name}
+                className="flex items-center justify-between p-3 bg-surface-50 rounded-lg group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-medium text-surface-800">{skill.name}</span>
+                  <StarRating
+                    value={skill.proficiency}
+                    onChange={(v) => updateSkillProficiency(skill.name, v)}
+                    size="sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeSkill(skill.name)}
+                  className="p-1 rounded text-surface-400 hover:text-danger hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* PTO */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Time Off (This Quarter)</h3>
+        <div>
+          <label className="block text-sm font-medium text-surface-700 mb-1.5">PTO Hours</label>
+          <input
+            type="number"
+            value={formData.ptoHours}
+            onChange={(e) => setFormData(prev => ({ ...prev, ptoHours: Number(e.target.value) }))}
+            className="input font-mono w-32"
+            min={0}
+            step={8}
+          />
+          <p className="mt-1.5 text-xs text-surface-500">
+            Reduces effective capacity for this quarter
+          </p>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="sticky bottom-0 -mx-6 -mb-6 px-6 py-4 bg-surface-50 border-t border-surface-200 flex items-center justify-end gap-3">
+        <button type="button" onClick={onCancel} className="btn-ghost">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onSave(formData)}
+          className="btn-primary"
+        >
+          {employee ? 'Save Changes' : 'Add Employee'}
         </button>
       </div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Skills overview */}
-        <div className="lg:col-span-1">
-          <div className="card">
-            <div className="px-5 py-4 border-b border-surface-200">
-              <h2 className="font-display font-semibold text-surface-900">Skills Overview</h2>
-            </div>
-            <div className="divide-y divide-surface-100">
-              {mockSkills.map((skill) => {
-                const utilization = Math.round((skill.utilized / skill.totalCapacity) * 100);
-                const isHigh = utilization > 80;
+// Effective Capacity Preview Component
+function EffectiveCapacityPreview({
+  employees,
+  settings,
+  holidays,
+}: {
+  employees: CapacityEmployee[];
+  settings: CapacitySettings;
+  holidays: Holiday[];
+}) {
+  const calculations = useMemo(() => {
+    const activeEmployees = employees.filter(e => e.status !== 'ON_LEAVE');
+    const totalWeeklyHours = activeEmployees.reduce((sum, e) => sum + e.hoursPerWeek, 0);
+    const totalPtoHours = employees.reduce((sum, e) => sum + e.ptoHours, 0);
 
-                return (
-                  <div key={skill.name} className="px-5 py-4 hover:bg-surface-50 transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-surface-900">{skill.name}</span>
-                        <span className="text-xs text-surface-500">{skill.employees} members</span>
-                      </div>
-                      <span className={`text-sm font-mono ${isHigh ? 'text-warning' : 'text-success'}`}>
-                        {utilization}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          isHigh ? 'bg-warning' : 'bg-success'
-                        }`}
-                        style={{ width: `${utilization}%` }}
-                      />
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-xs text-surface-500">
-                      <span>{skill.utilized}h allocated</span>
-                      <span>{skill.totalCapacity}h total</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+    // Assume 13 weeks in a quarter
+    const weeksInQuarter = 13;
+    const grossQuarterlyHours = totalWeeklyHours * weeksInQuarter;
+
+    // Holiday hours (8 hours per holiday per employee)
+    const holidayHours = holidays.length * 8 * activeEmployees.length;
+
+    // KTLO deduction
+    const ktloHours = grossQuarterlyHours * (settings.ktloPercentage / 100);
+
+    // Meeting overhead deduction
+    const meetingHours = grossQuarterlyHours * (settings.meetingOverheadPercentage / 100);
+
+    // Calculate effective
+    const effectiveHours = grossQuarterlyHours - totalPtoHours - holidayHours - ktloHours - meetingHours;
+    const utilizationPercent = Math.round((effectiveHours / grossQuarterlyHours) * 100);
+
+    return {
+      activeEmployees: activeEmployees.length,
+      totalEmployees: employees.length,
+      totalWeeklyHours,
+      grossQuarterlyHours,
+      ptoHours: totalPtoHours,
+      holidayHours,
+      ktloHours: Math.round(ktloHours),
+      meetingHours: Math.round(meetingHours),
+      effectiveHours: Math.round(effectiveHours),
+      utilizationPercent,
+    };
+  }, [employees, settings, holidays]);
+
+  return (
+    <div className="card overflow-hidden">
+      {/* Header with gauge */}
+      <div className="p-5 bg-gradient-to-br from-surface-50 to-surface-100 border-b border-surface-200">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Effective Capacity</h3>
+            <p className="mt-1 text-3xl font-display font-bold text-surface-900 tabular-nums">
+              {calculations.effectiveHours.toLocaleString()}
+              <span className="text-lg font-normal text-surface-500 ml-1">hours</span>
+            </p>
+            <p className="text-sm text-surface-500">This quarter (Q1 2026)</p>
           </div>
-        </div>
 
-        {/* Employee list */}
-        <div className="lg:col-span-2">
-          <div className="card">
-            <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between">
-              <h2 className="font-display font-semibold text-surface-900">Team Members</h2>
-              <input
-                type="text"
-                placeholder="Search team..."
-                className="input w-48"
+          {/* Circular gauge */}
+          <div className="relative w-20 h-20">
+            <svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+                className="text-surface-200"
               />
-            </div>
-            <div className="divide-y divide-surface-100">
-              {mockEmployees.map((employee) => {
-                const utilization = Math.round((employee.allocated / employee.capacity) * 100);
-                const availableHours = employee.capacity - employee.allocated;
-
-                return (
-                  <div
-                    key={employee.id}
-                    className="px-5 py-4 flex items-center gap-4 hover:bg-surface-50 transition-colors cursor-pointer group"
-                  >
-                    {/* Avatar */}
-                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-white">
-                        {employee.name.split(' ').map((n) => n[0]).join('')}
-                      </span>
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-surface-900 truncate">{employee.name}</p>
-                        <span className="text-xs text-surface-500">({employee.capacity}h/week)</span>
-                      </div>
-                      <p className="text-sm text-surface-500 truncate">{employee.role}</p>
-                    </div>
-
-                    {/* Skills */}
-                    <div className="hidden md:flex items-center gap-1.5">
-                      {employee.skills.slice(0, 3).map((skill) => (
-                        <span key={skill} className="badge-default">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Capacity bar */}
-                    <div className="w-32">
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-surface-500">{utilization}% used</span>
-                        <span className="font-mono text-surface-700">{availableHours}h free</span>
-                      </div>
-                      <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            utilization > 90
-                              ? 'bg-danger'
-                              : utilization > 70
-                              ? 'bg-warning'
-                              : 'bg-success'
-                          }`}
-                          style={{ width: `${utilization}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Arrow */}
-                    <svg
-                      className="w-5 h-5 text-surface-400 group-hover:text-surface-600 transition-colors"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </div>
-                );
-              })}
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${calculations.utilizationPercent * 2.64} 264`}
+                className="text-accent-500 transition-all duration-500"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
+                {calculations.utilizationPercent}%
+              </span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Breakdown */}
+      <div className="p-5 space-y-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">Gross Capacity</span>
+          <span className="font-mono font-medium text-surface-900 tabular-nums">
+            {calculations.grossQuarterlyHours.toLocaleString()}h
+          </span>
+        </div>
+
+        <div className="h-px bg-surface-100" />
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">− PTO</span>
+          <span className="font-mono text-danger tabular-nums">−{calculations.ptoHours}h</span>
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">− Holidays ({holidays.length} days)</span>
+          <span className="font-mono text-danger tabular-nums">−{calculations.holidayHours}h</span>
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">− KTLO ({settings.ktloPercentage}%)</span>
+          <span className="font-mono text-danger tabular-nums">−{calculations.ktloHours}h</span>
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">− Meetings ({settings.meetingOverheadPercentage}%)</span>
+          <span className="font-mono text-danger tabular-nums">−{calculations.meetingHours}h</span>
+        </div>
+
+        <div className="h-px bg-surface-200" />
+
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-surface-900">Available for Projects</span>
+          <span className="font-mono font-bold text-accent-700 tabular-nums">
+            {calculations.effectiveHours.toLocaleString()}h
+          </span>
+        </div>
+      </div>
+
+      {/* Team summary */}
+      <div className="px-5 py-4 bg-surface-50 border-t border-surface-200">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-surface-600">
+            {calculations.activeEmployees} active / {calculations.totalEmployees} total
+          </span>
+          <span className="text-surface-600">
+            {calculations.totalWeeklyHours}h/week base
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main Component
+export function Capacity() {
+  // State
+  const [employees, setEmployees] = useState<CapacityEmployee[]>(mockEmployees);
+  const [settings, setSettings] = useState<CapacitySettings>({
+    defaultHoursPerWeek: 40,
+    ktloPercentage: 15,
+    meetingOverheadPercentage: 10,
+    holidays: mockHolidays.map(h => h.date),
+  });
+  const [holidays, setHolidays] = useState<Holiday[]>(mockHolidays);
+
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [slideOverEmployee, setSlideOverEmployee] = useState<CapacityEmployee | null | 'new'>(null);
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayName, setNewHolidayName] = useState('');
+
+  // Filtered employees
+  const filteredEmployees = useMemo(() => {
+    if (!search) return employees;
+    const lower = search.toLowerCase();
+    return employees.filter(e =>
+      e.name.toLowerCase().includes(lower) ||
+      e.role.toLowerCase().includes(lower) ||
+      e.department.toLowerCase().includes(lower) ||
+      e.skills.some(s => s.name.toLowerCase().includes(lower))
+    );
+  }, [employees, search]);
+
+  // Handlers
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(filteredEmployees.map(e => e.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  }, [filteredEmployees]);
+
+  const handleSelectEmployee = useCallback((id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSaveEmployee = useCallback((data: Partial<CapacityEmployee>) => {
+    if (slideOverEmployee === 'new') {
+      // Add new employee
+      const newEmployee: CapacityEmployee = {
+        id: String(Date.now()),
+        name: data.name || '',
+        email: data.email || '',
+        role: data.role || '',
+        department: data.department || '',
+        hoursPerWeek: data.hoursPerWeek || 40,
+        status: data.status || 'ACTIVE',
+        skills: data.skills || [],
+        avatarColor: AVATAR_COLORS[employees.length % AVATAR_COLORS.length],
+        ptoHours: data.ptoHours || 0,
+      };
+      setEmployees(prev => [...prev, newEmployee]);
+    } else if (slideOverEmployee) {
+      // Update existing
+      setEmployees(prev => prev.map(e =>
+        e.id === slideOverEmployee.id ? { ...e, ...data } : e
+      ));
+    }
+    setSlideOverEmployee(null);
+  }, [slideOverEmployee, employees.length]);
+
+  const handleAddHoliday = useCallback(() => {
+    if (!newHolidayDate) return;
+    const date = new Date(newHolidayDate);
+    const holiday: Holiday = {
+      date,
+      name: newHolidayName || 'Holiday',
+    };
+    setHolidays(prev => [...prev, holiday].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    setSettings(prev => ({
+      ...prev,
+      holidays: [...prev.holidays, date],
+    }));
+    setNewHolidayDate('');
+    setNewHolidayName('');
+  }, [newHolidayDate, newHolidayName]);
+
+  const handleRemoveHoliday = useCallback((date: Date) => {
+    setHolidays(prev => prev.filter(h => h.date.getTime() !== date.getTime()));
+    setSettings(prev => ({
+      ...prev,
+      holidays: prev.holidays.filter(d => d.getTime() !== date.getTime()),
+    }));
+  }, []);
+
+  const getStatusBadge = (status: CapacityEmployee['status']) => {
+    switch (status) {
+      case 'ACTIVE':
+        return <span className="badge-success">Active</span>;
+      case 'ON_LEAVE':
+        return <span className="badge-warning">On Leave</span>;
+      case 'CONTRACTOR':
+        return <span className="badge-accent">Contractor</span>;
+    }
+  };
+
+  const allSelected = filteredEmployees.length > 0 && filteredEmployees.every(e => selectedIds.has(e.id));
+  const someSelected = filteredEmployees.some(e => selectedIds.has(e.id));
+
+  return (
+    <div className="animate-fade-in">
+      {/* Header */}
+      <div className="page-header flex items-center justify-between">
+        <div>
+          <h1 className="page-title">Capacity Setup</h1>
+          <p className="page-subtitle">Manage team members, skills, and capacity settings</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="btn-secondary">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Import CSV
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => setSlideOverEmployee('new')}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM3 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 9.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+            </svg>
+            Add Employee
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Left Column: Employees */}
+        <div className="xl:col-span-2 space-y-6">
+          {/* Employees Card */}
+          <div className="card">
+            <div className="px-5 py-4 border-b border-surface-200 flex items-center justify-between gap-4">
+              <h2 className="font-display font-semibold text-surface-900">Employees</h2>
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search team..."
+                className="w-64"
+              />
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-surface-50 border-b border-surface-200">
+                    <th className="w-10 px-4 py-3">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={someSelected && !allSelected}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Skills</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Hours/Week</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Status</th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100">
+                  {filteredEmployees.map((employee, index) => (
+                    <tr
+                      key={employee.id}
+                      className="hover:bg-surface-50 transition-colors cursor-pointer group"
+                      style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => setSlideOverEmployee(employee)}
+                    >
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(employee.id)}
+                          onChange={(e) => handleSelectEmployee(employee.id, e.target.checked)}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br ${employee.avatarColor} flex items-center justify-center shadow-sm`}>
+                            <span className="text-xs font-semibold text-white">
+                              {employee.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-surface-900 truncate">{employee.name}</p>
+                            <p className="text-xs text-surface-500 truncate">{employee.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-surface-700">{employee.role}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap max-w-[200px]">
+                          {employee.skills.slice(0, 3).map(skill => (
+                            <span key={skill.name} className="badge-default flex items-center gap-1">
+                              {skill.name}
+                              <span className="text-amber-500">{'★'.repeat(skill.proficiency)}</span>
+                            </span>
+                          ))}
+                          {employee.skills.length > 3 && (
+                            <span className="text-xs text-surface-500">+{employee.skills.length - 3}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-surface-700 tabular-nums">{employee.hoursPerWeek}h</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {getStatusBadge(employee.status)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <svg
+                          className="w-5 h-5 text-surface-400 group-hover:text-surface-600 transition-colors"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-surface-200 flex items-center justify-between text-sm text-surface-500">
+              <span>{filteredEmployees.length} employees</span>
+              {selectedIds.size > 0 && (
+                <span className="text-accent-700 font-medium">{selectedIds.size} selected</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Settings & Preview */}
+        <div className="space-y-6">
+          {/* Effective Capacity Preview */}
+          <EffectiveCapacityPreview
+            employees={employees}
+            settings={settings}
+            holidays={holidays}
+          />
+
+          {/* Capacity Settings */}
+          <div className="card">
+            <div className="px-5 py-4 border-b border-surface-200">
+              <h2 className="font-display font-semibold text-surface-900">Capacity Settings</h2>
+            </div>
+
+            <div className="p-5 space-y-6">
+              {/* Default Hours */}
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-2">Default Hours/Week</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    value={settings.defaultHoursPerWeek}
+                    onChange={(e) => setSettings(prev => ({ ...prev, defaultHoursPerWeek: Number(e.target.value) }))}
+                    className="input w-24 font-mono"
+                    min={0}
+                    max={60}
+                  />
+                  <span className="text-sm text-surface-500">hours for new employees</span>
+                </div>
+              </div>
+
+              {/* KTLO Slider */}
+              <Slider
+                value={settings.ktloPercentage}
+                onChange={(v) => setSettings(prev => ({ ...prev, ktloPercentage: v }))}
+                min={0}
+                max={50}
+                label="KTLO Allocation"
+              />
+              <p className="text-xs text-surface-500 -mt-4">
+                Keep-the-lights-on: maintenance, bugs, support
+              </p>
+
+              {/* Meeting Overhead Slider */}
+              <Slider
+                value={settings.meetingOverheadPercentage}
+                onChange={(v) => setSettings(prev => ({ ...prev, meetingOverheadPercentage: v }))}
+                min={0}
+                max={40}
+                label="Meeting Overhead"
+              />
+              <p className="text-xs text-surface-500 -mt-4">
+                Standups, planning, reviews, 1:1s
+              </p>
+            </div>
+          </div>
+
+          {/* Holiday Calendar */}
+          <div className="card">
+            <div className="px-5 py-4 border-b border-surface-200">
+              <h2 className="font-display font-semibold text-surface-900">Holiday Calendar</h2>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Add Holiday */}
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={newHolidayDate}
+                  onChange={(e) => setNewHolidayDate(e.target.value)}
+                  className="input flex-1"
+                />
+                <input
+                  type="text"
+                  value={newHolidayName}
+                  onChange={(e) => setNewHolidayName(e.target.value)}
+                  placeholder="Name"
+                  className="input flex-1"
+                />
+                <button
+                  onClick={handleAddHoliday}
+                  disabled={!newHolidayDate}
+                  className="btn-secondary"
+                >
+                  Add
+                </button>
+              </div>
+
+              {/* Holidays List */}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {holidays.map((holiday) => (
+                  <div
+                    key={holiday.date.toISOString()}
+                    className="flex items-center justify-between p-2.5 bg-surface-50 rounded-lg group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 flex flex-col items-center justify-center bg-white rounded-md border border-surface-200 shadow-subtle">
+                        <span className="text-[10px] font-semibold text-accent-600 uppercase leading-none">
+                          {holiday.date.toLocaleDateString('en-US', { month: 'short' })}
+                        </span>
+                        <span className="text-sm font-bold text-surface-900 leading-none">
+                          {holiday.date.getDate()}
+                        </span>
+                      </div>
+                      <span className="text-sm font-medium text-surface-700">{holiday.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveHoliday(holiday.date)}
+                      className="p-1.5 rounded text-surface-400 hover:text-danger hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Employee Slide-over */}
+      <SlideOver
+        isOpen={slideOverEmployee !== null}
+        onClose={() => setSlideOverEmployee(null)}
+        title={slideOverEmployee === 'new' ? 'Add Employee' : slideOverEmployee?.name || ''}
+      >
+        <EmployeeForm
+          employee={slideOverEmployee === 'new' ? null : slideOverEmployee}
+          onSave={handleSaveEmployee}
+          onCancel={() => setSlideOverEmployee(null)}
+        />
+      </SlideOver>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useAppStore } from '../stores/app.store';
+import { UserMenu } from './auth';
 
 // Icons as simple SVG components
 const Icons = {
@@ -137,10 +138,7 @@ export function Layout() {
           <div className="h-full px-6 flex items-center justify-between">
             <Breadcrumb />
             <div className="flex items-center gap-3">
-              {/* Placeholder for user menu, notifications, etc. */}
-              <div className="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center">
-                <span className="text-xs font-medium text-surface-600">U</span>
-              </div>
+              <UserMenu />
             </div>
           </div>
         </header>

@@ -4,3 +4,4 @@ export { Capacity } from './Capacity';
 export { ScenariosList } from './ScenariosList';
 export { ScenarioPlanner } from './ScenarioPlanner';
 export { Reports } from './Reports';
+export { Unauthorized } from './Unauthorized';

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { toast } from '../stores/toast';
 
 export interface Scenario {
   id: string;
@@ -30,6 +31,33 @@ export interface CapacityAnalysis {
   utilizationPercent: number;
 }
 
+export interface CalculatorResult {
+  scenarioId: string;
+  cacheHit: boolean;
+  calculatedAt: string;
+  summary: {
+    totalDemand: number;
+    totalCapacity: number;
+    utilizationPercent: number;
+    gap: number;
+  };
+  bySkill?: CapacityAnalysis[];
+  byInitiative?: Array<{
+    initiativeId: string;
+    title: string;
+    demand: number;
+    allocated: number;
+  }>;
+}
+
+export interface ScenarioComparison {
+  scenarioId: string;
+  name: string;
+  totalDemand: number;
+  totalCapacity: number;
+  utilizationPercent: number;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   page: number;
@@ -46,6 +74,9 @@ export const scenarioKeys = {
   detail: (id: string) => [...scenarioKeys.details(), id] as const,
   allocations: (id: string) => [...scenarioKeys.detail(id), 'allocations'] as const,
   analysis: (id: string) => [...scenarioKeys.detail(id), 'analysis'] as const,
+  calculator: (id: string, options?: { includeBreakdown?: boolean }) =>
+    [...scenarioKeys.detail(id), 'calculator', options] as const,
+  compare: (ids: string[]) => [...scenarioKeys.all, 'compare', ids] as const,
 };
 
 export function useScenarios() {
@@ -79,14 +110,99 @@ export function useScenarioAnalysis(id: string) {
   });
 }
 
+export function useScenarioCalculator(
+  id: string,
+  options: { skipCache?: boolean; includeBreakdown?: boolean } = {}
+) {
+  const params = new URLSearchParams();
+  if (options.skipCache) params.set('skipCache', 'true');
+  if (options.includeBreakdown) params.set('includeBreakdown', 'true');
+  const queryString = params.toString();
+
+  return useQuery({
+    queryKey: scenarioKeys.calculator(id, { includeBreakdown: options.includeBreakdown }),
+    queryFn: () =>
+      api.get<CalculatorResult>(`/scenarios/${id}/calculator${queryString ? `?${queryString}` : ''}`),
+    enabled: !!id,
+  });
+}
+
+export function useCompareScenarios(scenarioIds: string[]) {
+  const params = new URLSearchParams();
+  scenarioIds.forEach((id) => params.append('scenarioIds', id));
+
+  return useQuery({
+    queryKey: scenarioKeys.compare(scenarioIds),
+    queryFn: () => api.get<ScenarioComparison[]>(`/scenarios/compare?${params}`),
+    enabled: scenarioIds.length >= 2,
+  });
+}
+
 export function useCreateScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Scenario>) =>
-      api.post<Scenario>('/scenarios', data),
+    mutationFn: (data: Partial<Scenario>) => api.post<Scenario>('/scenarios', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      toast.success('Scenario created successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to create scenario');
+    },
+  });
+}
+
+export function useUpdateScenario() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Scenario> }) =>
+      api.put<Scenario>(`/scenarios/${id}`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      toast.success('Scenario updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update scenario');
+    },
+  });
+}
+
+export function useDeleteScenario() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/scenarios/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      toast.success('Scenario deleted successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete scenario');
+    },
+  });
+}
+
+export function useUpdatePriorities() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scenarioId,
+      priorities,
+    }: {
+      scenarioId: string;
+      priorities: Array<{ initiativeId: string; rank: number }>;
+    }) => api.put<Scenario>(`/scenarios/${scenarioId}/priorities`, { priorities }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.detail(variables.scenarioId) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
+      toast.success('Priorities updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update priorities');
     },
   });
 }
@@ -99,6 +215,10 @@ export function useCloneScenario() {
       api.post<Scenario>(`/scenarios/${id}/clone`, { name }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      toast.success('Scenario cloned successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to clone scenario');
     },
   });
 }
@@ -112,6 +232,13 @@ export function useCreateAllocation() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(variables.scenarioId) });
       queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.calculator(variables.scenarioId),
+      });
+      toast.success('Allocation created successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to create allocation');
     },
   });
 }
@@ -120,7 +247,7 @@ export function useUpdateAllocation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       scenarioId,
       allocationId,
       data,
@@ -128,10 +255,56 @@ export function useUpdateAllocation() {
       scenarioId: string;
       allocationId: string;
       data: Partial<Allocation>;
-    }) => api.patch<Allocation>(`/scenarios/${scenarioId}/allocations/${allocationId}`, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(variables.scenarioId) });
-      queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
+    }) => {
+      const allocation = await api.put<Allocation>(`/allocations/${allocationId}`, data);
+      return { allocation, scenarioId };
+    },
+    onSuccess: ({ scenarioId }) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(scenarioId) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(scenarioId) });
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.calculator(scenarioId),
+      });
+      toast.success('Allocation updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update allocation');
+    },
+  });
+}
+
+export function useDeleteAllocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ scenarioId, allocationId }: { scenarioId: string; allocationId: string }) =>
+      api.delete(`/allocations/${allocationId}`).then(() => ({ scenarioId })),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(result.scenarioId) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(result.scenarioId) });
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.calculator(result.scenarioId),
+      });
+      toast.success('Allocation deleted successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete allocation');
+    },
+  });
+}
+
+export function useInvalidateCalculatorCache() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (scenarioId: string) =>
+      api.post(`/scenarios/${scenarioId}/calculator/invalidate`, {}).then(() => scenarioId),
+    onSuccess: (scenarioId) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.calculator(scenarioId) });
+      toast.info('Calculator cache invalidated');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to invalidate cache');
     },
   });
 }

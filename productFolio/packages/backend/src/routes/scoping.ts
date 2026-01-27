@@ -10,6 +10,8 @@ import {
 import type { PaginationParams } from '../types/index.js';
 
 export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
+  // Apply authentication to all routes in this plugin
+  fastify.addHook('onRequest', fastify.authenticate);
   /**
    * GET /api/initiatives/:initiativeId/scope-items
    * List scope items for an initiative

@@ -12,6 +12,8 @@ import * as initiativesService from '../services/initiatives.service.js';
 import { enqueueCsvImport } from '../jobs/index.js';
 
 export async function initiativesRoutes(fastify: FastifyInstance) {
+  // Apply authentication to all routes in this plugin
+  fastify.addHook('onRequest', fastify.authenticate);
   /**
    * GET /api/initiatives
    * List initiatives with filters and pagination
@@ -138,7 +140,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       // Queue the import job for background processing
       const jobId = await enqueueCsvImport(
         rows,
-        'system', // TODO: get from auth context
+        request.user.sub, // Use authenticated user's ID
         request.body.fileName || `import-${Date.now()}.csv`
       );
 

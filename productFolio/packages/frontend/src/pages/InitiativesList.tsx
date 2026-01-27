@@ -1,167 +1,550 @@
-import { Link } from 'react-router-dom';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { type ColumnDef, type SortingState, type RowSelectionState } from '@tanstack/react-table';
+import {
+  VirtualTable,
+  MultiSelect,
+  Select,
+  SearchInput,
+  StatusBadge,
+  Tag,
+  Checkbox,
+  BulkActionsBar,
+} from '../components/ui';
+import {
+  useInitiatives,
+  useBulkUpdateStatus,
+  useBulkAddTags,
+  useBulkDeleteInitiatives,
+  useExportInitiatives,
+} from '../hooks/useInitiatives';
+import type { Initiative, InitiativeStatus, InitiativeFilters } from '../types';
+import { getQuarterOptions } from '../types';
 
-const mockInitiatives = [
-  {
-    id: '1',
-    name: 'Customer Portal Redesign',
-    status: 'IN_PROGRESS',
-    priority: 1,
-    owner: 'Sarah Chen',
-    startDate: '2024-01-15',
-    endDate: '2024-06-30',
-  },
-  {
-    id: '2',
-    name: 'API Gateway Migration',
-    status: 'APPROVED',
-    priority: 2,
-    owner: 'Mike Johnson',
-    startDate: '2024-02-01',
-    endDate: '2024-05-15',
-  },
-  {
-    id: '3',
-    name: 'Mobile App v2',
-    status: 'DRAFT',
-    priority: 3,
-    owner: 'Alex Rivera',
-    startDate: '2024-03-01',
-    endDate: '2024-09-30',
-  },
-  {
-    id: '4',
-    name: 'Data Pipeline Optimization',
-    status: 'PENDING_APPROVAL',
-    priority: 4,
-    owner: 'Emily Watson',
-    startDate: '2024-02-15',
-    endDate: '2024-04-30',
-  },
+// Status filter options
+const statusOptions = [
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-const statusColors: Record<string, string> = {
-  DRAFT: 'badge-default',
-  PENDING_APPROVAL: 'badge-warning',
-  APPROVED: 'badge-accent',
-  IN_PROGRESS: 'badge-success',
-  COMPLETED: 'badge-default',
+// Quarter options
+const quarterOptions = getQuarterOptions();
+
+// Mock tags (in production, fetch from customFields or a tags table)
+const extractTags = (initiative: Initiative): string[] => {
+  const customFields = initiative.customFields as Record<string, unknown> | null;
+  if (!customFields?.tags) return [];
+  return Array.isArray(customFields.tags) ? customFields.tags : [];
 };
 
-const statusLabels: Record<string, string> = {
-  DRAFT: 'Draft',
-  PENDING_APPROVAL: 'Pending',
-  APPROVED: 'Approved',
-  IN_PROGRESS: 'In Progress',
-  COMPLETED: 'Completed',
-};
+// Generate mock data for demo (will be replaced by API data)
+function generateMockData(count: number): Initiative[] {
+  const names = [
+    'Customer Portal Redesign',
+    'API Gateway Migration',
+    'Mobile App v2',
+    'Data Pipeline Optimization',
+    'Analytics Dashboard',
+    'User Authentication Upgrade',
+    'Payment Integration',
+    'Search Infrastructure',
+    'Notification System',
+    'Admin Console Redesign',
+    'Performance Monitoring',
+    'CI/CD Pipeline Overhaul',
+    'Database Migration',
+    'Security Audit Implementation',
+    'Cloud Cost Optimization',
+  ];
+
+  const owners = [
+    'Sarah Chen',
+    'Mike Johnson',
+    'Alex Rivera',
+    'Emily Watson',
+    'David Park',
+    'Lisa Thompson',
+    'James Wilson',
+    'Maria Garcia',
+    'Robert Brown',
+    'Jennifer Lee',
+  ];
+
+  const statuses: InitiativeStatus[] = [
+    'DRAFT',
+    'PENDING_APPROVAL',
+    'APPROVED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'ON_HOLD',
+  ];
+
+  const tagSets = [
+    ['frontend', 'react'],
+    ['backend', 'api'],
+    ['infrastructure', 'devops'],
+    ['mobile', 'ios', 'android'],
+    ['security', 'compliance'],
+    ['analytics', 'data'],
+    ['platform', 'core'],
+    ['integration', 'api'],
+    [],
+    ['urgent', 'priority'],
+  ];
+
+  const quarters = ['2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4', '2025-Q1', '2025-Q2'];
+
+  return Array.from({ length: count }, (_, i) => ({
+    id: `initiative-${i + 1}`,
+    title: `${names[i % names.length]} ${Math.floor(i / names.length) > 0 ? `#${Math.floor(i / names.length) + 1}` : ''}`.trim(),
+    description: `Description for initiative ${i + 1}`,
+    businessOwnerId: `owner-${(i % owners.length) + 1}`,
+    productOwnerId: `po-${(i % owners.length) + 1}`,
+    status: statuses[i % statuses.length],
+    targetQuarter: quarters[i % quarters.length],
+    customFields: {
+      tags: tagSets[i % tagSets.length],
+      owner: owners[i % owners.length],
+    },
+    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+  }));
+}
+
+// Use mock data for demo
+const mockInitiatives = generateMockData(1200);
 
 export function InitiativesList() {
+  const navigate = useNavigate();
+
+  // Filter state
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [quarterFilter, setQuarterFilter] = useState('');
+
+  // Table state
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  // Build filters object
+  const filters: InitiativeFilters = useMemo(
+    () => ({
+      search: search || undefined,
+      status: statusFilter.length > 0 ? (statusFilter as InitiativeStatus[]) : undefined,
+      targetQuarter: quarterFilter || undefined,
+      limit: 1000, // Get all for virtualization
+    }),
+    [search, statusFilter, quarterFilter]
+  );
+
+  // API hooks
+  const { data: apiData, isLoading } = useInitiatives(filters);
+  const bulkUpdateStatus = useBulkUpdateStatus();
+  const bulkAddTags = useBulkAddTags();
+  const bulkDelete = useBulkDeleteInitiatives();
+  const exportMutation = useExportInitiatives();
+
+  // Use mock data if API returns nothing (for demo purposes)
+  const initiatives = useMemo(() => {
+    if (apiData?.data && apiData.data.length > 0) {
+      return apiData.data;
+    }
+    // Filter mock data based on current filters
+    let filtered = [...mockInitiatives];
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(
+        (i) =>
+          i.title.toLowerCase().includes(searchLower) ||
+          (i.customFields as Record<string, unknown>)?.owner?.toString().toLowerCase().includes(searchLower)
+      );
+    }
+    if (statusFilter.length > 0) {
+      filtered = filtered.filter((i) => statusFilter.includes(i.status));
+    }
+    if (quarterFilter) {
+      filtered = filtered.filter((i) => i.targetQuarter === quarterFilter);
+    }
+    return filtered;
+  }, [apiData, search, statusFilter, quarterFilter]);
+
+  // Get selected IDs
+  const selectedIds = useMemo(
+    () => Object.keys(rowSelection).filter((id) => rowSelection[id]),
+    [rowSelection]
+  );
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape to clear selection
+      if (e.key === 'Escape' && selectedIds.length > 0) {
+        setRowSelection({});
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds.length]
+  );
+
+  // Stats
+  const stats = useMemo(() => {
+    const total = mockInitiatives.length;
+    const inProgress = mockInitiatives.filter((i) => i.status === 'IN_PROGRESS').length;
+    const pending = mockInitiatives.filter((i) => i.status === 'PENDING_APPROVAL').length;
+    const completed = mockInitiatives.filter((i) => i.status === 'COMPLETED').length;
+    return { total, inProgress, pending, completed };
+  }, []);
+
+  // Handlers
+  const handleStatusChange = useCallback(
+    (status: InitiativeStatus) => {
+      bulkUpdateStatus.mutate({ ids: selectedIds, status });
+      setRowSelection({});
+    },
+    [selectedIds, bulkUpdateStatus]
+  );
+
+  const handleAddTags = useCallback(
+    (tags: string[]) => {
+      bulkAddTags.mutate({ ids: selectedIds, tags });
+      setRowSelection({});
+    },
+    [selectedIds, bulkAddTags]
+  );
+
+  const handleDelete = useCallback(() => {
+    if (window.confirm(`Delete ${selectedIds.length} initiative(s)?`)) {
+      bulkDelete.mutate(selectedIds);
+      setRowSelection({});
+    }
+  }, [selectedIds, bulkDelete]);
+
+  const handleExport = useCallback(() => {
+    exportMutation.mutate(filters);
+  }, [filters, exportMutation]);
+
+  const handleRowClick = useCallback(
+    (row: Initiative) => {
+      navigate(`/initiatives/${row.id}`);
+    },
+    [navigate]
+  );
+
+  // Column definitions
+  const columns = useMemo<ColumnDef<Initiative, unknown>[]>(
+    () => [
+      {
+        id: 'select',
+        size: 40,
+        header: ({ table }) => (
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected()}
+            indeterminate={table.getIsSomePageRowsSelected()}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+          />
+        ),
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={row.getIsSelected()}
+              onChange={row.getToggleSelectedHandler()}
+            />
+          </div>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: 'title',
+        header: 'Title',
+        size: 320,
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-0.5">
+            <Link
+              to={`/initiatives/${row.original.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-medium text-surface-900 hover:text-accent-600 transition-colors line-clamp-1"
+            >
+              {row.original.title}
+            </Link>
+            {row.original.description && (
+              <span className="text-xs text-surface-500 line-clamp-1">
+                {row.original.description}
+              </span>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        size: 120,
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
+        id: 'owner',
+        header: 'Owner',
+        size: 160,
+        accessorFn: (row) => (row.customFields as Record<string, unknown>)?.owner ?? '',
+        cell: ({ row }) => {
+          const owner = (row.original.customFields as Record<string, unknown>)?.owner;
+          if (!owner) return <span className="text-surface-400">-</span>;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center text-[10px] font-bold text-white">
+                {String(owner)
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')}
+              </div>
+              <span className="text-surface-700 truncate">{String(owner)}</span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: 'targetQuarter',
+        header: 'Quarter',
+        size: 100,
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-surface-600 bg-surface-100 px-2 py-1 rounded">
+            {row.original.targetQuarter || '-'}
+          </span>
+        ),
+      },
+      {
+        id: 'tags',
+        header: 'Tags',
+        size: 200,
+        cell: ({ row }) => {
+          const tags = extractTags(row.original);
+          if (tags.length === 0) return <span className="text-surface-400">-</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {tags.slice(0, 3).map((tag) => (
+                <Tag key={tag} label={tag} size="sm" />
+              ))}
+              {tags.length > 3 && (
+                <span className="text-xs text-surface-500 px-1">+{tags.length - 3}</span>
+              )}
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        accessorKey: 'updatedAt',
+        header: 'Updated',
+        size: 100,
+        cell: ({ row }) => (
+          <span className="text-xs text-surface-500 font-mono">
+            {new Date(row.original.updatedAt).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            })}
+          </span>
+        ),
+      },
+    ],
+    []
+  );
+
+  const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter;
+
   return (
     <div className="animate-fade-in">
+      {/* Header */}
       <div className="page-header flex items-center justify-between">
         <div>
           <h1 className="page-title">Initiatives</h1>
           <p className="page-subtitle">Manage and track your portfolio initiatives</p>
         </div>
-        <button className="btn-primary">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          New Initiative
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={exportMutation.isPending}
+            className="btn-secondary"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export CSV
+          </button>
+          <button className="btn-primary">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Initiative
+          </button>
+        </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total Initiatives', value: '12', change: '+2 this month' },
-          { label: 'In Progress', value: '5', change: '42% of total' },
-          { label: 'Pending Review', value: '3', change: 'Awaiting approval' },
-          { label: 'Completed', value: '4', change: 'This quarter' },
+          {
+            label: 'Total Initiatives',
+            value: stats.total.toLocaleString(),
+            icon: (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+              </svg>
+            ),
+          },
+          {
+            label: 'In Progress',
+            value: stats.inProgress.toString(),
+            accent: 'text-emerald-600',
+            icon: (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+              </svg>
+            ),
+          },
+          {
+            label: 'Pending Review',
+            value: stats.pending.toString(),
+            accent: 'text-amber-600',
+            icon: (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+          },
+          {
+            label: 'Completed',
+            value: stats.completed.toString(),
+            accent: 'text-violet-600',
+            icon: (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+          },
         ].map((stat, i) => (
           <div key={stat.label} className={`stat-card animate-slide-up stagger-${i + 1}`}>
-            <p className="stat-label">{stat.label}</p>
-            <p className="stat-value">{stat.value}</p>
-            <p className="stat-change text-surface-500">{stat.change}</p>
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="stat-label">{stat.label}</p>
+                <p className={`stat-value ${stat.accent || ''}`}>{stat.value}</p>
+              </div>
+              <div className={`p-2 rounded-lg bg-surface-100 ${stat.accent || 'text-surface-500'}`}>
+                {stat.icon}
+              </div>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Table */}
-      <div className="card">
-        <div className="px-4 py-3 border-b border-surface-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <input
-              type="text"
-              placeholder="Search initiatives..."
-              className="input w-64"
-            />
-            <select className="input w-40">
-              <option value="">All Statuses</option>
-              <option value="DRAFT">Draft</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="APPROVED">Approved</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-surface-500">
-            <span>4 initiatives</span>
+      {/* Main table card */}
+      <div className="card overflow-hidden">
+        {/* Filter bar */}
+        <div className="px-4 py-3 border-b border-surface-200 bg-surface-50/50">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search initiatives..."
+                className="w-72"
+              />
+              <MultiSelect
+                options={statusOptions}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Status"
+                className="w-44"
+              />
+              <Select
+                options={quarterOptions}
+                value={quarterFilter}
+                onChange={setQuarterFilter}
+                placeholder="Quarter"
+                className="w-36"
+              />
+              {hasActiveFilters && (
+                <button
+                  onClick={() => {
+                    setSearch('');
+                    setStatusFilter([]);
+                    setQuarterFilter('');
+                  }}
+                  className="text-sm text-surface-500 hover:text-surface-700 transition-colors"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-sm text-surface-500">
+              <span className="tabular-nums font-medium">
+                {initiatives.length.toLocaleString()} initiative{initiatives.length !== 1 ? 's' : ''}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="table-container border-0 rounded-none">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Initiative</th>
-                <th>Status</th>
-                <th>Owner</th>
-                <th>Timeline</th>
-                <th className="text-right">Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockInitiatives.map((initiative) => (
-                <tr key={initiative.id} className="group">
-                  <td>
-                    <Link
-                      to={`/initiatives/${initiative.id}`}
-                      className="font-medium text-surface-900 hover:text-accent-600 transition-colors"
-                    >
-                      {initiative.name}
-                    </Link>
-                  </td>
-                  <td>
-                    <span className={statusColors[initiative.status]}>
-                      {statusLabels[initiative.status]}
-                    </span>
-                  </td>
-                  <td className="text-surface-600">{initiative.owner}</td>
-                  <td className="text-surface-600 font-mono text-xs">
-                    {initiative.startDate} → {initiative.endDate}
-                  </td>
-                  <td className="text-right">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-surface-100 text-xs font-medium text-surface-700">
-                      {initiative.priority}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Table */}
+        <VirtualTable
+          data={initiatives}
+          columns={columns}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          enableRowSelection
+          rowSelection={rowSelection}
+          onRowSelectionChange={setRowSelection}
+          globalFilter={search}
+          onRowClick={handleRowClick}
+          getRowId={(row) => row.id}
+          isLoading={isLoading}
+          emptyMessage={
+            hasActiveFilters
+              ? 'No initiatives match your filters'
+              : 'No initiatives yet. Create your first one!'
+          }
+        />
 
-        <div className="px-4 py-3 border-t border-surface-200 flex items-center justify-between text-sm">
-          <span className="text-surface-500">Showing 1-4 of 4 initiatives</span>
-          <div className="flex items-center gap-2">
-            <button className="btn-ghost px-3 py-1.5" disabled>
-              Previous
-            </button>
-            <button className="btn-ghost px-3 py-1.5" disabled>
-              Next
-            </button>
+        {/* Footer */}
+        <div className="px-4 py-3 border-t border-surface-200 bg-surface-50/30 flex items-center justify-between text-sm">
+          <span className="text-surface-500">
+            {selectedIds.length > 0 ? (
+              <span>
+                <span className="font-medium text-surface-700">{selectedIds.length}</span> selected
+              </span>
+            ) : (
+              <span>
+                Showing{' '}
+                <span className="font-medium text-surface-700">
+                  {initiatives.length.toLocaleString()}
+                </span>{' '}
+                initiatives
+              </span>
+            )}
+          </span>
+          <div className="flex items-center gap-2 text-xs text-surface-400">
+            <kbd className="px-1.5 py-0.5 bg-surface-100 border border-surface-200 rounded">
+              Shift
+            </kbd>
+            <span>+ Click for range select</span>
           </div>
         </div>
       </div>
+
+      {/* Bulk actions bar */}
+      {selectedIds.length > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setRowSelection({})}
+          onStatusChange={handleStatusChange}
+          onAddTags={handleAddTags}
+          onDelete={handleDelete}
+        />
+      )}
     </div>
   );
 }

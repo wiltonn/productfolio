@@ -14,7 +14,8 @@
     "test": "npm run test --workspaces --if-present",
     "db:generate": "npm run db:generate --workspace=@productfolio/backend",
     "db:migrate": "npm run db:migrate --workspace=@productfolio/backend",
-    "db:push": "npm run db:push --workspace=@productfolio/backend"
+    "db:push": "npm run db:push --workspace=@productfolio/backend",
+    "db:seed": "npm run db:seed --workspace=@productfolio/backend"
   },
   "devDependencies": {
     "typescript": "^5.3.3"

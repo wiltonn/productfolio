@@ -78,6 +78,13 @@
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
 }
 
 @layer base {
@@ -320,4 +327,1051 @@
   .stagger-3 { animation-delay: 150ms; }
   .stagger-4 { animation-delay: 200ms; }
   .stagger-5 { animation-delay: 250ms; }
+
+  /* Line clamp utilities */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Tabular numbers for data */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ============================================================================
+   SCENARIO PLANNER - Mission Control Aesthetic
+   A sophisticated command center for resource planning with glowing data
+   visualizations, sharp geometric elements, and precision instruments.
+   ============================================================================ */
+
+.scenario-planner {
+  @apply flex flex-col h-[calc(100vh-64px)] bg-surface-50 overflow-hidden;
+  /* Subtle grid pattern background for command center feel */
+  background-image:
+    linear-gradient(to right, rgba(0,0,0,0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,0,0,0.015) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Header - Command bar */
+.planner-header {
+  @apply flex items-center justify-between px-6 py-3
+         bg-white border-b border-surface-200 flex-shrink-0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.header-left {
+  @apply flex items-center gap-4;
+}
+
+.back-link {
+  @apply flex items-center gap-1.5 text-sm text-surface-500
+         hover:text-accent-600 transition-colors;
+}
+
+.scenario-title-group {
+  @apply flex items-center gap-3;
+}
+
+.scenario-name-input {
+  @apply text-xl font-display font-bold text-surface-900 bg-transparent
+         border-none outline-none px-0 py-1
+         hover:bg-surface-50 focus:bg-surface-100
+         rounded transition-colors cursor-text;
+  min-width: 200px;
+}
+
+.scenario-id {
+  @apply text-xs font-mono text-surface-400 bg-surface-100 px-2 py-1 rounded;
+}
+
+.header-center {
+  @apply flex items-center;
+}
+
+.stat-pills {
+  @apply flex items-center gap-2;
+}
+
+.stat-pill {
+  @apply flex items-center gap-2 px-3 py-1.5
+         bg-surface-800 text-white rounded-full text-sm;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stat-pill.warning {
+  @apply bg-amber-600;
+}
+
+.stat-pill.danger {
+  @apply bg-red-600;
+}
+
+.pill-label {
+  @apply text-xs font-medium opacity-70;
+}
+
+.pill-value {
+  @apply font-mono font-semibold tabular-nums;
+}
+
+.header-right {
+  @apply flex items-center gap-2;
+}
+
+.help-btn {
+  @apply p-2 rounded-full;
+}
+
+/* Assumptions Dropdown */
+.assumptions-dropdown {
+  @apply absolute top-full right-0 mt-2 w-64
+         bg-white rounded-lg border border-surface-200
+         shadow-elevated p-4 space-y-4 z-50;
+  animation: fade-in 0.15s ease-out;
+}
+
+.assumption-row {
+  @apply flex items-center justify-between;
+}
+
+.assumption-row label {
+  @apply text-sm font-medium text-surface-700;
+}
+
+.assumption-input {
+  @apply flex items-center gap-1;
+}
+
+.assumption-input input {
+  @apply w-16 px-2 py-1 text-sm font-mono text-right
+         border border-surface-300 rounded
+         focus:outline-none focus:ring-2 focus:ring-accent-500;
+}
+
+.assumption-input span {
+  @apply text-sm text-surface-500;
+}
+
+/* Main body layout */
+.planner-body {
+  @apply flex-1 flex flex-col overflow-hidden;
+}
+
+.planner-main {
+  @apply flex-1 flex overflow-hidden;
+}
+
+/* Panel styles */
+.left-panel,
+.right-panel {
+  @apply flex flex-col bg-white border-r border-surface-200 overflow-hidden;
+}
+
+.right-panel {
+  @apply flex-1 border-r-0;
+}
+
+.bottom-panel {
+  @apply flex flex-col bg-white border-t border-surface-200 flex-shrink-0 overflow-hidden;
+  transition: height 0.2s ease-out;
+}
+
+.bottom-panel.collapsed {
+  @apply overflow-hidden;
+}
+
+.panel-header {
+  @apply flex items-center justify-between px-4 py-3
+         bg-surface-50 border-b border-surface-200 flex-shrink-0;
+}
+
+.panel-header h3 {
+  @apply text-sm font-display font-semibold text-surface-900;
+}
+
+.panel-header.with-tabs {
+  @apply py-0 px-0;
+}
+
+.panel-header.collapsible {
+  @apply cursor-default;
+}
+
+.panel-count {
+  @apply px-2 py-0.5 text-xs font-mono font-medium
+         bg-accent-100 text-accent-700 rounded-full;
+}
+
+.collapse-toggle {
+  @apply p-1 rounded hover:bg-surface-200 transition-colors;
+}
+
+.panel-toolbar {
+  @apply flex items-center gap-3 px-4 py-3 border-b border-surface-100;
+}
+
+.toggle-filter {
+  @apply flex items-center gap-2 text-sm text-surface-600 cursor-pointer whitespace-nowrap;
+}
+
+.panel-tabs {
+  @apply flex;
+}
+
+.panel-tab {
+  @apply px-5 py-3 text-sm font-medium text-surface-500
+         border-b-2 border-transparent
+         hover:text-surface-700 hover:bg-surface-50
+         transition-colors;
+}
+
+.panel-tab.active {
+  @apply text-accent-700 border-accent-500 bg-white;
+}
+
+.panel-content {
+  @apply flex-1 overflow-auto p-4;
+}
+
+/* Initiative list */
+.initiatives-list {
+  @apply flex-1 overflow-y-auto p-3 space-y-2;
+}
+
+.initiative-card {
+  @apply flex items-center p-3
+         bg-white rounded-lg border border-surface-200
+         hover:border-surface-300 hover:shadow-soft
+         transition-all duration-150 cursor-grab;
+}
+
+.initiative-card.dragging {
+  @apply shadow-lg opacity-90;
+}
+
+.initiative-card.shortage {
+  @apply border-l-3 border-l-amber-500;
+}
+
+.rank-badge {
+  @apply w-7 h-7 flex items-center justify-center
+         bg-surface-800 text-white text-xs font-bold rounded-full flex-shrink-0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.shortage-indicator {
+  @apply text-amber-500 flex-shrink-0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.quarter-badge {
+  @apply px-1.5 py-0.5 text-xs font-mono font-medium
+         bg-surface-100 text-surface-600 rounded;
+}
+
+.hours-badge {
+  @apply px-1.5 py-0.5 text-xs font-mono font-semibold
+         bg-accent-50 text-accent-700 rounded;
+}
+
+.drag-handle {
+  @apply text-surface-300 group-hover:text-surface-500 transition-colors ml-2 flex-shrink-0;
+}
+
+/* Capacity Bar Chart */
+.capacity-chart {
+  @apply h-full flex flex-col;
+}
+
+.chart-legend {
+  @apply flex items-center gap-4 mb-4;
+}
+
+.legend-item {
+  @apply flex items-center gap-2 text-sm text-surface-600;
+}
+
+.legend-dot {
+  @apply w-3 h-3 rounded-sm;
+}
+
+.legend-dot.capacity {
+  @apply bg-surface-300;
+}
+
+.legend-dot.demand {
+  @apply bg-accent-500;
+}
+
+.chart-bars {
+  @apply flex-1 flex items-end justify-around gap-4 pb-8;
+}
+
+.bar-group {
+  @apply flex flex-col items-center flex-1 max-w-24;
+  animation: slide-up 0.4s ease-out backwards;
+}
+
+.bar-container {
+  @apply relative flex items-end justify-center gap-2 w-full h-48 mb-3;
+}
+
+.bar {
+  @apply relative w-8 rounded-t transition-all duration-500;
+}
+
+.bar.capacity {
+  @apply bg-surface-200;
+}
+
+.bar.demand {
+  @apply bg-accent-500;
+}
+
+.bar.demand.tight {
+  @apply bg-amber-500;
+}
+
+.bar.demand.shortage {
+  @apply bg-red-500;
+}
+
+.bar-glow {
+  @apply absolute inset-0 rounded-t opacity-0 transition-opacity;
+  background: linear-gradient(to top, transparent, rgba(255,255,255,0.3));
+}
+
+.bar:hover .bar-glow {
+  @apply opacity-100;
+}
+
+.bar-label {
+  @apply text-xs font-mono font-medium text-surface-600;
+}
+
+.bar-value {
+  @apply text-xs font-mono font-bold text-surface-500;
+}
+
+.bar-value.ok {
+  @apply text-emerald-600;
+}
+
+.bar-value.tight {
+  @apply text-amber-600;
+}
+
+.bar-value.shortage {
+  @apply text-red-600;
+}
+
+/* Skill Capacity Chart */
+.skill-chart {
+  @apply space-y-4;
+}
+
+.skill-row {
+  @apply space-y-2;
+  animation: slide-up 0.3s ease-out backwards;
+}
+
+.skill-label {
+  @apply flex items-center justify-between;
+}
+
+.skill-name {
+  @apply text-sm font-medium text-surface-900;
+}
+
+.skill-stats {
+  @apply text-sm font-mono text-surface-600 tabular-nums;
+}
+
+.skill-stats.tight {
+  @apply text-amber-600;
+}
+
+.skill-stats.shortage {
+  @apply text-red-600;
+}
+
+.skill-stats .utilization {
+  @apply text-xs text-surface-400 ml-1;
+}
+
+.skill-bars {
+  @apply flex items-center gap-2;
+}
+
+.skill-bar-track {
+  @apply relative flex-1 h-4 bg-surface-100 rounded overflow-hidden;
+}
+
+.skill-bar {
+  @apply absolute inset-y-0 left-0 rounded transition-all duration-500;
+}
+
+.skill-bar.capacity {
+  @apply bg-surface-200;
+}
+
+.skill-bar.demand {
+  @apply bg-accent-500;
+}
+
+.skill-bar.demand.tight {
+  @apply bg-amber-500;
+}
+
+.skill-bar.demand.shortage {
+  @apply bg-red-500;
+}
+
+.gap-indicator {
+  @apply text-xs font-mono font-bold text-red-600 whitespace-nowrap;
+}
+
+/* Team Capacity Chart */
+.team-chart {
+  @apply grid grid-cols-2 gap-4;
+}
+
+.team-card {
+  @apply p-4 bg-surface-50 rounded-xl border border-surface-200;
+  animation: slide-up 0.3s ease-out backwards;
+}
+
+.team-header {
+  @apply flex items-center justify-between mb-3;
+}
+
+.team-name {
+  @apply font-display font-semibold text-surface-900;
+}
+
+.team-status {
+  @apply text-xs font-medium px-2 py-0.5 rounded-full;
+}
+
+.team-status.ok {
+  @apply bg-emerald-100 text-emerald-700;
+}
+
+.team-status.tight {
+  @apply bg-amber-100 text-amber-700;
+}
+
+.team-status.shortage {
+  @apply bg-red-100 text-red-700;
+}
+
+.team-gauge {
+  @apply relative flex items-center justify-center mb-3;
+}
+
+.gauge-svg {
+  @apply w-full h-auto;
+}
+
+.gauge-bg {
+  @apply text-surface-200;
+}
+
+.gauge-value {
+  transition: stroke-dasharray 0.6s ease-out;
+}
+
+.gauge-value.ok {
+  @apply text-emerald-500;
+}
+
+.gauge-value.tight {
+  @apply text-amber-500;
+}
+
+.gauge-value.shortage {
+  @apply text-red-500;
+}
+
+.gauge-label {
+  @apply absolute bottom-0 left-1/2 -translate-x-1/2 text-center;
+}
+
+.gauge-percent {
+  @apply block text-xl font-display font-bold text-surface-900 tabular-nums;
+}
+
+.gauge-sublabel {
+  @apply block text-xs text-surface-500 -mt-0.5;
+}
+
+.team-details {
+  @apply grid grid-cols-3 gap-2 pt-3 border-t border-surface-200;
+}
+
+.team-stat {
+  @apply text-center;
+}
+
+.team-stat .stat-label {
+  @apply block text-xs text-surface-500 mb-0.5;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.team-stat .stat-value {
+  @apply block text-sm font-mono font-semibold text-surface-900 tabular-nums;
+  margin-top: 0;
+}
+
+.team-stat .stat-value.ok {
+  @apply text-emerald-600;
+}
+
+.team-stat .stat-value.tight {
+  @apply text-amber-600;
+}
+
+.team-stat .stat-value.shortage {
+  @apply text-red-600;
+}
+
+/* Allocations Table */
+.allocations-table-wrapper {
+  @apply flex-1 overflow-auto;
+}
+
+.allocations-table {
+  @apply w-full text-sm;
+}
+
+.allocations-table thead {
+  @apply sticky top-0 z-10;
+}
+
+.allocations-table th {
+  @apply px-4 py-2 text-left text-xs font-semibold text-surface-500
+         uppercase tracking-wider bg-surface-100 border-b border-surface-200;
+}
+
+.allocations-table td {
+  @apply px-4 py-2.5 text-surface-700 border-b border-surface-100;
+}
+
+.allocations-table tr:hover td {
+  @apply bg-surface-50;
+}
+
+.allocations-table tr.overallocated {
+  @apply bg-red-50;
+}
+
+.allocations-table tr.overallocated:hover td {
+  @apply bg-red-100;
+}
+
+.employee-cell {
+  @apply flex items-center gap-2;
+}
+
+.employee-avatar {
+  @apply w-7 h-7 rounded-full bg-gradient-to-br from-accent-400 to-accent-600
+         flex items-center justify-center text-xs font-bold text-white flex-shrink-0;
+}
+
+.initiative-name {
+  @apply text-surface-600 truncate max-w-48;
+}
+
+.percentage-cell {
+  @apply flex items-center gap-2;
+}
+
+.percentage-bar-mini {
+  @apply w-16 h-1.5 bg-surface-200 rounded-full overflow-hidden;
+}
+
+.percentage-bar-mini .bar {
+  @apply h-full bg-accent-500 rounded-full transition-all;
+}
+
+.percentage-bar-mini .bar.over {
+  @apply bg-red-500;
+}
+
+.overallocation-warning {
+  @apply text-red-500;
+}
+
+/* Inline Edit */
+.inline-edit-display {
+  @apply cursor-pointer px-1.5 py-0.5 -mx-1.5 rounded
+         hover:bg-surface-100 transition-colors font-mono text-sm;
+}
+
+.inline-edit-input {
+  @apply px-1.5 py-0.5 -mx-1.5 text-sm font-mono
+         border border-accent-400 rounded outline-none
+         focus:ring-2 focus:ring-accent-500;
+  width: auto;
+  min-width: 60px;
+}
+
+.percentage-input {
+  @apply w-12 text-right;
+}
+
+.auto-allocate {
+  @apply text-xs py-1.5;
+}
+
+/* Compare Modal */
+.modal-overlay {
+  @apply fixed inset-0 z-50 bg-surface-900/60 backdrop-blur-sm
+         flex items-center justify-center p-4;
+  animation: fade-in 0.2s ease-out;
+}
+
+.compare-modal {
+  @apply w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden;
+  animation: slide-up 0.3s ease-out;
+}
+
+.modal-header {
+  @apply flex items-center justify-between px-6 py-4 border-b border-surface-200;
+}
+
+.modal-header h3 {
+  @apply text-lg font-display font-semibold text-surface-900;
+}
+
+.modal-close {
+  @apply p-2 rounded-lg text-surface-400 hover:text-surface-600
+         hover:bg-surface-100 transition-colors;
+}
+
+.modal-body {
+  @apply p-6;
+}
+
+.compare-grid {
+  @apply grid grid-cols-2 gap-6;
+}
+
+.compare-column {
+  @apply p-4 rounded-lg space-y-4;
+}
+
+.compare-column.current {
+  @apply bg-accent-50 border border-accent-200;
+}
+
+.compare-column.baseline {
+  @apply bg-surface-50 border border-surface-200;
+}
+
+.compare-column h4 {
+  @apply text-sm font-semibold text-surface-900 mb-3 pb-2 border-b border-surface-200;
+}
+
+.compare-stat {
+  @apply flex items-center justify-between;
+}
+
+.compare-stat .label {
+  @apply text-sm text-surface-600;
+}
+
+.compare-stat .value {
+  @apply font-mono font-semibold text-surface-900;
+}
+
+.compare-stat .delta {
+  @apply ml-2 text-xs font-mono;
+}
+
+.compare-stat .delta.positive {
+  @apply text-emerald-600;
+}
+
+.compare-stat .delta.negative {
+  @apply text-red-600;
+}
+
+.compare-stat.shortage .value {
+  @apply text-red-600;
+}
+
+/* Guided Mode Overlay */
+.guided-overlay {
+  @apply fixed inset-0 z-[100] pointer-events-none;
+}
+
+.guided-backdrop {
+  @apply absolute inset-0 bg-surface-900/40 pointer-events-auto;
+  animation: fade-in 0.2s ease-out;
+}
+
+.guided-tooltip {
+  @apply absolute bg-white rounded-xl shadow-2xl p-5 w-80 pointer-events-auto;
+  animation: slide-up 0.3s ease-out;
+}
+
+.guided-tooltip.right {
+  @apply left-[440px] top-1/3;
+}
+
+.guided-tooltip.left {
+  @apply right-8 top-1/3;
+}
+
+.guided-tooltip.top {
+  @apply bottom-[320px] left-1/2 -translate-x-1/2;
+}
+
+.guided-step-indicator {
+  @apply flex items-center gap-2 mb-4;
+}
+
+.step-dot {
+  @apply w-2 h-2 rounded-full bg-surface-300 transition-colors;
+}
+
+.step-dot.active {
+  @apply bg-accent-500 w-4;
+}
+
+.step-dot.completed {
+  @apply bg-accent-300;
+}
+
+.guided-title {
+  @apply text-lg font-display font-semibold text-surface-900 mb-2;
+}
+
+.guided-description {
+  @apply text-sm text-surface-600 leading-relaxed mb-4;
+}
+
+.guided-actions {
+  @apply flex items-center justify-between;
+}
+
+.guided-skip {
+  @apply text-sm text-surface-500 hover:text-surface-700 transition-colors;
+}
+
+.guided-next {
+  @apply px-4 py-2 bg-accent-600 text-white text-sm font-medium rounded-lg
+         hover:bg-accent-700 transition-colors;
+}
+
+/* ============================================================================
+   REPORTS DASHBOARD - Executive Command Center
+   Precision instruments with Bloomberg Terminal meets Dieter Rams aesthetic.
+   Data hierarchy, glanceable metrics, subtle visualizations.
+   ============================================================================ */
+
+.reports-dashboard {
+  @apply pb-8;
+}
+
+.reports-header {
+  @apply flex items-start justify-between mb-6;
+}
+
+.reports-actions {
+  @apply flex items-center gap-2;
+}
+
+/* Filter Bar - Glass morphism style */
+.reports-filters {
+  @apply flex items-end justify-between gap-6 mb-8 p-4
+         bg-white/80 backdrop-blur-sm rounded-xl
+         border border-surface-200 shadow-soft;
+}
+
+.filter-group {
+  @apply flex items-end gap-4;
+}
+
+.filter-timestamp {
+  @apply flex items-center gap-1.5 text-xs text-surface-400;
+}
+
+/* Summary Stats Row */
+.reports-summary {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8;
+}
+
+.report-stat-card {
+  @apply relative bg-white rounded-xl border border-surface-200 p-5
+         shadow-soft hover:shadow-elevated transition-all duration-300;
+  animation: slide-up 0.4s ease-out backwards;
+}
+
+.report-stat-card::before {
+  content: '';
+  @apply absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300;
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.03) 0%, transparent 60%);
+}
+
+.report-stat-card:hover::before {
+  @apply opacity-100;
+}
+
+/* Health Score Gauge */
+.report-stat-card.utilization-gauge {
+  @apply flex flex-col;
+}
+
+.gauge-container {
+  @apply relative flex-1 flex flex-col items-center justify-center pt-2;
+}
+
+.gauge-container .gauge-svg {
+  @apply w-full max-w-32;
+}
+
+.gauge-value-label {
+  @apply flex items-baseline gap-0.5 mt-2;
+}
+
+/* Main Reports Grid */
+.reports-grid {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+}
+
+/* Report Card Base */
+.report-card {
+  @apply bg-white rounded-xl border border-surface-200 shadow-soft overflow-hidden;
+  animation: slide-up 0.4s ease-out backwards;
+}
+
+.report-card-header {
+  @apply flex items-center justify-between px-5 py-4 border-b border-surface-100;
+}
+
+.report-card-title {
+  @apply text-sm font-display font-semibold text-surface-900;
+}
+
+.report-card-icon {
+  @apply w-8 h-8 rounded-lg flex items-center justify-center
+         bg-surface-100 text-surface-600;
+}
+
+.report-card-icon.danger {
+  @apply bg-red-50 text-red-600;
+}
+
+.report-card-icon.warning {
+  @apply bg-amber-50 text-amber-600;
+}
+
+.report-card-icon.accent {
+  @apply bg-accent-50 text-accent-600;
+}
+
+.report-card-count {
+  @apply px-2.5 py-1 text-xs font-mono font-semibold rounded-full
+         bg-surface-100 text-surface-600;
+}
+
+.report-card-count.danger {
+  @apply bg-red-100 text-red-700;
+}
+
+.report-card-count.warning {
+  @apply bg-amber-100 text-amber-700;
+}
+
+/* Skill Gap Rows */
+.skill-gap-row {
+  @apply px-5 py-4;
+  animation: slide-up 0.3s ease-out backwards;
+}
+
+.skill-gap-row:last-child {
+  @apply border-b-0;
+}
+
+/* Overallocated People */
+.overallocated-row {
+  @apply px-5 py-3 rounded-lg bg-surface-50/50;
+  animation: slide-up 0.3s ease-out backwards;
+}
+
+.overallocated-avatar {
+  @apply w-9 h-9 rounded-full flex items-center justify-center
+         text-xs font-bold text-white flex-shrink-0;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+
+/* Delivery Timeline */
+.delivery-timeline {
+  @apply grid grid-cols-1 md:grid-cols-2 gap-6 p-5;
+}
+
+.timeline-quarter {
+  @apply space-y-3;
+}
+
+.timeline-quarter-header {
+  @apply flex items-center justify-between pb-2 border-b border-surface-100;
+}
+
+.timeline-items {
+  @apply space-y-3;
+}
+
+.timeline-item {
+  @apply p-3 rounded-lg bg-surface-50/70 border border-surface-100
+         hover:border-surface-200 hover:bg-surface-50 transition-all duration-200;
+  animation: slide-up 0.3s ease-out backwards;
+}
+
+.timeline-item-header {
+  @apply flex items-center gap-2;
+}
+
+.timeline-status-dot {
+  @apply w-2 h-2 rounded-full flex-shrink-0;
+}
+
+.timeline-item-title {
+  @apply flex-1 text-sm font-medium text-surface-900 truncate;
+}
+
+/* Scenario Comparison */
+.scenario-comparison {
+  @apply p-5 space-y-5;
+}
+
+.comparison-headers {
+  @apply flex items-center gap-4;
+}
+
+.comparison-column {
+  @apply flex-1;
+}
+
+.comparison-select {
+  @apply w-full px-3 py-2 text-sm font-medium
+         bg-surface-50 border border-surface-200 rounded-lg
+         focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent
+         cursor-pointer;
+}
+
+.comparison-divider {
+  @apply w-10 h-10 rounded-full bg-surface-100 flex items-center justify-center flex-shrink-0;
+}
+
+.comparison-metrics {
+  @apply space-y-4;
+}
+
+.comparison-metric-row {
+  @apply flex items-center justify-between gap-4 py-3 border-b border-surface-100;
+}
+
+.comparison-metric-row:last-child {
+  @apply border-b-0;
+}
+
+.comparison-value {
+  @apply flex-1;
+}
+
+.comparison-value.left {
+  @apply text-right;
+}
+
+.comparison-value.right {
+  @apply text-left;
+}
+
+.comparison-label {
+  @apply flex flex-col items-center gap-0.5 w-24 text-center;
+}
+
+.comparison-risk {
+  @apply flex items-center justify-between pt-4 border-t border-surface-100;
+}
+
+.risk-badge {
+  @apply px-3 py-1.5 text-xs font-semibold rounded-lg;
+}
+
+/* Animations for reports */
+@keyframes gauge-fill {
+  from {
+    stroke-dashoffset: 141.4;
+  }
+}
+
+.report-stat-card .gauge-svg path:nth-child(2) {
+  animation: gauge-fill 1s ease-out 0.3s backwards;
+}
+
+/* Hover effects for data rows */
+.skill-gap-row:hover,
+.overallocated-row:hover,
+.timeline-item:hover {
+  @apply bg-surface-50;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .reports-filters {
+    @apply flex-col items-stretch gap-4;
+  }
+
+  .filter-group {
+    @apply flex-wrap;
+  }
+
+  .filter-timestamp {
+    @apply justify-center;
+  }
+
+  .delivery-timeline {
+    @apply grid-cols-1;
+  }
+}
+
+@media (max-width: 640px) {
+  .reports-header {
+    @apply flex-col gap-4;
+  }
+
+  .reports-actions {
+    @apply w-full justify-end;
+  }
+
+  .comparison-headers {
+    @apply flex-col gap-2;
+  }
+
+  .comparison-divider {
+    @apply w-8 h-8;
+  }
 }

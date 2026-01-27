@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { LoginPage, ProtectedRoute } from './components/auth';
 import {
   InitiativesList,
   InitiativeDetail,
@@ -7,12 +8,25 @@ import {
   ScenariosList,
   ScenarioPlanner,
   Reports,
+  Unauthorized,
 } from './pages';
 
 export const router = createBrowserRouter([
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/unauthorized',
+    element: <Unauthorized />,
+  },
+  {
     path: '/',
-    element: <Layout />,
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       {
         index: true,

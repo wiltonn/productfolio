@@ -16,6 +16,8 @@ import * as capacityService from '../services/capacity.service.js';
 // ============================================================================
 
 export async function resourcesRoutes(fastify: FastifyInstance) {
+  // Apply authentication to all routes in this plugin
+  fastify.addHook('onRequest', fastify.authenticate);
   // GET /api/employees - List employees
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/employees',

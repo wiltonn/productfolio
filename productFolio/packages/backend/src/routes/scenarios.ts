@@ -14,6 +14,8 @@ import { allocationService } from '../services/allocation.service.js';
 import { scenarioCalculatorService } from '../services/scenario-calculator.service.js';
 
 export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
+  // Apply authentication to all routes in this plugin
+  fastify.addHook('onRequest', fastify.authenticate);
   // GET /api/scenarios - List scenarios
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/scenarios',
