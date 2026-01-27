@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum InitiativeStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+  INTERN
+}
+
+enum UserRole {
+  ADMIN
+  PRODUCT_OWNER
+  BUSINESS_OWNER
+  RESOURCE_MANAGER
+  VIEWER
+}
+
+// ============================================================================
+// User
+// ============================================================================
+
+model User {
+  id    String   @id @default(uuid()) @db.Uuid
+  email String   @unique
+  name  String
+  role  UserRole @default(VIEWER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  ownedInitiatives   Initiative[] @relation("BusinessOwner")
+  managedInitiatives Initiative[] @relation("ProductOwner")
+  approvals          Approval[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// ============================================================================
+// Initiative & Related
+// ============================================================================
+
+model Initiative {
+  id              String           @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?          @db.Text
+  businessOwnerId String           @db.Uuid
+  productOwnerId  String           @db.Uuid
+  status          InitiativeStatus @default(DRAFT)
+  targetQuarter   String? // e.g., "2024-Q1"
+  customFields    Json?            @db.JsonB
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  businessOwner User        @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
+  productOwner  User        @relation("ProductOwner", fields: [productOwnerId], references: [id])
+  scopeItems    ScopeItem[]
+  approvals     Approval[]
+  allocations   Allocation[]
+
+  @@index([businessOwnerId])
+  @@index([productOwnerId])
+  @@index([status])
+  @@index([targetQuarter])
+}
+
+model ScopeItem {
+  id                  String @id @default(uuid()) @db.Uuid
+  initiativeId        String @db.Uuid
+  name                String
+  description         String? @db.Text
+  skillDemand         Json?  @db.JsonB // e.g., { "frontend": 2, "backend": 3 }
+  estimateP50         Float? // 50th percentile estimate in hours
+  estimateP90         Float? // 90th percentile estimate in hours
+  quarterDistribution Json?  @db.JsonB // e.g., { "2024-Q1": 0.6, "2024-Q2": 0.4 }
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  @@index([initiativeId])
+}
+
+model Approval {
+  id           String   @id @default(uuid()) @db.Uuid
+  initiativeId String   @db.Uuid
+  approverId   String   @db.Uuid
+  version      Int      @default(1)
+  notes        String?  @db.Text
+  approvedAt   DateTime @default(now())
+
+  // Relations
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  approver   User       @relation(fields: [approverId], references: [id])
+
+  @@index([initiativeId])
+  @@index([approverId])
+  @@index([approvedAt])
+}
+
+// ============================================================================
+// Employee & Capacity
+// ============================================================================
+
+model Employee {
+  id             String         @id @default(uuid()) @db.Uuid
+  name           String
+  role           String
+  managerId      String?        @db.Uuid
+  employmentType EmploymentType @default(FULL_TIME)
+  hoursPerWeek   Float          @default(40)
+  activeStart    DateTime       @default(now())
+  activeEnd      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  manager          Employee?          @relation("EmployeeManager", fields: [managerId], references: [id])
+  directReports    Employee[]         @relation("EmployeeManager")
+  skills           Skill[]
+  capacityCalendar CapacityCalendar[]
+  allocations      Allocation[]
+
+  @@index([managerId])
+  @@index([employmentType])
+  @@index([activeStart, activeEnd])
+}
+
+model Skill {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String
+  employeeId  String @db.Uuid
+  proficiency Int    @default(3) // 1-5 scale
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, name])
+  @@index([name])
+  @@index([proficiency])
+}
+
+model CapacityCalendar {
+  employeeId     String   @db.Uuid
+  period         DateTime @db.Date // First day of the period (week/month)
+  hoursAvailable Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, period])
+  @@index([period])
+}
+
+// ============================================================================
+// Scenario Planning
+// ============================================================================
+
+model Scenario {
+  id               String @id @default(uuid()) @db.Uuid
+  name             String
+  quarterRange     String // e.g., "2024-Q1:2024-Q4"
+  assumptions      Json?  @db.JsonB // Flexible assumptions storage
+  priorityRankings Json?  @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
+  version          Int    @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  allocations Allocation[]
+
+  @@index([name])
+  @@index([quarterRange])
+}
+
+model Allocation {
+  id           String   @id @default(uuid()) @db.Uuid
+  scenarioId   String   @db.Uuid
+  employeeId   String   @db.Uuid
+  initiativeId String?  @db.Uuid // Nullable for unallocated capacity
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  percentage   Float    @default(100) // Allocation percentage (0-100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  scenario   Scenario    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+
+  @@index([scenarioId])
+  @@index([employeeId])
+  @@index([initiativeId])
+  @@index([startDate, endDate])
+}

@@ -1,0 +1,25 @@
+{
+  "name": "productfolio",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:backend": "npm run dev --workspace=@productfolio/backend",
+    "dev:frontend": "npm run dev --workspace=@productfolio/frontend",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace=@productfolio/backend",
+    "db:migrate": "npm run db:migrate --workspace=@productfolio/backend",
+    "db:push": "npm run db:push --workspace=@productfolio/backend"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
