@@ -1,6 +1,8 @@
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../stores/app.store';
 import { UserMenu } from './auth';
+import { useRoutePrefetch } from '../hooks/useRoutePrefetch';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 // Icons as simple SVG components
 const Icons = {
@@ -46,11 +48,58 @@ const navigation = [
 export function Layout() {
   const { sidebar } = useAppStore();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Prefetch likely navigation targets during idle time
+  useRoutePrefetch();
+
+  // Global keyboard shortcuts
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: 'i',
+        alt: true,
+        callback: () => navigate('/initiatives'),
+        description: 'Go to Initiatives',
+      },
+      {
+        key: 'c',
+        alt: true,
+        callback: () => navigate('/capacity'),
+        description: 'Go to Capacity',
+      },
+      {
+        key: 's',
+        alt: true,
+        callback: () => navigate('/scenarios'),
+        description: 'Go to Scenarios',
+      },
+      {
+        key: 'r',
+        alt: true,
+        callback: () => navigate('/reports'),
+        description: 'Go to Reports',
+      },
+      {
+        key: 'b',
+        alt: true,
+        callback: () => sidebar.toggleCollapsed(),
+        description: 'Toggle sidebar',
+      },
+    ],
+  });
 
   return (
     <div className="min-h-screen bg-surface-50">
+      {/* Skip to main content link */}
+      <a href="#main-content" className="skip-to-main">
+        Skip to main content
+      </a>
+
       {/* Sidebar */}
       <aside
+        role="navigation"
+        aria-label="Main navigation"
         className={`fixed inset-y-0 left-0 z-30 flex flex-col bg-white border-r border-surface-200 transition-all duration-300 ease-in-out ${
           sidebar.isCollapsed ? 'w-16' : 'w-64'
         }`}
@@ -72,7 +121,7 @@ export function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        <nav aria-label="Primary navigation" className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const isActive =
               location.pathname === item.href ||
@@ -82,6 +131,7 @@ export function Layout() {
               <NavLink
                 key={item.name}
                 to={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                   isActive
                     ? 'bg-accent-50 text-accent-700'
@@ -91,10 +141,12 @@ export function Layout() {
               >
                 {/* Active indicator bar */}
                 {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent-500 rounded-r-full" />
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent-500 rounded-r-full" aria-hidden="true" />
                 )}
 
-                <item.icon />
+                <span aria-hidden="true">
+                  <item.icon />
+                </span>
 
                 <span
                   className={`whitespace-nowrap transition-opacity duration-200 ${
@@ -106,7 +158,7 @@ export function Layout() {
 
                 {/* Tooltip for collapsed state */}
                 {sidebar.isCollapsed && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-surface-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
+                  <div role="tooltip" className="absolute left-full ml-2 px-2 py-1 bg-surface-900 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
                     {item.name}
                   </div>
                 )}
@@ -129,12 +181,14 @@ export function Layout() {
 
       {/* Main content */}
       <main
+        id="main-content"
+        role="main"
         className={`min-h-screen transition-all duration-300 ease-in-out ${
           sidebar.isCollapsed ? 'pl-16' : 'pl-64'
         }`}
       >
         {/* Top header bar with subtle texture */}
-        <header className="sticky top-0 z-20 h-16 bg-white/80 backdrop-blur-sm border-b border-surface-200">
+        <header role="banner" className="sticky top-0 z-20 h-16 bg-white/80 backdrop-blur-sm border-b border-surface-200">
           <div className="h-full px-6 flex items-center justify-between">
             <Breadcrumb />
             <div className="flex items-center gap-3">
@@ -168,21 +222,26 @@ function Breadcrumb() {
   };
 
   return (
-    <nav className="flex items-center gap-2 text-sm">
-      {segments.map((segment, index) => {
-        const isLast = index === segments.length - 1;
-        const isUUID = /^[0-9a-f-]{36}$/i.test(segment);
-        const label = breadcrumbMap[segment] || (isUUID ? 'Details' : segment);
+    <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
+      <ol className="flex items-center gap-2">
+        {segments.map((segment, index) => {
+          const isLast = index === segments.length - 1;
+          const isUUID = /^[0-9a-f-]{36}$/i.test(segment);
+          const label = breadcrumbMap[segment] || (isUUID ? 'Details' : segment);
 
-        return (
-          <span key={segment} className="flex items-center gap-2">
-            {index > 0 && <span className="text-surface-300">/</span>}
-            <span className={isLast ? 'text-surface-900 font-medium' : 'text-surface-500'}>
-              {label}
-            </span>
-          </span>
-        );
-      })}
+          return (
+            <li key={segment} className="flex items-center gap-2">
+              {index > 0 && <span className="text-surface-300" aria-hidden="true">/</span>}
+              <span
+                className={isLast ? 'text-surface-900 font-medium' : 'text-surface-500'}
+                aria-current={isLast ? 'page' : undefined}
+              >
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

@@ -87,6 +87,13 @@ export {
   type ApprovalHistoryEntry,
 } from './useScoping';
 
+// Route prefetch hooks
+export { useRoutePrefetch, usePrefetchOnHover } from './useRoutePrefetch';
+
+// Accessibility hooks
+export { useFocusTrap } from './useFocusTrap';
+export { useKeyboardShortcuts, formatShortcut, type KeyboardShortcut } from './useKeyboardShortcuts';
+
 // Types from central types file
 export type {
   Initiative,

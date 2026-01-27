@@ -1,15 +1,82 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LoginPage, ProtectedRoute } from './components/auth';
 import {
-  InitiativesList,
-  InitiativeDetail,
-  Capacity,
-  ScenariosList,
-  ScenarioPlanner,
-  Reports,
-  Unauthorized,
-} from './pages';
+  PageLoadingSkeleton,
+  DetailPageSkeleton,
+  PlannerPageSkeleton,
+  ErrorBoundary,
+} from './components/ui';
+
+// Lazy-load route components for code splitting
+// Each route becomes its own chunk, loaded on-demand
+const InitiativesList = lazy(() =>
+  import('./pages/InitiativesList').then((m) => ({ default: m.InitiativesList }))
+);
+
+const InitiativeDetail = lazy(() =>
+  import('./pages/InitiativeDetail').then((m) => ({ default: m.InitiativeDetail }))
+);
+
+const Capacity = lazy(() =>
+  import('./pages/Capacity').then((m) => ({ default: m.Capacity }))
+);
+
+const ScenariosList = lazy(() =>
+  import('./pages/ScenariosList').then((m) => ({ default: m.ScenariosList }))
+);
+
+const ScenarioPlanner = lazy(() =>
+  import('./pages/ScenarioPlanner').then((m) => ({ default: m.ScenarioPlanner }))
+);
+
+const Reports = lazy(() =>
+  import('./pages/Reports').then((m) => ({ default: m.Reports }))
+);
+
+const Unauthorized = lazy(() =>
+  import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
+);
+
+// Suspense wrappers with appropriate skeletons for each route type
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoadingSkeleton />}>{children}</Suspense>;
+}
+
+function LazyDetailPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<DetailPageSkeleton />}>{children}</Suspense>;
+}
+
+function LazyPlannerPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PlannerPageSkeleton />}>{children}</Suspense>;
+}
+
+// Minimal fallback for non-critical pages
+function MinimalFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex items-center gap-3 text-surface-500">
+        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="3"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+        <span className="text-sm font-medium">Loading...</span>
+      </div>
+    </div>
+  );
+}
 
 export const router = createBrowserRouter([
   {
@@ -18,13 +85,19 @@ export const router = createBrowserRouter([
   },
   {
     path: '/unauthorized',
-    element: <Unauthorized />,
+    element: (
+      <Suspense fallback={<MinimalFallback />}>
+        <Unauthorized />
+      </Suspense>
+    ),
   },
   {
     path: '/',
     element: (
       <ProtectedRoute>
-        <Layout />
+        <ErrorBoundary>
+          <Layout />
+        </ErrorBoundary>
       </ProtectedRoute>
     ),
     children: [
@@ -34,27 +107,63 @@ export const router = createBrowserRouter([
       },
       {
         path: 'initiatives',
-        element: <InitiativesList />,
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <InitiativesList />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
       },
       {
         path: 'initiatives/:id',
-        element: <InitiativeDetail />,
+        element: (
+          <ErrorBoundary>
+            <LazyDetailPage>
+              <InitiativeDetail />
+            </LazyDetailPage>
+          </ErrorBoundary>
+        ),
       },
       {
         path: 'capacity',
-        element: <Capacity />,
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <Capacity />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
       },
       {
         path: 'scenarios',
-        element: <ScenariosList />,
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <ScenariosList />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
       },
       {
         path: 'scenarios/:id',
-        element: <ScenarioPlanner />,
+        element: (
+          <ErrorBoundary>
+            <LazyPlannerPage>
+              <ScenarioPlanner />
+            </LazyPlannerPage>
+          </ErrorBoundary>
+        ),
       },
       {
         path: 'reports',
-        element: <Reports />,
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <Reports />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
       },
     ],
   },
