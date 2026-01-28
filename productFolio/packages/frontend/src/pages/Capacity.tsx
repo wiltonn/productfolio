@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SearchInput, Checkbox } from '../components/ui';
+import { useEmployees, Employee } from '../hooks/useEmployees';
 
 // Types
 interface Skill {
@@ -47,91 +48,22 @@ const AVATAR_COLORS = [
   'from-fuchsia-400 to-fuchsia-600',
 ];
 
-const mockEmployees: CapacityEmployee[] = [
-  {
-    id: '1',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@company.com',
-    role: 'Senior Frontend Engineer',
-    department: 'Engineering',
-    skills: [{ name: 'Frontend', proficiency: 5 }, { name: 'React', proficiency: 5 }, { name: 'TypeScript', proficiency: 4 }],
-    hoursPerWeek: 40,
+// Map API Employee to CapacityEmployee format
+function mapEmployeeToCapacity(employee: Employee, index: number): CapacityEmployee {
+  return {
+    id: employee.id,
+    name: employee.name,
+    email: employee.email,
+    role: employee.title || 'Team Member',
+    department: employee.department || 'Engineering',
+    skills: employee.skills.map(s => ({ name: s, proficiency: 3 })), // Default proficiency
+    hoursPerWeek: employee.defaultCapacityHours,
     status: 'ACTIVE',
-    avatarColor: AVATAR_COLORS[0],
-    ptoHours: 16,
-  },
-  {
-    id: '2',
-    name: 'Mike Johnson',
-    email: 'mike.johnson@company.com',
-    role: 'Backend Lead',
-    department: 'Engineering',
-    skills: [{ name: 'Backend', proficiency: 5 }, { name: 'Go', proficiency: 5 }, { name: 'PostgreSQL', proficiency: 4 }],
-    hoursPerWeek: 40,
-    status: 'ACTIVE',
-    avatarColor: AVATAR_COLORS[1],
+    avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
     ptoHours: 0,
-  },
-  {
-    id: '3',
-    name: 'Alex Rivera',
-    email: 'alex.rivera@company.com',
-    role: 'Full Stack Developer',
-    department: 'Engineering',
-    skills: [{ name: 'Frontend', proficiency: 4 }, { name: 'Backend', proficiency: 3 }, { name: 'React', proficiency: 4 }],
-    hoursPerWeek: 32,
-    status: 'ACTIVE',
-    avatarColor: AVATAR_COLORS[2],
-    ptoHours: 8,
-  },
-  {
-    id: '4',
-    name: 'Emily Watson',
-    email: 'emily.watson@company.com',
-    role: 'Data Engineer',
-    department: 'Data',
-    skills: [{ name: 'Python', proficiency: 5 }, { name: 'Data', proficiency: 5 }, { name: 'ML/AI', proficiency: 3 }],
-    hoursPerWeek: 40,
-    status: 'ON_LEAVE',
-    avatarColor: AVATAR_COLORS[3],
-    ptoHours: 40,
-  },
-  {
-    id: '5',
-    name: 'James Lee',
-    email: 'james.lee@company.com',
-    role: 'UI Designer',
-    department: 'Design',
-    skills: [{ name: 'Design', proficiency: 5 }, { name: 'Frontend', proficiency: 2 }],
-    hoursPerWeek: 40,
-    status: 'ACTIVE',
-    avatarColor: AVATAR_COLORS[4],
-    ptoHours: 0,
-  },
-  {
-    id: '6',
-    name: 'Priya Patel',
-    email: 'priya.patel@company.com',
-    role: 'DevOps Engineer',
-    department: 'Infrastructure',
-    skills: [{ name: 'DevOps', proficiency: 5 }, { name: 'AWS', proficiency: 4 }, { name: 'Python', proficiency: 3 }],
-    hoursPerWeek: 40,
-    status: 'CONTRACTOR',
-    avatarColor: AVATAR_COLORS[5],
-    ptoHours: 0,
-  },
-];
+  };
+}
 
-const mockHolidays: Holiday[] = [
-  { date: new Date(2026, 0, 1), name: "New Year's Day" },
-  { date: new Date(2026, 0, 19), name: 'MLK Day' },
-  { date: new Date(2026, 1, 16), name: "Presidents' Day" },
-  { date: new Date(2026, 4, 25), name: 'Memorial Day' },
-  { date: new Date(2026, 6, 3), name: 'Independence Day (Observed)' },
-  { date: new Date(2026, 8, 7), name: 'Labor Day' },
-  { date: new Date(2026, 10, 26), name: 'Thanksgiving' },
-  { date: new Date(2026, 11, 25), name: 'Christmas' },
-];
 
 // Slider Component
 function Slider({
@@ -573,7 +505,9 @@ function EffectiveCapacityPreview({
 
     // Calculate effective
     const effectiveHours = grossQuarterlyHours - totalPtoHours - holidayHours - ktloHours - meetingHours;
-    const utilizationPercent = Math.round((effectiveHours / grossQuarterlyHours) * 100);
+    const utilizationPercent = grossQuarterlyHours > 0
+      ? Math.round((effectiveHours / grossQuarterlyHours) * 100)
+      : 0;
 
     return {
       activeEmployees: activeEmployees.length,
@@ -692,17 +626,39 @@ function EffectiveCapacityPreview({
   );
 }
 
+// Default holidays (can be fetched from API in the future)
+const DEFAULT_HOLIDAYS: Holiday[] = [
+  { date: new Date(2026, 0, 1), name: "New Year's Day" },
+  { date: new Date(2026, 0, 19), name: 'MLK Day' },
+  { date: new Date(2026, 1, 16), name: "Presidents' Day" },
+  { date: new Date(2026, 4, 25), name: 'Memorial Day' },
+  { date: new Date(2026, 6, 3), name: 'Independence Day (Observed)' },
+  { date: new Date(2026, 8, 7), name: 'Labor Day' },
+  { date: new Date(2026, 10, 26), name: 'Thanksgiving' },
+  { date: new Date(2026, 11, 25), name: 'Christmas' },
+];
+
 // Main Component
 export function Capacity() {
+  // Fetch employees from API
+  const { data: employeesData, isLoading } = useEmployees({ limit: 100 });
+
   // State
-  const [employees, setEmployees] = useState<CapacityEmployee[]>(mockEmployees);
+  const [employees, setEmployees] = useState<CapacityEmployee[]>([]);
   const [settings, setSettings] = useState<CapacitySettings>({
     defaultHoursPerWeek: 40,
     ktloPercentage: 15,
     meetingOverheadPercentage: 10,
-    holidays: mockHolidays.map(h => h.date),
+    holidays: DEFAULT_HOLIDAYS.map(h => h.date),
   });
-  const [holidays, setHolidays] = useState<Holiday[]>(mockHolidays);
+  const [holidays, setHolidays] = useState<Holiday[]>(DEFAULT_HOLIDAYS);
+
+  // Update employees when API data changes
+  useEffect(() => {
+    if (employeesData?.data) {
+      setEmployees(employeesData.data.map((e, i) => mapEmployeeToCapacity(e, i)));
+    }
+  }, [employeesData]);
 
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());

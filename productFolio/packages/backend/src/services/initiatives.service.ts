@@ -77,6 +77,7 @@ export async function list(
       include: {
         businessOwner: true,
         productOwner: true,
+        scopeItems: true,
       },
     }),
     prisma.initiative.count({ where }),

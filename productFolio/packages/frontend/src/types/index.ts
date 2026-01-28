@@ -18,6 +18,20 @@ export interface User {
   updatedAt: string;
 }
 
+// Scope item type
+export interface ScopeItem {
+  id: string;
+  initiativeId: string;
+  name: string;
+  description: string | null;
+  skillDemand: Record<string, number> | null;
+  estimateP50: number | null;
+  estimateP90: number | null;
+  quarterDistribution: Record<string, number> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Initiative types
 export interface Initiative {
   id: string;
@@ -33,6 +47,7 @@ export interface Initiative {
   // Relations (optional, depends on includes)
   businessOwner?: User;
   productOwner?: User;
+  scopeItems?: ScopeItem[];
 }
 
 // API Response types

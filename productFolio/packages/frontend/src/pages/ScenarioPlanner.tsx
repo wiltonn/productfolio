@@ -19,8 +19,20 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { SearchInput, StatusBadge, Checkbox } from '../components/ui';
-import type { InitiativeStatus } from '../types';
+import { SearchInput, StatusBadge, Checkbox, Modal, Select } from '../components/ui';
+import type { SelectOption } from '../components/ui';
+import {
+  useScenario,
+  useScenarioAllocations,
+  useScenarioAnalysis,
+  useUpdatePriorities,
+  useCreateAllocation,
+  useUpdateAllocation,
+  useDeleteAllocation,
+} from '../hooks/useScenarios';
+import { useInitiatives } from '../hooks/useInitiatives';
+import { useEmployees } from '../hooks/useEmployees';
+import type { InitiativeStatus, Initiative } from '../types';
 
 // ============================================================================
 // TYPES
@@ -76,52 +88,106 @@ interface ScenarioAssumptions {
 }
 
 // ============================================================================
-// MOCK DATA
+// HELPER FUNCTIONS
 // ============================================================================
 
-const mockInitiatives: InitiativeForPlanning[] = [
-  { id: '1', title: 'Customer Portal Redesign', quarter: '2026-Q1', status: 'APPROVED', totalHours: 520, demandBySkill: { Frontend: 280, Backend: 160, Design: 80 }, hasShortage: false },
-  { id: '2', title: 'API Gateway Migration', quarter: '2026-Q1', status: 'APPROVED', totalHours: 440, demandBySkill: { Backend: 320, DevOps: 120 }, hasShortage: true },
-  { id: '3', title: 'Mobile App v2', quarter: '2026-Q2', status: 'IN_PROGRESS', totalHours: 680, demandBySkill: { Frontend: 360, Backend: 200, Design: 120 }, hasShortage: false },
-  { id: '4', title: 'Data Pipeline Optimization', quarter: '2026-Q1', status: 'APPROVED', totalHours: 320, demandBySkill: { Backend: 200, Data: 120 }, hasShortage: true },
-  { id: '5', title: 'Analytics Dashboard', quarter: '2026-Q2', status: 'PENDING_APPROVAL', totalHours: 400, demandBySkill: { Frontend: 200, Data: 120, Design: 80 }, hasShortage: false },
-  { id: '6', title: 'Security Audit Implementation', quarter: '2026-Q1', status: 'APPROVED', totalHours: 240, demandBySkill: { Backend: 120, DevOps: 80, Security: 40 }, hasShortage: true },
-  { id: '7', title: 'Search Infrastructure', quarter: '2026-Q2', status: 'DRAFT', totalHours: 560, demandBySkill: { Backend: 320, Data: 160, DevOps: 80 }, hasShortage: false },
-  { id: '8', title: 'Notification System', quarter: '2026-Q1', status: 'APPROVED', totalHours: 280, demandBySkill: { Backend: 160, Frontend: 120 }, hasShortage: false },
-];
+// Transform API Initiative to planning format
+function transformInitiativeForPlanning(
+  initiative: Initiative,
+  capacityAnalysis: CapacityBySkill[]
+): InitiativeForPlanning {
+  // Calculate total hours from scope items
+  const totalHours = initiative.scopeItems?.reduce((sum, item) =>
+    sum + (item.estimateP50 || 0), 0
+  ) ?? 0;
 
-const mockCapacityByQuarter: CapacityByQuarter[] = [
-  { quarter: '2026-Q1', capacity: 1800, demand: 1520, gap: 280 },
-  { quarter: '2026-Q2', capacity: 1920, demand: 1640, gap: 280 },
-  { quarter: '2026-Q3', capacity: 1760, demand: 1200, gap: 560 },
-  { quarter: '2026-Q4', capacity: 1840, demand: 800, gap: 1040 },
-];
+  // Aggregate skill demand from scope items
+  const demandBySkill: Record<string, number> = {};
+  initiative.scopeItems?.forEach(item => {
+    if (item.skillDemand) {
+      Object.entries(item.skillDemand as Record<string, number>).forEach(([skill, hours]) => {
+        demandBySkill[skill] = (demandBySkill[skill] || 0) + hours;
+      });
+    }
+  });
 
-const mockCapacityBySkill: CapacityBySkill[] = [
-  { skill: 'Frontend', capacity: 960, demand: 960, gap: 0 },
-  { skill: 'Backend', capacity: 1280, demand: 1480, gap: -200 },
-  { skill: 'Design', capacity: 400, demand: 280, gap: 120 },
-  { skill: 'Data', capacity: 320, demand: 400, gap: -80 },
-  { skill: 'DevOps', capacity: 240, demand: 280, gap: -40 },
-  { skill: 'Security', capacity: 80, demand: 40, gap: 40 },
-];
+  // Check if any required skill has shortage
+  const hasShortage = Object.keys(demandBySkill).some(skill => {
+    const analysis = capacityAnalysis.find(a => a.skill === skill);
+    return analysis && analysis.gap < 0;
+  });
 
-const mockCapacityByTeam: CapacityByTeam[] = [
-  { team: 'Platform', capacity: 1200, demand: 1080, gap: 120 },
-  { team: 'Product', capacity: 960, demand: 1120, gap: -160 },
-  { team: 'Data', capacity: 480, demand: 520, gap: -40 },
-  { team: 'Infrastructure', capacity: 320, demand: 280, gap: 40 },
-];
+  return {
+    id: initiative.id,
+    title: initiative.title,
+    quarter: initiative.targetQuarter || 'Unassigned',
+    status: initiative.status,
+    totalHours,
+    demandBySkill,
+    hasShortage,
+  };
+}
 
-const mockAllocations: AllocationRow[] = [
-  { id: '1', employeeId: 'e1', employeeName: 'Sarah Chen', initiativeId: '1', initiativeTitle: 'Customer Portal Redesign', startDate: '2026-01-06', endDate: '2026-03-27', percentage: 80, isOverallocated: false },
-  { id: '2', employeeId: 'e1', employeeName: 'Sarah Chen', initiativeId: '3', initiativeTitle: 'Mobile App v2', startDate: '2026-01-06', endDate: '2026-02-14', percentage: 40, isOverallocated: true },
-  { id: '3', employeeId: 'e2', employeeName: 'Mike Johnson', initiativeId: '2', initiativeTitle: 'API Gateway Migration', startDate: '2026-01-06', endDate: '2026-03-27', percentage: 100, isOverallocated: false },
-  { id: '4', employeeId: 'e3', employeeName: 'Alex Rivera', initiativeId: '1', initiativeTitle: 'Customer Portal Redesign', startDate: '2026-02-03', endDate: '2026-03-27', percentage: 60, isOverallocated: false },
-  { id: '5', employeeId: 'e4', employeeName: 'Emily Watson', initiativeId: '4', initiativeTitle: 'Data Pipeline Optimization', startDate: '2026-01-06', endDate: '2026-02-28', percentage: 100, isOverallocated: false },
-  { id: '6', employeeId: 'e5', employeeName: 'Priya Patel', initiativeId: '2', initiativeTitle: 'API Gateway Migration', startDate: '2026-01-20', endDate: '2026-03-13', percentage: 50, isOverallocated: false },
-  { id: '7', employeeId: 'e5', employeeName: 'Priya Patel', initiativeId: '6', initiativeTitle: 'Security Audit Implementation', startDate: '2026-02-03', endDate: '2026-03-27', percentage: 60, isOverallocated: true },
-];
+// Calculate capacity by quarter from employees and allocations
+function calculateCapacityByQuarter(
+  employees: Array<{ hoursPerWeek: number }>,
+  quarterRange: string
+): CapacityByQuarter[] {
+  const [startQ, endQ] = quarterRange.split(':');
+  const quarters: string[] = [];
+
+  // Generate quarters in range
+  if (startQ && endQ) {
+    const [startYear, startQtr] = startQ.split('-Q').map(Number);
+    const [endYear, endQtr] = endQ.split('-Q').map(Number);
+
+    let year = startYear;
+    let qtr = startQtr;
+
+    while (year < endYear || (year === endYear && qtr <= endQtr)) {
+      quarters.push(`${year}-Q${qtr}`);
+      qtr++;
+      if (qtr > 4) {
+        qtr = 1;
+        year++;
+      }
+      if (quarters.length > 8) break; // Safety limit
+    }
+  }
+
+  // Estimate 13 weeks per quarter, calculate total capacity
+  const weeksPerQuarter = 13;
+  const totalWeeklyHours = employees.reduce((sum, e) => sum + (e.hoursPerWeek || 40), 0);
+  const quarterlyCapacity = totalWeeklyHours * weeksPerQuarter;
+
+  return quarters.map((quarter) => ({
+    quarter,
+    capacity: quarterlyCapacity,
+    demand: Math.round(quarterlyCapacity * (0.7 + Math.random() * 0.3)), // Placeholder
+    gap: Math.round(quarterlyCapacity * 0.1), // Placeholder
+  }));
+}
+
+// Calculate capacity by team (simplified - group by first skill)
+function calculateCapacityByTeam(employees: Array<{ skills: string[]; hoursPerWeek: number }>): CapacityByTeam[] {
+  const teams: Record<string, { capacity: number; count: number }> = {};
+
+  employees.forEach(emp => {
+    const team = emp.skills?.[0] || 'General';
+    if (!teams[team]) {
+      teams[team] = { capacity: 0, count: 0 };
+    }
+    teams[team].capacity += (emp.hoursPerWeek || 40) * 13; // Quarter
+    teams[team].count++;
+  });
+
+  return Object.entries(teams).map(([team, data]) => ({
+    team,
+    capacity: data.capacity,
+    demand: Math.round(data.capacity * 0.85), // Placeholder
+    gap: Math.round(data.capacity * 0.15),
+  }));
+}
 
 
 // ============================================================================
@@ -609,13 +675,24 @@ function CompareModal({
 export function ScenarioPlanner() {
   const { id } = useParams<{ id: string }>();
 
+  // API hooks
+  const { data: scenario, isLoading: scenarioLoading } = useScenario(id || '');
+  const { data: allocationsData, isLoading: allocationsLoading } = useScenarioAllocations(id || '');
+  const { data: capacityAnalysis, isLoading: analysisLoading } = useScenarioAnalysis(id || '');
+  const { data: initiativesData, isLoading: initiativesLoading } = useInitiatives({ limit: 100 });
+  const { data: employeesData } = useEmployees({ limit: 100 });
+  const updatePriorities = useUpdatePriorities();
+  const createAllocation = useCreateAllocation();
+  const updateAllocation = useUpdateAllocation();
+  const deleteAllocation = useDeleteAllocation();
+
   // Panel sizing state
   const [leftPanelWidth, setLeftPanelWidth] = useState(420);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(280);
   const [isBottomPanelCollapsed, setIsBottomPanelCollapsed] = useState(false);
 
-  // Initiative state
-  const [initiatives, setInitiatives] = useState(mockInitiatives);
+  // Local state for drag-and-drop ordering
+  const [initiativeOrder, setInitiativeOrder] = useState<string[]>([]);
   const [approvedOnly, setApprovedOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -623,22 +700,177 @@ export function ScenarioPlanner() {
   // Visualization state
   const [activeTab, setActiveTab] = useState<'quarter' | 'skill' | 'team'>('quarter');
 
-  // Allocation state
-  const [allocations, setAllocations] = useState(mockAllocations);
-
   // Scenario state
-  const [scenarioName, setScenarioName] = useState('Q1 2026 Resource Plan');
+  const [showAssumptions, setShowAssumptions] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [assumptions, setAssumptions] = useState<ScenarioAssumptions>({
     allocationCap: 100,
     bufferPercentage: 10,
     ktloPercentage: 15,
   });
-  const [showAssumptions, setShowAssumptions] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
 
   // Guided mode
   const [showGuidedMode, setShowGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState(0);
+
+  // Add allocation modal state
+  const [isAddAllocationModalOpen, setIsAddAllocationModalOpen] = useState(false);
+  const [newAllocation, setNewAllocation] = useState({
+    employeeId: '',
+    initiativeId: '',
+    startDate: '',
+    endDate: '',
+    percentage: 100,
+  });
+
+  // Transform API data to component formats
+  const capacityBySkill: CapacityBySkill[] = useMemo(() => {
+    if (!capacityAnalysis) return [];
+    return capacityAnalysis.map(item => ({
+      skill: item.skill,
+      capacity: item.capacity,
+      demand: item.demand,
+      gap: item.gap,
+    }));
+  }, [capacityAnalysis]);
+
+  const initiatives: InitiativeForPlanning[] = useMemo(() => {
+    if (!initiativesData?.data) return [];
+
+    const transformed = initiativesData.data.map(init =>
+      transformInitiativeForPlanning(init, capacityBySkill)
+    );
+
+    // Sort by priority rankings from scenario if available
+    if (scenario?.priorityRankings && initiativeOrder.length === 0) {
+      const rankings = scenario.priorityRankings as Array<{ initiativeId: string; rank: number }>;
+      transformed.sort((a, b) => {
+        const aRank = rankings.find(r => r.initiativeId === a.id)?.rank ?? 999;
+        const bRank = rankings.find(r => r.initiativeId === b.id)?.rank ?? 999;
+        return aRank - bRank;
+      });
+    } else if (initiativeOrder.length > 0) {
+      // Use local order from drag-and-drop
+      transformed.sort((a, b) => {
+        const aIdx = initiativeOrder.indexOf(a.id);
+        const bIdx = initiativeOrder.indexOf(b.id);
+        if (aIdx === -1 && bIdx === -1) return 0;
+        if (aIdx === -1) return 1;
+        if (bIdx === -1) return -1;
+        return aIdx - bIdx;
+      });
+    }
+
+    return transformed;
+  }, [initiativesData, capacityBySkill, scenario, initiativeOrder]);
+
+  const allocations: AllocationRow[] = useMemo(() => {
+    if (!allocationsData || !employeesData?.data || !initiativesData?.data) return [];
+
+    // Group allocations by employee to detect overallocations
+    const employeeAllocations: Record<string, number> = {};
+    allocationsData.forEach(alloc => {
+      employeeAllocations[alloc.employeeId] = (employeeAllocations[alloc.employeeId] || 0) + alloc.percentage;
+    });
+
+    return allocationsData.map(alloc => {
+      const employee = employeesData.data.find(e => e.id === alloc.employeeId);
+      const initiative = initiativesData.data.find(i => i.id === alloc.initiativeId);
+
+      return {
+        id: alloc.id,
+        employeeId: alloc.employeeId,
+        employeeName: employee?.name || 'Unknown',
+        initiativeId: alloc.initiativeId,
+        initiativeTitle: initiative?.title || 'Unknown Initiative',
+        startDate: alloc.startDate.split('T')[0],
+        endDate: alloc.endDate.split('T')[0],
+        percentage: alloc.percentage,
+        isOverallocated: employeeAllocations[alloc.employeeId] > 100,
+      };
+    });
+  }, [allocationsData, employeesData, initiativesData]);
+
+  const capacityByQuarter: CapacityByQuarter[] = useMemo(() => {
+    if (!employeesData?.data || !scenario?.quarterRange) return [];
+    return calculateCapacityByQuarter(
+      employeesData.data.map(e => ({ hoursPerWeek: e.defaultCapacityHours })),
+      scenario.quarterRange
+    );
+  }, [employeesData, scenario]);
+
+  const capacityByTeam: CapacityByTeam[] = useMemo(() => {
+    if (!employeesData?.data) return [];
+    return calculateCapacityByTeam(
+      employeesData.data.map(e => ({
+        skills: e.skills || [],
+        hoursPerWeek: e.defaultCapacityHours,
+      }))
+    );
+  }, [employeesData]);
+
+  // Options for allocation modal dropdowns
+  const employeeOptions: SelectOption[] = useMemo(() => {
+    if (!employeesData?.data) return [];
+    return employeesData.data.map(emp => ({
+      value: emp.id,
+      label: emp.name,
+    }));
+  }, [employeesData]);
+
+  const initiativeOptions: SelectOption[] = useMemo(() => {
+    if (!initiativesData?.data) return [];
+    return initiativesData.data.map(init => ({
+      value: init.id,
+      label: init.title,
+    }));
+  }, [initiativesData]);
+
+  // Compute default dates based on scenario quarter range
+  const defaultAllocationDates = useMemo(() => {
+    if (!scenario?.quarterRange) {
+      const today = new Date();
+      const threeMonthsLater = new Date(today);
+      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+      return {
+        startDate: today.toISOString().split('T')[0],
+        endDate: threeMonthsLater.toISOString().split('T')[0],
+      };
+    }
+    const [startQ, endQ] = scenario.quarterRange.split(':');
+    // Convert quarter to date (e.g., 2025-Q1 -> 2025-01-01)
+    const quarterToDate = (q: string, isEnd = false) => {
+      const [year, qNum] = q.split('-Q').map(Number);
+      const month = isEnd ? (qNum * 3) : ((qNum - 1) * 3 + 1);
+      const day = isEnd ? new Date(year, month, 0).getDate() : 1;
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    };
+    return {
+      startDate: quarterToDate(startQ),
+      endDate: quarterToDate(endQ, true),
+    };
+  }, [scenario?.quarterRange]);
+
+  // Initialize initiative order from scenario priorities
+  useEffect(() => {
+    if (scenario?.priorityRankings && initiativeOrder.length === 0) {
+      const rankings = scenario.priorityRankings as Array<{ initiativeId: string; rank: number }>;
+      const sorted = [...rankings].sort((a, b) => a.rank - b.rank);
+      setInitiativeOrder(sorted.map(r => r.initiativeId));
+    }
+  }, [scenario, initiativeOrder.length]);
+
+  // Update assumptions from scenario
+  useEffect(() => {
+    if (scenario?.assumptions) {
+      const a = scenario.assumptions as Record<string, number>;
+      setAssumptions({
+        allocationCap: a.allocationCapPercentage || 100,
+        bufferPercentage: a.bufferPercentage || 10,
+        ktloPercentage: 15,
+      });
+    }
+  }, [scenario]);
 
   // DnD sensors
   const sensors = useSensors(
@@ -668,11 +900,11 @@ export function ScenarioPlanner() {
   // Summary stats
   const stats = useMemo(() => {
     const totalDemand = initiatives.reduce((sum, i) => sum + i.totalHours, 0);
-    const totalCapacity = mockCapacityByQuarter.reduce((sum, q) => sum + q.capacity, 0);
-    const skillGaps = mockCapacityBySkill.filter(s => s.gap < 0).length;
-    const utilizationPercent = Math.round((totalDemand / totalCapacity) * 100);
+    const totalCapacity = capacityByQuarter.reduce((sum, q) => sum + q.capacity, 0);
+    const skillGaps = capacityBySkill.filter(s => s.gap < 0).length;
+    const utilizationPercent = totalCapacity > 0 ? Math.round((totalDemand / totalCapacity) * 100) : 0;
     return { totalDemand, totalCapacity, skillGaps, utilizationPercent };
-  }, [initiatives]);
+  }, [initiatives, capacityByQuarter, capacityBySkill]);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -684,13 +916,26 @@ export function ScenarioPlanner() {
     setActiveId(null);
 
     if (over && active.id !== over.id) {
-      setInitiatives(items => {
-        const oldIndex = items.findIndex(i => i.id === active.id);
-        const newIndex = items.findIndex(i => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
+      const currentOrder = initiativeOrder.length > 0
+        ? initiativeOrder
+        : initiatives.map(i => i.id);
+
+      const oldIndex = currentOrder.indexOf(String(active.id));
+      const newIndex = currentOrder.indexOf(String(over.id));
+      const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+
+      setInitiativeOrder(newOrder);
+
+      // Save to API
+      if (id) {
+        const priorities = newOrder.map((initiativeId, idx) => ({
+          initiativeId,
+          rank: idx + 1,
+        }));
+        updatePriorities.mutate({ scenarioId: id, priorities });
+      }
     }
-  }, []);
+  }, [initiativeOrder, initiatives, id, updatePriorities]);
 
   // Allocation handlers
   const handleAllocationChange = useCallback((
@@ -698,13 +943,63 @@ export function ScenarioPlanner() {
     field: keyof AllocationRow,
     value: string
   ) => {
-    setAllocations(allocs => allocs.map(a => {
-      if (a.id === allocationId) {
-        return { ...a, [field]: field === 'percentage' ? Number(value) : value };
-      }
-      return a;
-    }));
-  }, []);
+    if (!id) return;
+    const data: Record<string, string | number> = {};
+    if (field === 'startDate' || field === 'endDate') {
+      data[field] = value;
+    } else if (field === 'percentage') {
+      data[field] = Number(value);
+    }
+    updateAllocation.mutate({
+      scenarioId: id,
+      allocationId,
+      data,
+    });
+  }, [id, updateAllocation]);
+
+  const handleDeleteAllocation = useCallback((allocationId: string) => {
+    if (!id) return;
+    deleteAllocation.mutate({
+      scenarioId: id,
+      allocationId,
+    });
+  }, [id, deleteAllocation]);
+
+  const handleCreateAllocation = useCallback(() => {
+    if (!id || !newAllocation.employeeId) return;
+    createAllocation.mutate({
+      scenarioId: id,
+      data: {
+        employeeId: newAllocation.employeeId,
+        initiativeId: newAllocation.initiativeId || undefined,
+        startDate: newAllocation.startDate || defaultAllocationDates.startDate,
+        endDate: newAllocation.endDate || defaultAllocationDates.endDate,
+        percentage: newAllocation.percentage,
+      },
+    }, {
+      onSuccess: () => {
+        setIsAddAllocationModalOpen(false);
+        setNewAllocation({
+          employeeId: '',
+          initiativeId: '',
+          startDate: '',
+          endDate: '',
+          percentage: 100,
+        });
+      },
+    });
+  }, [id, newAllocation, defaultAllocationDates, createAllocation]);
+
+  const openAddAllocationModal = useCallback(() => {
+    setNewAllocation({
+      employeeId: '',
+      initiativeId: '',
+      startDate: defaultAllocationDates.startDate,
+      endDate: defaultAllocationDates.endDate,
+      percentage: 100,
+    });
+    setIsAddAllocationModalOpen(true);
+  }, [defaultAllocationDates]);
 
   const handleAutoAllocate = useCallback(() => {
     // Placeholder for auto-allocation logic
@@ -732,6 +1027,19 @@ export function ScenarioPlanner() {
     ? initiatives.find(i => i.id === activeId)
     : null;
 
+  const isLoading = scenarioLoading || initiativesLoading || allocationsLoading || analysisLoading;
+
+  if (isLoading && !scenario) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-600 mx-auto"></div>
+          <p className="mt-4 text-surface-600">Loading scenario...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="scenario-planner">
       {/* Header */}
@@ -744,13 +1052,8 @@ export function ScenarioPlanner() {
             Scenarios
           </Link>
           <div className="scenario-title-group">
-            <input
-              type="text"
-              value={scenarioName}
-              onChange={(e) => setScenarioName(e.target.value)}
-              className="scenario-name-input"
-            />
-            <span className="scenario-id">ID: {id}</span>
+            <span className="scenario-name-input">{scenario?.name || 'Untitled Scenario'}</span>
+            <span className="scenario-id">{scenario?.quarterRange || ''}</span>
           </div>
         </div>
 
@@ -957,9 +1260,9 @@ export function ScenarioPlanner() {
             </div>
 
             <div className="panel-content">
-              {activeTab === 'quarter' && <CapacityBarChart data={mockCapacityByQuarter} />}
-              {activeTab === 'skill' && <SkillCapacityChart data={mockCapacityBySkill} />}
-              {activeTab === 'team' && <TeamCapacityChart data={mockCapacityByTeam} />}
+              {activeTab === 'quarter' && <CapacityBarChart data={capacityByQuarter} />}
+              {activeTab === 'skill' && <SkillCapacityChart data={capacityBySkill} />}
+              {activeTab === 'team' && <TeamCapacityChart data={capacityByTeam} />}
             </div>
           </div>
         </div>
@@ -990,12 +1293,20 @@ export function ScenarioPlanner() {
               <span className="panel-count">{allocations.length} allocations</span>
             </div>
             {!isBottomPanelCollapsed && (
-              <button onClick={handleAutoAllocate} className="btn-primary auto-allocate">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                </svg>
-                Auto-allocate
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={openAddAllocationModal} className="btn-secondary">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add Allocation
+                </button>
+                <button onClick={handleAutoAllocate} className="btn-primary auto-allocate">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                  </svg>
+                  Auto-allocate
+                </button>
+              </div>
             )}
           </div>
 
@@ -1014,7 +1325,8 @@ export function ScenarioPlanner() {
                       <th>Start</th>
                       <th>End</th>
                       <th>% Allocation</th>
-                      <th></th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1074,6 +1386,17 @@ export function ScenarioPlanner() {
                             </span>
                           )}
                         </td>
+                        <td>
+                          <button
+                            onClick={() => handleDeleteAllocation(allocation.id)}
+                            className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete allocation"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1101,6 +1424,101 @@ export function ScenarioPlanner() {
           onSkip={() => setShowGuidedMode(false)}
         />
       )}
+
+      {/* Add Allocation Modal */}
+      <Modal
+        isOpen={isAddAllocationModalOpen}
+        onClose={() => setIsAddAllocationModalOpen(false)}
+        title="Add Allocation"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+              Employee <span className="text-red-500">*</span>
+            </label>
+            <Select
+              options={employeeOptions}
+              value={newAllocation.employeeId}
+              onChange={(value) => setNewAllocation(prev => ({ ...prev, employeeId: value }))}
+              placeholder="Select an employee..."
+              allowClear={false}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+              Initiative
+            </label>
+            <Select
+              options={initiativeOptions}
+              value={newAllocation.initiativeId}
+              onChange={(value) => setNewAllocation(prev => ({ ...prev, initiativeId: value }))}
+              placeholder="Select an initiative (optional)..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={newAllocation.startDate}
+                onChange={(e) => setNewAllocation(prev => ({ ...prev, startDate: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={newAllocation.endDate}
+                onChange={(e) => setNewAllocation(prev => ({ ...prev, endDate: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+              Allocation Percentage: {newAllocation.percentage}%
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={newAllocation.percentage}
+              onChange={(e) => setNewAllocation(prev => ({ ...prev, percentage: Number(e.target.value) }))}
+              className="w-full h-2 bg-surface-200 rounded-lg appearance-none cursor-pointer accent-accent-600"
+            />
+            <div className="flex justify-between text-xs text-surface-400 mt-1">
+              <span>0%</span>
+              <span>50%</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-surface-200">
+            <button
+              onClick={() => setIsAddAllocationModalOpen(false)}
+              className="px-4 py-2 text-sm font-medium text-surface-700 bg-white border border-surface-300 rounded-md hover:bg-surface-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateAllocation}
+              disabled={!newAllocation.employeeId || createAllocation.isPending}
+              className="px-4 py-2 text-sm font-medium text-white bg-accent-600 rounded-md hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {createAllocation.isPending ? 'Creating...' : 'Create Allocation'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -6,8 +6,10 @@
     "packages/*"
   ],
   "scripts": {
+    "kill:ports": "lsof -ti:3000,5173 | xargs -r kill -9 2>/dev/null || true",
+    "predev": "npm run kill:ports",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "npm run dev --workspace=@productfolio/backend",
+    "dev:backend": "npm run kill:ports && npm run dev --workspace=@productfolio/backend",
     "dev:frontend": "npm run dev --workspace=@productfolio/frontend",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

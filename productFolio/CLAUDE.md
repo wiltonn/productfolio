@@ -139,3 +139,4 @@ REDIS_DB=0
 - ESM modules throughout
 - Skill demands stored as JSON: `{frontend: 2, backend: 3}`
 - Approval workflow uses version tracking for audit trails
+- Use agent-browser skill for browser tests

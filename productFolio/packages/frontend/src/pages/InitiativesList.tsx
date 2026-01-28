@@ -35,89 +35,12 @@ const statusOptions = [
 // Quarter options
 const quarterOptions = getQuarterOptions();
 
-// Mock tags (in production, fetch from customFields or a tags table)
+// Extract tags from initiative customFields
 const extractTags = (initiative: Initiative): string[] => {
   const customFields = initiative.customFields as Record<string, unknown> | null;
   if (!customFields?.tags) return [];
   return Array.isArray(customFields.tags) ? customFields.tags : [];
 };
-
-// Generate mock data for demo (will be replaced by API data)
-function generateMockData(count: number): Initiative[] {
-  const names = [
-    'Customer Portal Redesign',
-    'API Gateway Migration',
-    'Mobile App v2',
-    'Data Pipeline Optimization',
-    'Analytics Dashboard',
-    'User Authentication Upgrade',
-    'Payment Integration',
-    'Search Infrastructure',
-    'Notification System',
-    'Admin Console Redesign',
-    'Performance Monitoring',
-    'CI/CD Pipeline Overhaul',
-    'Database Migration',
-    'Security Audit Implementation',
-    'Cloud Cost Optimization',
-  ];
-
-  const owners = [
-    'Sarah Chen',
-    'Mike Johnson',
-    'Alex Rivera',
-    'Emily Watson',
-    'David Park',
-    'Lisa Thompson',
-    'James Wilson',
-    'Maria Garcia',
-    'Robert Brown',
-    'Jennifer Lee',
-  ];
-
-  const statuses: InitiativeStatus[] = [
-    'DRAFT',
-    'PENDING_APPROVAL',
-    'APPROVED',
-    'IN_PROGRESS',
-    'COMPLETED',
-    'ON_HOLD',
-  ];
-
-  const tagSets = [
-    ['frontend', 'react'],
-    ['backend', 'api'],
-    ['infrastructure', 'devops'],
-    ['mobile', 'ios', 'android'],
-    ['security', 'compliance'],
-    ['analytics', 'data'],
-    ['platform', 'core'],
-    ['integration', 'api'],
-    [],
-    ['urgent', 'priority'],
-  ];
-
-  const quarters = ['2024-Q1', '2024-Q2', '2024-Q3', '2024-Q4', '2025-Q1', '2025-Q2'];
-
-  return Array.from({ length: count }, (_, i) => ({
-    id: `initiative-${i + 1}`,
-    title: `${names[i % names.length]} ${Math.floor(i / names.length) > 0 ? `#${Math.floor(i / names.length) + 1}` : ''}`.trim(),
-    description: `Description for initiative ${i + 1}`,
-    businessOwnerId: `owner-${(i % owners.length) + 1}`,
-    productOwnerId: `po-${(i % owners.length) + 1}`,
-    status: statuses[i % statuses.length],
-    targetQuarter: quarters[i % quarters.length],
-    customFields: {
-      tags: tagSets[i % tagSets.length],
-      owner: owners[i % owners.length],
-    },
-    createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-  }));
-}
-
-// Use mock data for demo
-const mockInitiatives = generateMockData(1200);
 
 export function InitiativesList() {
   const navigate = useNavigate();
@@ -137,7 +60,7 @@ export function InitiativesList() {
       search: search || undefined,
       status: statusFilter.length > 0 ? (statusFilter as InitiativeStatus[]) : undefined,
       targetQuarter: quarterFilter || undefined,
-      limit: 1000, // Get all for virtualization
+      limit: 100, // Backend max is 100
     }),
     [search, statusFilter, quarterFilter]
   );
@@ -149,29 +72,8 @@ export function InitiativesList() {
   const bulkDelete = useBulkDeleteInitiatives();
   const exportMutation = useExportInitiatives();
 
-  // Use mock data if API returns nothing (for demo purposes)
-  const initiatives = useMemo(() => {
-    if (apiData?.data && apiData.data.length > 0) {
-      return apiData.data;
-    }
-    // Filter mock data based on current filters
-    let filtered = [...mockInitiatives];
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(
-        (i) =>
-          i.title.toLowerCase().includes(searchLower) ||
-          (i.customFields as Record<string, unknown>)?.owner?.toString().toLowerCase().includes(searchLower)
-      );
-    }
-    if (statusFilter.length > 0) {
-      filtered = filtered.filter((i) => statusFilter.includes(i.status));
-    }
-    if (quarterFilter) {
-      filtered = filtered.filter((i) => i.targetQuarter === quarterFilter);
-    }
-    return filtered;
-  }, [apiData, search, statusFilter, quarterFilter]);
+  // Use API data
+  const initiatives = apiData?.data ?? [];
 
   // Get selected IDs
   const selectedIds = useMemo(
@@ -193,14 +95,14 @@ export function InitiativesList() {
   }, [selectedIds.length]
   );
 
-  // Stats
+  // Stats computed from real data
   const stats = useMemo(() => {
-    const total = mockInitiatives.length;
-    const inProgress = mockInitiatives.filter((i) => i.status === 'IN_PROGRESS').length;
-    const pending = mockInitiatives.filter((i) => i.status === 'PENDING_APPROVAL').length;
-    const completed = mockInitiatives.filter((i) => i.status === 'COMPLETED').length;
+    const total = apiData?.pagination?.total ?? initiatives.length;
+    const inProgress = initiatives.filter((i) => i.status === 'IN_PROGRESS').length;
+    const pending = initiatives.filter((i) => i.status === 'PENDING_APPROVAL').length;
+    const completed = initiatives.filter((i) => i.status === 'COMPLETED').length;
     return { total, inProgress, pending, completed };
-  }, []);
+  }, [apiData?.pagination?.total, initiatives]);
 
   // Handlers
   const handleStatusChange = useCallback(

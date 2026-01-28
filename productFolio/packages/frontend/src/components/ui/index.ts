@@ -45,3 +45,4 @@ export {
 } from './Skeleton';
 export { OfflineIndicator, useOnlineStatus } from './OfflineIndicator';
 export { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp';
+export { Modal } from './Modal';

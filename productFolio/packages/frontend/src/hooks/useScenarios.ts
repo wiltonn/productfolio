@@ -5,8 +5,10 @@ import { toast } from '../stores/toast';
 export interface Scenario {
   id: string;
   name: string;
-  description: string | null;
-  isBaseline: boolean;
+  quarterRange: string;
+  assumptions?: Record<string, unknown>;
+  priorityRankings?: Array<{ initiativeId: string; rank: number }>;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }

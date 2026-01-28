@@ -57,6 +57,11 @@ export async function listEmployees(
             name: true,
           },
         },
+        skills: {
+          select: {
+            name: true,
+          },
+        },
         _count: {
           select: { skills: true, allocations: true },
         },
@@ -66,14 +71,26 @@ export async function listEmployees(
     prisma.employee.count({ where }),
   ]);
 
+  // Transform to match frontend expected format
+  const data = employees.map(emp => ({
+    id: emp.id,
+    name: emp.name,
+    email: `${emp.name.toLowerCase().replace(/\s+/g, '.')}@company.com`, // Generate email from name
+    title: emp.role,
+    department: null, // Not in schema
+    managerId: emp.managerId,
+    skills: emp.skills.map(s => s.name),
+    defaultCapacityHours: emp.hoursPerWeek,
+    createdAt: emp.createdAt.toISOString(),
+    updatedAt: emp.updatedAt.toISOString(),
+  }));
+
   return {
-    employees,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-    },
+    data,
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
   };
 }
 

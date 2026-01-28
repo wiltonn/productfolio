@@ -1,36 +1,71 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useScenarios, useCreateScenario } from '../hooks/useScenarios';
+import { Modal } from '../components/ui';
 
-const mockScenarios = [
-  {
-    id: '1',
-    name: 'Q2 2024 Baseline',
-    description: 'Current approved plan for Q2',
-    isBaseline: true,
-    initiatives: 5,
-    utilization: 78,
-    updatedAt: '2024-01-20',
-  },
-  {
-    id: '2',
-    name: 'Aggressive Growth',
-    description: 'Add 2 new initiatives, hire 3 engineers',
-    isBaseline: false,
-    initiatives: 7,
-    utilization: 92,
-    updatedAt: '2024-01-22',
-  },
-  {
-    id: '3',
-    name: 'Conservative Approach',
-    description: 'Defer mobile app, focus on core platform',
-    isBaseline: false,
-    initiatives: 4,
-    utilization: 65,
-    updatedAt: '2024-01-21',
-  },
-];
+// Helper to get current quarter
+function getCurrentQuarter(): string {
+  const now = new Date();
+  const quarter = Math.ceil((now.getMonth() + 1) / 3);
+  return `${now.getFullYear()}-Q${quarter}`;
+}
+
+// Generate quarter options for next 8 quarters
+function getQuarterOptions(): string[] {
+  const options: string[] = [];
+  const now = new Date();
+  let year = now.getFullYear();
+  let quarter = Math.ceil((now.getMonth() + 1) / 3);
+
+  for (let i = 0; i < 8; i++) {
+    options.push(`${year}-Q${quarter}`);
+    quarter++;
+    if (quarter > 4) {
+      quarter = 1;
+      year++;
+    }
+  }
+  return options;
+}
 
 export function ScenariosList() {
+  const { data: scenariosData, isLoading } = useScenarios();
+  const scenarios = scenariosData?.data ?? [];
+  const createScenario = useCreateScenario();
+  const quarterOptions = getQuarterOptions();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newScenarioName, setNewScenarioName] = useState('');
+  const [startQuarter, setStartQuarter] = useState(getCurrentQuarter());
+  const [endQuarter, setEndQuarter] = useState(getCurrentQuarter());
+
+  const handleCreateScenario = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newScenarioName.trim()) return;
+
+    createScenario.mutate(
+      {
+        name: newScenarioName.trim(),
+        quarterRange: `${startQuarter}:${endQuarter}`,
+      },
+      {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          setNewScenarioName('');
+          setStartQuarter(getCurrentQuarter());
+          setEndQuarter(getCurrentQuarter());
+        },
+      }
+    );
+  };
+
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setNewScenarioName('');
+    setStartQuarter(getCurrentQuarter());
+    setEndQuarter(getCurrentQuarter());
+  };
   return (
     <div className="animate-fade-in">
       <div className="page-header flex items-center justify-between">
@@ -38,7 +73,7 @@ export function ScenariosList() {
           <h1 className="page-title">Scenarios</h1>
           <p className="page-subtitle">Compare different resource allocation strategies</p>
         </div>
-        <button className="btn-primary">
+        <button onClick={openModal} className="btn-primary">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
@@ -48,7 +83,11 @@ export function ScenariosList() {
 
       {/* Scenario cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {mockScenarios.map((scenario, index) => (
+        {isLoading ? (
+          <div className="col-span-3 text-center py-8 text-surface-500">Loading scenarios...</div>
+        ) : scenarios.length === 0 ? (
+          <div className="col-span-3 text-center py-8 text-surface-500">No scenarios yet. Create your first one!</div>
+        ) : scenarios.map((scenario, index) => (
           <Link
             key={scenario.id}
             to={`/scenarios/${scenario.id}`}
@@ -56,15 +95,12 @@ export function ScenariosList() {
           >
             <div className="flex items-start justify-between mb-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-display font-semibold text-surface-900 group-hover:text-accent-600 transition-colors">
-                    {scenario.name}
-                  </h3>
-                  {scenario.isBaseline && (
-                    <span className="badge-accent">Baseline</span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-surface-500">{scenario.description}</p>
+                <h3 className="font-display font-semibold text-surface-900 group-hover:text-accent-600 transition-colors">
+                  {scenario.name}
+                </h3>
+                <p className="mt-1 text-sm text-surface-500 font-mono">
+                  {scenario.quarterRange}
+                </p>
               </div>
               <svg
                 className="w-5 h-5 text-surface-300 group-hover:text-accent-500 transition-colors"
@@ -77,40 +113,17 @@ export function ScenariosList() {
               </svg>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-surface-100">
-              <div>
-                <p className="text-xs text-surface-500 mb-1">Initiatives</p>
-                <p className="text-lg font-display font-bold text-surface-900">{scenario.initiatives}</p>
-              </div>
-              <div>
-                <p className="text-xs text-surface-500 mb-1">Utilization</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-lg font-display font-bold text-surface-900">{scenario.utilization}%</p>
-                  <div className="flex-1 h-2 bg-surface-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        scenario.utilization > 85
-                          ? 'bg-warning'
-                          : scenario.utilization > 70
-                          ? 'bg-success'
-                          : 'bg-accent-500'
-                      }`}
-                      style={{ width: `${scenario.utilization}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <p className="mt-4 text-xs text-surface-400">
-              Updated {scenario.updatedAt}
+              Updated {new Date(scenario.updatedAt).toLocaleDateString()}
             </p>
           </Link>
         ))}
 
         {/* Create new scenario card */}
-        <button className="card p-6 border-2 border-dashed border-surface-300 hover:border-accent-400 hover:bg-accent-50/50 transition-all duration-200 flex flex-col items-center justify-center text-surface-500 hover:text-accent-600 min-h-[200px] group">
+        <button
+          onClick={openModal}
+          className="card p-6 border-2 border-dashed border-surface-300 hover:border-accent-400 hover:bg-accent-50/50 transition-all duration-200 flex flex-col items-center justify-center text-surface-500 hover:text-accent-600 min-h-[200px] group"
+        >
           <div className="w-12 h-12 rounded-full bg-surface-100 group-hover:bg-accent-100 flex items-center justify-center mb-3 transition-colors">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -122,64 +135,110 @@ export function ScenariosList() {
       </div>
 
       {/* Comparison section */}
-      <div className="mt-10">
-        <h2 className="text-lg font-display font-semibold text-surface-900 mb-4">Quick Comparison</h2>
-        <div className="card overflow-hidden">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Scenario</th>
-                <th className="text-center">Initiatives</th>
-                <th className="text-center">Team Utilization</th>
-                <th className="text-center">Skill Gaps</th>
-                <th className="text-center">Risk Level</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockScenarios.map((scenario) => (
-                <tr key={scenario.id}>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-surface-900">{scenario.name}</span>
-                      {scenario.isBaseline && <span className="badge-accent">Baseline</span>}
-                    </div>
-                  </td>
-                  <td className="text-center font-mono">{scenario.initiatives}</td>
-                  <td className="text-center">
-                    <span className={`font-mono ${
-                      scenario.utilization > 85 ? 'text-warning' : 'text-surface-700'
-                    }`}>
-                      {scenario.utilization}%
-                    </span>
-                  </td>
-                  <td className="text-center">
-                    <span className={`badge ${
-                      scenario.utilization > 85 ? 'badge-warning' : 'badge-success'
-                    }`}>
-                      {scenario.utilization > 85 ? '2 gaps' : 'None'}
-                    </span>
-                  </td>
-                  <td className="text-center">
-                    <span className={`badge ${
-                      scenario.utilization > 90
-                        ? 'badge-danger'
-                        : scenario.utilization > 80
-                        ? 'badge-warning'
-                        : 'badge-success'
-                    }`}>
-                      {scenario.utilization > 90
-                        ? 'High'
-                        : scenario.utilization > 80
-                        ? 'Medium'
-                        : 'Low'}
-                    </span>
-                  </td>
+      {scenarios.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-lg font-display font-semibold text-surface-900 mb-4">Quick Comparison</h2>
+          <div className="card overflow-hidden">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Scenario</th>
+                  <th className="text-center">Quarter Range</th>
+                  <th className="text-center">Created</th>
+                  <th className="text-center">Last Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {scenarios.map((scenario) => (
+                  <tr key={scenario.id}>
+                    <td>
+                      <span className="font-medium text-surface-900">{scenario.name}</span>
+                    </td>
+                    <td className="text-center font-mono text-sm">
+                      {scenario.quarterRange}
+                    </td>
+                    <td className="text-center font-mono text-sm">
+                      {new Date(scenario.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="text-center font-mono text-sm">
+                      {new Date(scenario.updatedAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Create Scenario Modal */}
+      <Modal isOpen={isModalOpen} onClose={closeModal} title="Create New Scenario">
+        <form onSubmit={handleCreateScenario} className="space-y-4">
+          <div>
+            <label htmlFor="scenario-name" className="block text-sm font-medium text-surface-700 mb-1">
+              Name
+            </label>
+            <input
+              id="scenario-name"
+              type="text"
+              value={newScenarioName}
+              onChange={(e) => setNewScenarioName(e.target.value)}
+              placeholder="e.g., Q2 Planning"
+              className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="start-quarter" className="block text-sm font-medium text-surface-700 mb-1">
+                Start Quarter
+              </label>
+              <select
+                id="start-quarter"
+                value={startQuarter}
+                onChange={(e) => setStartQuarter(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+              >
+                {quarterOptions.map((q) => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="end-quarter" className="block text-sm font-medium text-surface-700 mb-1">
+                End Quarter
+              </label>
+              <select
+                id="end-quarter"
+                value={endQuarter}
+                onChange={(e) => setEndQuarter(e.target.value)}
+                className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+              >
+                {quarterOptions.map((q) => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={closeModal}
+              className="px-4 py-2 text-sm font-medium text-surface-700 hover:bg-surface-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={createScenario.isPending || !newScenarioName.trim()}
+              className="px-4 py-2 text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {createScenario.isPending ? 'Creating...' : 'Create Scenario'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
