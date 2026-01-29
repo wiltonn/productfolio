@@ -5,6 +5,7 @@ import 'dotenv/config';
 import { registerErrorHandler } from './lib/error-handler.js';
 import authPlugin from './plugins/auth.plugin.js';
 import { authRoutes } from './routes/auth.js';
+import { userRoutes } from './routes/users.js';
 import { initiativesRoutes } from './routes/initiatives.js';
 import { scopingRoutes } from './routes/scoping.js';
 import { resourcesRoutes } from './routes/resources.js';
@@ -39,6 +40,7 @@ fastify.get('/health', async () => {
 
 // Register API routes
 await fastify.register(authRoutes);
+await fastify.register(userRoutes);
 await fastify.register(initiativesRoutes);
 await fastify.register(scopingRoutes);
 await fastify.register(resourcesRoutes);

@@ -5,8 +5,8 @@ test.describe('Initiatives Management', () => {
   test.beforeEach(async ({ page }) => {
     // Login as admin before each test
     await page.goto('/');
-    await page.fill('input[name="email"]', TEST_USERS.admin.email);
-    await page.fill('input[name="password"]', TEST_USERS.admin.password);
+    await page.fill('#email', TEST_USERS.admin.email);
+    await page.fill('#password', TEST_USERS.admin.password);
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/initiatives/, { timeout: 10000 });
   });
@@ -293,8 +293,8 @@ test.describe('Initiatives Management', () => {
 test.describe('Initiative Form Validation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await page.fill('input[name="email"]', TEST_USERS.admin.email);
-    await page.fill('input[name="password"]', TEST_USERS.admin.password);
+    await page.fill('#email', TEST_USERS.admin.email);
+    await page.fill('#password', TEST_USERS.admin.password);
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/initiatives/, { timeout: 10000 });
   });

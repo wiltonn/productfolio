@@ -1,0 +1,259 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - link "Skip to main content" [ref=e4] [cursor=pointer]:
+      - /url: "#main-content"
+    - navigation "Main navigation" [ref=e5]:
+      - generic [ref=e7]:
+        - generic [ref=e9]: P
+        - generic [ref=e10]: ProductFolio
+      - navigation "Primary navigation" [ref=e11]:
+        - link "Initiatives" [ref=e12] [cursor=pointer]:
+          - /url: /initiatives
+          - img [ref=e15]
+          - generic [ref=e17]: Initiatives
+        - link "Capacity" [ref=e18] [cursor=pointer]:
+          - /url: /capacity
+          - img [ref=e20]
+          - generic [ref=e22]: Capacity
+        - link "Scenarios" [ref=e23] [cursor=pointer]:
+          - /url: /scenarios
+          - img [ref=e25]
+          - generic [ref=e27]: Scenarios
+        - link "Reports" [ref=e28] [cursor=pointer]:
+          - /url: /reports
+          - img [ref=e30]
+          - generic [ref=e32]: Reports
+      - button "Collapse sidebar" [ref=e34]:
+        - img [ref=e35]
+    - main [ref=e37]:
+      - banner [ref=e38]:
+        - generic [ref=e39]:
+          - navigation "Breadcrumb" [ref=e40]:
+            - list [ref=e41]:
+              - listitem [ref=e42]:
+                - generic [ref=e43]: Initiatives
+          - button "User menu for Admin User" [ref=e46]:
+            - generic [ref=e48]: AU
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - heading "Initiatives" [level=1] [ref=e53]
+            - paragraph [ref=e54]: Manage and track your portfolio initiatives
+          - generic [ref=e55]:
+            - button "Export CSV" [ref=e56]:
+              - img [ref=e57]
+              - text: Export CSV
+            - button "New Initiative" [active] [ref=e59]:
+              - img [ref=e60]
+              - text: New Initiative
+        - generic [ref=e62]:
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - paragraph [ref=e66]: Total Initiatives
+              - paragraph [ref=e67]: "8"
+            - img [ref=e69]
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - paragraph [ref=e74]: In Progress
+              - paragraph [ref=e75]: "1"
+            - img [ref=e77]
+          - generic [ref=e80]:
+            - generic [ref=e81]:
+              - paragraph [ref=e82]: Pending Review
+              - paragraph [ref=e83]: "1"
+            - img [ref=e85]
+          - generic [ref=e88]:
+            - generic [ref=e89]:
+              - paragraph [ref=e90]: Completed
+              - paragraph [ref=e91]: "0"
+            - img [ref=e93]
+        - generic [ref=e95]:
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e100]:
+                - img
+                - searchbox "Search initiatives..." [ref=e101]
+              - button "Status" [ref=e103] [cursor=pointer]:
+                - generic [ref=e104]: Status
+                - img [ref=e106]
+              - button "Quarter" [ref=e109] [cursor=pointer]:
+                - generic [ref=e110]: Quarter
+                - img [ref=e112]
+            - generic [ref=e115]: 8 initiatives
+          - table [ref=e117]:
+            - rowgroup [ref=e118]:
+              - row "Title Status Owner Quarter Tags Updated" [ref=e119]:
+                - columnheader [ref=e120]:
+                  - generic [ref=e122]:
+                    - checkbox [ref=e123] [cursor=pointer]
+                    - img
+                    - img
+                - columnheader "Title" [ref=e124] [cursor=pointer]:
+                  - generic [ref=e125]:
+                    - text: Title
+                    - img [ref=e127]
+                - columnheader "Status" [ref=e129] [cursor=pointer]:
+                  - generic [ref=e130]:
+                    - text: Status
+                    - img [ref=e132]
+                - columnheader "Owner" [ref=e134] [cursor=pointer]:
+                  - generic [ref=e135]:
+                    - text: Owner
+                    - img [ref=e137]
+                - columnheader "Quarter" [ref=e139] [cursor=pointer]:
+                  - generic [ref=e140]:
+                    - text: Quarter
+                    - img [ref=e142]
+                - columnheader "Tags" [ref=e144]:
+                  - generic [ref=e145]: Tags
+                - columnheader "Updated" [ref=e146] [cursor=pointer]:
+                  - generic [ref=e147]:
+                    - text: Updated
+                    - img [ref=e149]
+            - rowgroup [ref=e151]:
+              - row "Notification System Centralized notification system for all channels On Hold - 2026-Q1 - Jan 28" [ref=e152] [cursor=pointer]:
+                - cell [ref=e153]:
+                  - generic [ref=e155]:
+                    - checkbox [ref=e156]
+                    - img
+                    - img
+                - cell "Notification System Centralized notification system for all channels" [ref=e157]:
+                  - generic [ref=e158]:
+                    - link "Notification System" [ref=e159]:
+                      - /url: /initiatives/74aa136a-9302-45bd-a06a-a664d34def79
+                    - generic [ref=e160]: Centralized notification system for all channels
+                - cell "On Hold" [ref=e161]:
+                  - generic [ref=e162]: On Hold
+                - cell "-" [ref=e164]
+                - cell "2026-Q1" [ref=e165]
+                - cell "-" [ref=e166]
+                - cell "Jan 28" [ref=e167]
+              - row "Search Infrastructure Build new search infrastructure using Elasticsearch Draft - 2026-Q2 - Jan 28" [ref=e168] [cursor=pointer]:
+                - cell [ref=e169]:
+                  - generic [ref=e171]:
+                    - checkbox [ref=e172]
+                    - img
+                    - img
+                - cell "Search Infrastructure Build new search infrastructure using Elasticsearch" [ref=e173]:
+                  - generic [ref=e174]:
+                    - link "Search Infrastructure" [ref=e175]:
+                      - /url: /initiatives/c795733b-e89e-417a-8f3b-1818144dd3c4
+                    - generic [ref=e176]: Build new search infrastructure using Elasticsearch
+                - cell "Draft" [ref=e177]:
+                  - generic [ref=e178]: Draft
+                - cell "-" [ref=e180]
+                - cell "2026-Q2" [ref=e181]
+                - cell "-" [ref=e182]
+                - cell "Jan 28" [ref=e183]
+              - row "Security Audit Implementation Implement findings from security audit Approved - 2026-Q1 - Jan 28" [ref=e184] [cursor=pointer]:
+                - cell [ref=e185]:
+                  - generic [ref=e187]:
+                    - checkbox [ref=e188]
+                    - img
+                    - img
+                - cell "Security Audit Implementation Implement findings from security audit" [ref=e189]:
+                  - generic [ref=e190]:
+                    - link "Security Audit Implementation" [ref=e191]:
+                      - /url: /initiatives/06f28b58-696a-4edf-8f09-d16cfa97869e
+                    - generic [ref=e192]: Implement findings from security audit
+                - cell "Approved" [ref=e193]:
+                  - generic [ref=e194]: Approved
+                - cell "-" [ref=e196]
+                - cell "2026-Q1" [ref=e197]
+                - cell "-" [ref=e198]
+                - cell "Jan 28" [ref=e199]
+              - row "Analytics Dashboard New analytics dashboard for business intelligence Pending - 2026-Q2 - Jan 28" [ref=e200] [cursor=pointer]:
+                - cell [ref=e201]:
+                  - generic [ref=e203]:
+                    - checkbox [ref=e204]
+                    - img
+                    - img
+                - cell "Analytics Dashboard New analytics dashboard for business intelligence" [ref=e205]:
+                  - generic [ref=e206]:
+                    - link "Analytics Dashboard" [ref=e207]:
+                      - /url: /initiatives/5a37df06-78a3-477b-9340-4fe918ac6c36
+                    - generic [ref=e208]: New analytics dashboard for business intelligence
+                - cell "Pending" [ref=e209]:
+                  - generic [ref=e210]: Pending
+                - cell "-" [ref=e212]
+                - cell "2026-Q2" [ref=e213]
+                - cell "-" [ref=e214]
+                - cell "Jan 28" [ref=e215]
+              - row "Data Pipeline Optimization Optimize data pipelines for improved throughput and reliability Approved - 2026-Q1 - Jan 28" [ref=e216] [cursor=pointer]:
+                - cell [ref=e217]:
+                  - generic [ref=e219]:
+                    - checkbox [ref=e220]
+                    - img
+                    - img
+                - cell "Data Pipeline Optimization Optimize data pipelines for improved throughput and reliability" [ref=e221]:
+                  - generic [ref=e222]:
+                    - link "Data Pipeline Optimization" [ref=e223]:
+                      - /url: /initiatives/9c4e8712-a294-413f-bae7-59629ec93a9a
+                    - generic [ref=e224]: Optimize data pipelines for improved throughput and reliability
+                - cell "Approved" [ref=e225]:
+                  - generic [ref=e226]: Approved
+                - cell "-" [ref=e228]
+                - cell "2026-Q1" [ref=e229]
+                - cell "-" [ref=e230]
+                - cell "Jan 28" [ref=e231]
+              - row "Mobile App v2 Major update to mobile application with new features Active - 2026-Q2 - Jan 28" [ref=e232] [cursor=pointer]:
+                - cell [ref=e233]:
+                  - generic [ref=e235]:
+                    - checkbox [ref=e236]
+                    - img
+                    - img
+                - cell "Mobile App v2 Major update to mobile application with new features" [ref=e237]:
+                  - generic [ref=e238]:
+                    - link "Mobile App v2" [ref=e239]:
+                      - /url: /initiatives/c78f5b63-636a-4ab2-9ff7-a8283443da61
+                    - generic [ref=e240]: Major update to mobile application with new features
+                - cell "Active" [ref=e241]:
+                  - generic [ref=e242]: Active
+                - cell "-" [ref=e244]
+                - cell "2026-Q2" [ref=e245]
+                - cell "-" [ref=e246]
+                - cell "Jan 28" [ref=e247]
+              - row "API Gateway Migration Migrate existing API infrastructure to new gateway architecture Approved - 2026-Q1 - Jan 28" [ref=e248] [cursor=pointer]:
+                - cell [ref=e249]:
+                  - generic [ref=e251]:
+                    - checkbox [ref=e252]
+                    - img
+                    - img
+                - cell "API Gateway Migration Migrate existing API infrastructure to new gateway architecture" [ref=e253]:
+                  - generic [ref=e254]:
+                    - link "API Gateway Migration" [ref=e255]:
+                      - /url: /initiatives/bfe1ac18-f830-48fc-aa8d-ac1c5c903ee0
+                    - generic [ref=e256]: Migrate existing API infrastructure to new gateway architecture
+                - cell "Approved" [ref=e257]:
+                  - generic [ref=e258]: Approved
+                - cell "-" [ref=e260]
+                - cell "2026-Q1" [ref=e261]
+                - cell "-" [ref=e262]
+                - cell "Jan 28" [ref=e263]
+              - row "Customer Portal Redesign Complete redesign of the customer-facing portal with improved UX and performance Approved - 2026-Q1 - Jan 28" [ref=e264] [cursor=pointer]:
+                - cell [ref=e265]:
+                  - generic [ref=e267]:
+                    - checkbox [ref=e268]
+                    - img
+                    - img
+                - cell "Customer Portal Redesign Complete redesign of the customer-facing portal with improved UX and performance" [ref=e269]:
+                  - generic [ref=e270]:
+                    - link "Customer Portal Redesign" [ref=e271]:
+                      - /url: /initiatives/aed80ca8-7b87-460e-bdcd-f2ad83469c11
+                    - generic [ref=e272]: Complete redesign of the customer-facing portal with improved UX and performance
+                - cell "Approved" [ref=e273]:
+                  - generic [ref=e274]: Approved
+                - cell "-" [ref=e276]
+                - cell "2026-Q1" [ref=e277]
+                - cell "-" [ref=e278]
+                - cell "Jan 28" [ref=e279]
+          - generic [ref=e280]:
+            - generic [ref=e282]: Showing 8 initiatives
+            - generic [ref=e283]:
+              - generic [ref=e284]: Shift
+              - generic [ref=e285]: + Click for range select
+  - status [ref=e286]: "Success: Logged in successfully"
+```

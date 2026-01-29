@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { SearchInput, Checkbox } from '../components/ui';
-import { useEmployees, Employee } from '../hooks/useEmployees';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee } from '../hooks/useEmployees';
 
 // Types
 interface Skill {
@@ -642,6 +642,8 @@ const DEFAULT_HOLIDAYS: Holiday[] = [
 export function Capacity() {
   // Fetch employees from API
   const { data: employeesData, isLoading } = useEmployees({ limit: 100 });
+  const createEmployee = useCreateEmployee();
+  const updateEmployee = useUpdateEmployee();
 
   // State
   const [employees, setEmployees] = useState<CapacityEmployee[]>([]);
@@ -700,29 +702,26 @@ export function Capacity() {
   }, []);
 
   const handleSaveEmployee = useCallback((data: Partial<CapacityEmployee>) => {
+    // Map frontend fields to backend API fields
+    const apiData = {
+      name: data.name || '',
+      role: data.role || 'Team Member',
+      hoursPerWeek: data.hoursPerWeek || 40,
+      employmentType: data.status === 'CONTRACTOR' ? 'CONTRACTOR' as const : 'FULL_TIME' as const,
+    };
+
     if (slideOverEmployee === 'new') {
-      // Add new employee
-      const newEmployee: CapacityEmployee = {
-        id: String(Date.now()),
-        name: data.name || '',
-        email: data.email || '',
-        role: data.role || '',
-        department: data.department || '',
-        hoursPerWeek: data.hoursPerWeek || 40,
-        status: data.status || 'ACTIVE',
-        skills: data.skills || [],
-        avatarColor: AVATAR_COLORS[employees.length % AVATAR_COLORS.length],
-        ptoHours: data.ptoHours || 0,
-      };
-      setEmployees(prev => [...prev, newEmployee]);
+      // Create new employee via API
+      createEmployee.mutate(apiData);
     } else if (slideOverEmployee) {
-      // Update existing
-      setEmployees(prev => prev.map(e =>
-        e.id === slideOverEmployee.id ? { ...e, ...data } : e
-      ));
+      // Update existing employee via API
+      updateEmployee.mutate({
+        id: slideOverEmployee.id,
+        data: apiData,
+      });
     }
     setSlideOverEmployee(null);
-  }, [slideOverEmployee, employees.length]);
+  }, [slideOverEmployee, createEmployee, updateEmployee]);
 
   const handleAddHoliday = useCallback(() => {
     if (!newHolidayDate) return;

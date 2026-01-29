@@ -1,0 +1,581 @@
+{
+  "config": {
+    "configFile": "/home/wiltonn/dev/projects/productfolio/productFolio/playwright.config.ts",
+    "rootDir": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "playwright-report/results.json"
+        }
+      ],
+      [
+        "list",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "runAgents": "none",
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.58.0",
+    "workers": 4,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "initiatives.spec.ts",
+      "file": "initiatives.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Initiatives Management",
+          "file": "initiatives.spec.ts",
+          "line": 4,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display initiatives list",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 1027,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:29.768Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-0954e85ed4170c28e969",
+              "file": "initiatives.spec.ts",
+              "line": 14,
+              "column": 7
+            },
+            {
+              "title": "should create a new initiative",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 5900,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\u001b[22m\n\n    at /home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts:34:103",
+                        "location": {
+                          "file": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts",
+                          "column": 103,
+                          "line": 34
+                        },
+                        "snippet": "  32 |\n  33 |     // Should show form\n> 34 |     await expect(page.locator('input[name=\"title\"]').or(page.locator('input[placeholder*=\"title\"]'))).toBeVisible();\n     |                                                                                                       ^\n  35 |\n  36 |     // Fill form\n  37 |     const timestamp = Date.now();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts",
+                            "column": 103,
+                            "line": 34
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('input[name=\"title\"]').or(locator('input[placeholder*=\"title\"]'))\u001b[22m\n\n\n  32 |\n  33 |     // Should show form\n> 34 |     await expect(page.locator('input[name=\"title\"]').or(page.locator('input[placeholder*=\"title\"]'))).toBeVisible();\n     |                                                                                                       ^\n  35 |\n  36 |     // Fill form\n  37 |     const timestamp = Date.now();\n    at /home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts:34:103"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:30.873Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiatives-Ma-385e9-uld-create-a-new-initiative-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiatives-Ma-385e9-uld-create-a-new-initiative-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiatives-Ma-385e9-uld-create-a-new-initiative-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts",
+                        "column": 103,
+                        "line": 34
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-3b82cf58fa09eaffd5ab",
+              "file": "initiatives.spec.ts",
+              "line": 25,
+              "column": 7
+            },
+            {
+              "title": "should search initiatives",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 795,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:37.782Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-74a715c670104a6fed44",
+              "file": "initiatives.spec.ts",
+              "line": 90,
+              "column": 7
+            },
+            {
+              "title": "should filter initiatives by status",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 719,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:38.664Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-1268f72eb3da1b241822",
+              "file": "initiatives.spec.ts",
+              "line": 106,
+              "column": 7
+            },
+            {
+              "title": "should view initiative details",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 710,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:39.399Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-45ca52541aedc8490a82",
+              "file": "initiatives.spec.ts",
+              "line": 130,
+              "column": 7
+            },
+            {
+              "title": "should update initiative status",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 682,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:40.125Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-cbaa2185375f216320b0",
+              "file": "initiatives.spec.ts",
+              "line": 147,
+              "column": 7
+            },
+            {
+              "title": "should validate workflow transitions",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 685,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:40.819Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-916cb27194077fc3d45e",
+              "file": "initiatives.spec.ts",
+              "line": 193,
+              "column": 7
+            },
+            {
+              "title": "should handle bulk operations",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 646,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:41.513Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-3a9a56bfa94f1e6a3697",
+              "file": "initiatives.spec.ts",
+              "line": 229,
+              "column": 7
+            },
+            {
+              "title": "should export initiatives to CSV",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 709,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:42.169Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-3820a48e33b4539e1d30",
+              "file": "initiatives.spec.ts",
+              "line": 253,
+              "column": 7
+            },
+            {
+              "title": "should paginate through initiatives",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 678,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:42.892Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-4115361d185d2a4acf99",
+              "file": "initiatives.spec.ts",
+              "line": 273,
+              "column": 7
+            }
+          ]
+        },
+        {
+          "title": "Initiative Form Validation",
+          "file": "initiatives.spec.ts",
+          "line": 293,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should validate required fields",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 677,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:43.580Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-eac403122cff04df46a8",
+              "file": "initiatives.spec.ts",
+              "line": 302,
+              "column": 7
+            },
+            {
+              "title": "should validate title length",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 31141,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts",
+                            "column": 18,
+                            "line": 337
+                          },
+                          "message": "Error: page.fill: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"title\"]')\u001b[22m\n\n\n  335 |       // Fill with very long title\n  336 |       const longTitle = 'a'.repeat(300);\n> 337 |       await page.fill('input[name=\"title\"]', longTitle);\n      |                  ^\n  338 |\n  339 |       const submitButton = page.locator('button[type=\"submit\"]');\n  340 |       await submitButton.click();\n    at /home/wiltonn/dev/projects/productfolio/productFolio/tests/e2e/initiatives.spec.ts:337:18"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-01-29T00:13:44.268Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiative-For-36377-hould-validate-title-length-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiative-For-36377-hould-validate-title-length-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/home/wiltonn/dev/projects/productfolio/productFolio/test-results/initiatives-Initiative-For-36377-hould-validate-title-length-chromium/error-context.md"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "acc22929674c566efb2b-7e4480f69f679934b0c1",
+              "file": "initiatives.spec.ts",
+              "line": 327,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-01-29T00:13:28.781Z",
+    "duration": 46706.863000000005,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

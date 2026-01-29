@@ -15,6 +15,27 @@ export interface Employee {
   updatedAt: string;
 }
 
+// Input types for API calls (matches backend schema)
+export interface CreateEmployeeInput {
+  name: string;
+  role: string;
+  managerId?: string | null;
+  employmentType?: 'FULL_TIME' | 'PART_TIME' | 'CONTRACTOR' | 'INTERN';
+  hoursPerWeek?: number;
+  activeStart?: string;
+  activeEnd?: string | null;
+}
+
+export interface UpdateEmployeeInput {
+  name?: string;
+  role?: string;
+  managerId?: string | null;
+  employmentType?: 'FULL_TIME' | 'PART_TIME' | 'CONTRACTOR' | 'INTERN';
+  hoursPerWeek?: number;
+  activeStart?: string;
+  activeEnd?: string | null;
+}
+
 export interface Skill {
   id: string;
   employeeId: string;
@@ -96,7 +117,7 @@ export function useCreateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Employee>) =>
+    mutationFn: (data: CreateEmployeeInput) =>
       api.post<Employee>('/employees', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
@@ -112,7 +133,7 @@ export function useUpdateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Employee> }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateEmployeeInput }) =>
       api.put<Employee>(`/employees/${id}`, data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: employeeKeys.detail(variables.id) });

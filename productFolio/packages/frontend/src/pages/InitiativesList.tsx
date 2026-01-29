@@ -11,6 +11,7 @@ import {
   Checkbox,
   BulkActionsBar,
 } from '../components/ui';
+import { CreateInitiativeModal } from '../components/CreateInitiativeModal';
 import {
   useInitiatives,
   useBulkUpdateStatus,
@@ -53,6 +54,9 @@ export function InitiativesList() {
   // Table state
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  // Modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Build filters object
   const filters: InitiativeFilters = useMemo(
@@ -278,7 +282,7 @@ export function InitiativesList() {
             </svg>
             Export CSV
           </button>
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -447,6 +451,12 @@ export function InitiativesList() {
           onDelete={handleDelete}
         />
       )}
+
+      {/* Create Initiative Modal */}
+      <CreateInitiativeModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
     </div>
   );
 }

@@ -5,22 +5,22 @@
 
 export const TEST_USERS = {
   admin: {
-    email: 'admin@productfolio.test',
-    password: 'Admin123!',
+    email: 'admin@example.com',
+    password: 'AdminPassword123',
     role: 'ADMIN',
-    name: 'Test Admin',
+    name: 'Admin User',
   },
-  planner: {
-    email: 'planner@productfolio.test',
-    password: 'Planner123!',
-    role: 'PLANNER',
-    name: 'Test Planner',
+  productOwner: {
+    email: 'product.owner@example.com',
+    password: 'ProductOwner123',
+    role: 'PRODUCT_OWNER',
+    name: 'Product Owner',
   },
-  viewer: {
-    email: 'viewer@productfolio.test',
-    password: 'Viewer123!',
-    role: 'VIEWER',
-    name: 'Test Viewer',
+  businessOwner: {
+    email: 'business.owner@example.com',
+    password: 'BusinessOwner123',
+    role: 'BUSINESS_OWNER',
+    name: 'Business Owner',
   },
 } as const;
 
