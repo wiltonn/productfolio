@@ -67,7 +67,7 @@ describe('ScenarioCalculatorService', () => {
   const mockScenario = {
     id: scenarioId,
     name: 'Test Scenario',
-    quarterRange: '2024-Q1:2024-Q2',
+    periodIds: [],
     assumptions: {
       allocationCapPercentage: 100,
       bufferPercentage: 0,
@@ -107,7 +107,7 @@ describe('ScenarioCalculatorService', () => {
               id: '00000000-0000-0000-0000-000000000040',
               name: 'Feature A',
               skillDemand: { frontend: 100, backend: 150 },
-              quarterDistribution: { '2024-Q1': 0.6, '2024-Q2': 0.4 },
+              periodDistributions: [],
             },
           ],
         },
@@ -125,7 +125,7 @@ describe('ScenarioCalculatorService', () => {
           id: '00000000-0000-0000-0000-000000000040',
           name: 'Feature A',
           skillDemand: { frontend: 100, backend: 150 },
-          quarterDistribution: { '2024-Q1': 0.6, '2024-Q2': 0.4 },
+          periodDistributions: [],
         },
       ],
     },
@@ -208,7 +208,7 @@ describe('ScenarioCalculatorService', () => {
       expect(result).toBeDefined();
       expect(result.scenarioId).toBe(scenarioId);
       expect(result.scenarioName).toBe('Test Scenario');
-      expect(result.quarterRange).toBe('2024-Q1:2024-Q2');
+      expect(result.periods).toEqual([]);
       expect(result.calculatedAt).toBeInstanceOf(Date);
       expect(result.cacheHit).toBe(false);
     });
@@ -288,7 +288,7 @@ describe('ScenarioCalculatorService', () => {
       const cachedResult = {
         scenarioId,
         scenarioName: 'Cached Scenario',
-        quarterRange: '2024-Q1:2024-Q2',
+        periodIds: [],
         calculatedAt: new Date(),
         demandBySkillQuarter: [],
         capacityBySkillQuarter: [],
@@ -480,7 +480,7 @@ describe('ScenarioCalculatorService', () => {
               id: '00000000-0000-0000-0000-000000000040',
               name: 'Feature A',
               skillDemand: { frontend: 10000 }, // Very high demand
-              quarterDistribution: { '2024-Q1': 1.0 },
+              periodDistributions: [],
             },
           ],
         },
@@ -507,7 +507,7 @@ describe('ScenarioCalculatorService', () => {
               id: '00000000-0000-0000-0000-000000000040',
               name: 'Feature A',
               skillDemand: { frontend: 50000 }, // Massive demand for critical shortage
-              quarterDistribution: { '2024-Q1': 1.0 },
+              periodDistributions: [],
             },
           ],
         },

@@ -24,7 +24,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status?: string;
       businessOwnerId?: string;
       productOwnerId?: string;
-      targetQuarter?: string;
+      targetPeriodId?: string;
       search?: string;
       page?: string;
       limit?: string;
@@ -34,7 +34,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status: request.query.status,
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
-      targetQuarter: request.query.targetQuarter,
+      targetPeriodId: request.query.targetPeriodId,
       search: request.query.search,
       page: request.query.page ? parseInt(request.query.page, 10) : 1,
       limit: request.query.limit ? parseInt(request.query.limit, 10) : 20,
@@ -203,7 +203,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status?: string;
       businessOwnerId?: string;
       productOwnerId?: string;
-      targetQuarter?: string;
+      targetPeriodId?: string;
       search?: string;
     };
   }>('/api/initiatives/export', async (request, reply) => {
@@ -211,7 +211,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status: request.query.status,
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
-      targetQuarter: request.query.targetQuarter,
+      targetPeriodId: request.query.targetPeriodId,
       search: request.query.search,
     };
 

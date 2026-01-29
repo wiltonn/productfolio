@@ -1,6 +1,6 @@
 import { Job } from 'bullmq';
 import { prisma } from '../../lib/prisma.js';
-import { setCachedData, deleteKey, CACHE_TTL } from '../../lib/redis.js';
+import { setCachedData } from '../../lib/redis.js';
 import type { ViewRefreshJobData } from '../queue.js';
 
 // Cache keys for materialized views
@@ -11,25 +11,22 @@ const VIEW_CACHE_KEYS = {
   globalCapacity: 'view:capacity:global',
 };
 
+interface PeriodSummary {
+  periodId: string;
+  periodLabel: string;
+  totalHours: number;
+  skillBreakdown: Record<string, number>;
+}
+
 interface DemandSummary {
   scenarioId: string;
-  quarterSummaries: Array<{
-    quarter: string;
-    totalDemandHours: number;
-    skillBreakdown: Record<string, number>;
-    initiativeCount: number;
-  }>;
+  periodSummaries: Array<PeriodSummary & { initiativeCount: number }>;
   calculatedAt: string;
 }
 
 interface CapacitySummary {
   scenarioId: string;
-  quarterSummaries: Array<{
-    quarter: string;
-    totalCapacityHours: number;
-    skillBreakdown: Record<string, number>;
-    employeeCount: number;
-  }>;
+  periodSummaries: Array<PeriodSummary & { employeeCount: number }>;
   calculatedAt: string;
 }
 
@@ -60,7 +57,15 @@ export async function processViewRefresh(
   // Get scenarios to process
   const scenarios = await prisma.scenario.findMany({
     where: scenarioIds ? { id: { in: scenarioIds } } : undefined,
-    select: { id: true, name: true, quarterRange: true },
+    select: {
+      id: true,
+      name: true,
+      scenarioPeriods: {
+        include: {
+          period: true,
+        },
+      },
+    },
   });
 
   job.log(`Found ${scenarios.length} scenarios to process`);
@@ -69,14 +74,16 @@ export async function processViewRefresh(
   let currentStep = 0;
 
   for (const scenario of scenarios) {
+    const periods = scenario.scenarioPeriods.map((sp) => sp.period);
+
     if (viewType === 'demand_summary' || viewType === 'all') {
-      await refreshDemandSummary(scenario.id, scenario.quarterRange, job);
+      await refreshDemandSummary(scenario.id, periods, job);
       currentStep++;
       await job.updateProgress(Math.round((currentStep / totalSteps) * 100));
     }
 
     if (viewType === 'capacity_summary' || viewType === 'all') {
-      await refreshCapacitySummary(scenario.id, scenario.quarterRange, job);
+      await refreshCapacitySummary(scenario.id, periods, job);
       currentStep++;
       await job.updateProgress(Math.round((currentStep / totalSteps) * 100));
     }
@@ -105,7 +112,7 @@ export async function processViewRefresh(
 
 async function refreshDemandSummary(
   scenarioId: string,
-  quarterRange: string,
+  periods: Array<{ id: string; label: string }>,
   job: Job
 ): Promise<void> {
   job.log(`Refreshing demand summary for scenario ${scenarioId}`);
@@ -119,37 +126,41 @@ async function refreshDemandSummary(
   const priorityRankings = (scenario.priorityRankings as Array<{ initiativeId: string }>) || [];
   const initiativeIds = priorityRankings.map((pr) => pr.initiativeId);
 
-  // Get initiatives with scope items
+  // Get initiatives with scope items and their period distributions
   const initiatives = await prisma.initiative.findMany({
     where: { id: { in: initiativeIds } },
-    include: { scopeItems: true },
+    include: {
+      scopeItems: {
+        include: {
+          periodDistributions: true,
+        },
+      },
+    },
   });
 
-  // Parse quarter range
-  const quarters = getQuartersInRange(quarterRange);
-
-  // Aggregate demand by quarter
-  const quarterSummaries = quarters.map((quarter) => {
+  // Aggregate demand by period
+  const periodSummaries = periods.map((period) => {
     const skillBreakdown: Record<string, number> = {};
     let totalDemandHours = 0;
 
     for (const initiative of initiatives) {
       for (const scopeItem of initiative.scopeItems) {
         const skillDemand = (scopeItem.skillDemand as Record<string, number>) || {};
-        const quarterDistribution = (scopeItem.quarterDistribution as Record<string, number>) || {};
-        const distribution = quarterDistribution[quarter] || 0;
+        const distribution =
+          scopeItem.periodDistributions.find((pd) => pd.periodId === period.id)?.distribution || 0;
 
         for (const [skill, hours] of Object.entries(skillDemand)) {
-          const hoursForQuarter = hours * distribution;
-          skillBreakdown[skill] = (skillBreakdown[skill] || 0) + hoursForQuarter;
-          totalDemandHours += hoursForQuarter;
+          const hoursForPeriod = hours * distribution;
+          skillBreakdown[skill] = (skillBreakdown[skill] || 0) + hoursForPeriod;
+          totalDemandHours += hoursForPeriod;
         }
       }
     }
 
     return {
-      quarter,
-      totalDemandHours,
+      periodId: period.id,
+      periodLabel: period.label,
+      totalHours: totalDemandHours,
       skillBreakdown,
       initiativeCount: initiatives.length,
     };
@@ -157,7 +168,7 @@ async function refreshDemandSummary(
 
   const summary: DemandSummary = {
     scenarioId,
-    quarterSummaries,
+    periodSummaries,
     calculatedAt: new Date().toISOString(),
   };
 
@@ -167,46 +178,38 @@ async function refreshDemandSummary(
 
 async function refreshCapacitySummary(
   scenarioId: string,
-  quarterRange: string,
+  periods: Array<{ id: string; label: string }>,
   job: Job
 ): Promise<void> {
   job.log(`Refreshing capacity summary for scenario ${scenarioId}`);
 
-  // Get allocations with employee skills
+  // Get allocations with employee skills and allocation periods
   const allocations = await prisma.allocation.findMany({
     where: { scenarioId },
     include: {
       employee: {
         include: { skills: true },
       },
+      allocationPeriods: true,
     },
   });
 
-  const quarters = getQuartersInRange(quarterRange);
-
-  // Aggregate capacity by quarter
-  const quarterSummaries = quarters.map((quarter) => {
+  // Aggregate capacity by period using AllocationPeriod junction
+  const periodSummaries = periods.map((period) => {
     const skillBreakdown: Record<string, number> = {};
     let totalCapacityHours = 0;
     const employeeIds = new Set<string>();
 
-    const quarterDates = getQuarterDates(quarter);
-
     for (const allocation of allocations) {
-      // Check if allocation overlaps with quarter
-      const overlap = calculateDateOverlap(
-        allocation.startDate,
-        allocation.endDate,
-        quarterDates.start,
-        quarterDates.end
+      // Find the AllocationPeriod for this period
+      const ap = allocation.allocationPeriods.find(
+        (a) => a.periodId === period.id
       );
-
-      if (overlap === 0) continue;
+      if (!ap || ap.overlapRatio === 0) continue;
 
       employeeIds.add(allocation.employeeId);
 
-      // Base hours per quarter (520 = 40 hours/week * 13 weeks)
-      const baseHours = 520 * (allocation.percentage / 100) * overlap;
+      const baseHours = ap.hoursInPeriod;
 
       for (const skill of allocation.employee.skills) {
         const proficiencyMultiplier = skill.proficiency / 5;
@@ -217,8 +220,9 @@ async function refreshCapacitySummary(
     }
 
     return {
-      quarter,
-      totalCapacityHours,
+      periodId: period.id,
+      periodLabel: period.label,
+      totalHours: totalCapacityHours,
       skillBreakdown,
       employeeCount: employeeIds.size,
     };
@@ -226,7 +230,7 @@ async function refreshCapacitySummary(
 
   const summary: CapacitySummary = {
     scenarioId,
-    quarterSummaries,
+    periodSummaries,
     calculatedAt: new Date().toISOString(),
   };
 
@@ -296,60 +300,4 @@ async function refreshGlobalCapacitySummary(job: Job): Promise<void> {
   };
 
   await setCachedData(VIEW_CACHE_KEYS.globalCapacity, summary, 3600);
-}
-
-// Helper functions
-function getQuartersInRange(quarterRange: string): string[] {
-  const [startQuarter, endQuarter] = quarterRange.split(':');
-  const quarters: string[] = [];
-
-  const [startYear, startQ] = startQuarter.split('-Q');
-  const [endYear, endQ] = endQuarter.split('-Q');
-
-  let currentYear = parseInt(startYear, 10);
-  let currentQ = parseInt(startQ, 10);
-  const endYearNum = parseInt(endYear, 10);
-  const endQNum = parseInt(endQ, 10);
-
-  while (currentYear < endYearNum || (currentYear === endYearNum && currentQ <= endQNum)) {
-    quarters.push(`${currentYear}-Q${currentQ}`);
-    currentQ++;
-    if (currentQ > 4) {
-      currentQ = 1;
-      currentYear++;
-    }
-  }
-
-  return quarters;
-}
-
-function getQuarterDates(quarter: string): { start: Date; end: Date } {
-  const [year, q] = quarter.split('-Q');
-  const yearNum = parseInt(year, 10);
-  const qNum = parseInt(q, 10);
-
-  const startMonth = (qNum - 1) * 3;
-  const endMonth = startMonth + 2;
-
-  const start = new Date(yearNum, startMonth, 1);
-  const end = new Date(yearNum, endMonth + 1, 0);
-
-  return { start, end };
-}
-
-function calculateDateOverlap(
-  allocStart: Date,
-  allocEnd: Date,
-  quarterStart: Date,
-  quarterEnd: Date
-): number {
-  const overlapStart = new Date(Math.max(allocStart.getTime(), quarterStart.getTime()));
-  const overlapEnd = new Date(Math.min(allocEnd.getTime(), quarterEnd.getTime()));
-
-  if (overlapStart > overlapEnd) return 0;
-
-  const overlapDays = (overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
-  const quarterDays = (quarterEnd.getTime() - quarterStart.getTime()) / (1000 * 60 * 60 * 24) + 1;
-
-  return overlapDays / quarterDays;
 }

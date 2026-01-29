@@ -75,7 +75,7 @@ export const mockData = {
     title: string;
     description: string;
     status: string;
-    targetQuarter: string;
+    targetPeriodId: string | null;
     businessOwnerId: string;
     productOwnerId: string;
   }>) {
@@ -84,7 +84,7 @@ export const mockData = {
       title: 'Test Initiative',
       description: 'Test description',
       status: 'DRAFT',
-      targetQuarter: '2024-Q1',
+      targetPeriodId: null as string | null,
       businessOwnerId: testUuid('100'),
       productOwnerId: testUuid('101'),
       ...overrides,
@@ -99,7 +99,7 @@ export const mockData = {
     skillDemand: Record<string, number>;
     estimateP50: number;
     estimateP90: number;
-    quarterDistribution: Record<string, number>;
+    periodDistributions: Array<{ periodId: string; distribution: number }>;
   }>) {
     return {
       id: testUuid('1'),
@@ -109,7 +109,7 @@ export const mockData = {
       skillDemand: { frontend: 2, backend: 3 },
       estimateP50: 100,
       estimateP90: 150,
-      quarterDistribution: { '2024-Q1': 0.6, '2024-Q2': 0.4 },
+      periodDistributions: [] as Array<{ periodId: string; distribution: number }>,
       ...overrides,
     };
   },
@@ -117,14 +117,14 @@ export const mockData = {
   scenario(overrides?: Partial<{
     id: string;
     name: string;
-    quarterRange: string;
+    periodIds: string[];
     assumptions: Record<string, unknown>;
     priorityRankings: Array<{ initiativeId: string; rank: number }>;
   }>) {
     return {
       id: testUuid('1'),
       name: 'Test Scenario',
-      quarterRange: '2024-Q1:2024-Q4',
+      periodIds: [] as string[],
       assumptions: {},
       priorityRankings: [],
       ...overrides,

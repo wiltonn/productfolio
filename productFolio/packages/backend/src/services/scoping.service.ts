@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError, WorkflowError } from '../lib/errors.js';
-import { PaginationParams, PaginatedResponse, ApprovalHistoryEntry, SkillDemand, QuarterDistribution } from '../types/index.js';
+import { PaginationParams, PaginatedResponse, ApprovalHistoryEntry, SkillDemand } from '../types/index.js';
 import type { ScopeItem, Approval, Initiative } from '@prisma/client';
 import { CreateScopeItemInput, UpdateScopeItemInput } from '../schemas/scoping.schema.js';
 
@@ -84,7 +84,17 @@ export class ScopingService {
         skillDemand: data.skillDemand || null,
         estimateP50: data.estimateP50 || null,
         estimateP90: data.estimateP90 || null,
-        quarterDistribution: data.quarterDistribution || null,
+        periodDistributions: data.periodDistributions
+          ? {
+              create: data.periodDistributions.map((pd) => ({
+                periodId: pd.periodId,
+                distribution: pd.distribution,
+              })),
+            }
+          : undefined,
+      },
+      include: {
+        periodDistributions: true,
       },
     });
 
@@ -111,11 +121,31 @@ export class ScopingService {
     if (data.skillDemand !== undefined) updateData.skillDemand = data.skillDemand;
     if (data.estimateP50 !== undefined) updateData.estimateP50 = data.estimateP50;
     if (data.estimateP90 !== undefined) updateData.estimateP90 = data.estimateP90;
-    if (data.quarterDistribution !== undefined) updateData.quarterDistribution = data.quarterDistribution;
+
+    // Handle period distributions update
+    if (data.periodDistributions !== undefined) {
+      // Delete existing distributions and create new ones
+      await prisma.scopeItemPeriodDistribution.deleteMany({
+        where: { scopeItemId: id },
+      });
+
+      if (data.periodDistributions.length > 0) {
+        await prisma.scopeItemPeriodDistribution.createMany({
+          data: data.periodDistributions.map((pd) => ({
+            scopeItemId: id,
+            periodId: pd.periodId,
+            distribution: pd.distribution,
+          })),
+        });
+      }
+    }
 
     const updated = await prisma.scopeItem.update({
       where: { id },
       data: updateData,
+      include: {
+        periodDistributions: true,
+      },
     });
 
     return updated;

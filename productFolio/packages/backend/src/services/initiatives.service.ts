@@ -45,8 +45,8 @@ export async function list(
     where.productOwnerId = filters.productOwnerId;
   }
 
-  if (filters.targetQuarter) {
-    where.targetQuarter = filters.targetQuarter;
+  if (filters.targetPeriodId) {
+    where.targetPeriodId = filters.targetPeriodId;
   }
 
   if (filters.search) {
@@ -145,12 +145,13 @@ export async function create(data: CreateInitiativeInput) {
       businessOwnerId: data.businessOwnerId,
       productOwnerId: data.productOwnerId,
       status: data.status || InitiativeStatus.DRAFT,
-      targetQuarter: data.targetQuarter || null,
+      targetPeriodId: data.targetPeriodId || null,
       customFields: data.customFields || null,
     },
     include: {
       businessOwner: true,
       productOwner: true,
+      targetPeriod: true,
     },
   });
 
@@ -222,8 +223,8 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     updateData.productOwnerId = data.productOwnerId;
   }
 
-  if (data.targetQuarter !== undefined) {
-    updateData.targetQuarter = data.targetQuarter;
+  if (data.targetPeriodId !== undefined) {
+    updateData.targetPeriodId = data.targetPeriodId;
   }
 
   if (data.customFields !== undefined) {
@@ -236,6 +237,7 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     include: {
       businessOwner: true,
       productOwner: true,
+      targetPeriod: true,
     },
   });
 
@@ -441,7 +443,7 @@ export async function importFromCsv(
           businessOwnerId: validatedRow.businessOwnerId,
           productOwnerId: validatedRow.productOwnerId,
           status: validatedRow.status || InitiativeStatus.DRAFT,
-          targetQuarter: validatedRow.targetQuarter || null,
+          targetPeriodId: validatedRow.targetPeriodId || null,
           customFields: null,
         },
       });
@@ -477,8 +479,8 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     where.productOwnerId = filters.productOwnerId;
   }
 
-  if (filters.targetQuarter) {
-    where.targetQuarter = filters.targetQuarter;
+  if (filters.targetPeriodId) {
+    where.targetPeriodId = filters.targetPeriodId;
   }
 
   if (filters.search) {
@@ -503,6 +505,7 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     include: {
       businessOwner: true,
       productOwner: true,
+      targetPeriod: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -513,7 +516,8 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     title: initiative.title,
     description: initiative.description || '',
     status: initiative.status,
-    targetQuarter: initiative.targetQuarter || '',
+    targetPeriodId: initiative.targetPeriodId || '',
+    targetPeriodLabel: initiative.targetPeriod?.label || '',
     businessOwnerId: initiative.businessOwnerId,
     businessOwnerName: initiative.businessOwner.name,
     productOwnerId: initiative.productOwnerId,
@@ -528,7 +532,8 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     'title',
     'description',
     'status',
-    'targetQuarter',
+    'targetPeriodId',
+    'targetPeriodLabel',
     'businessOwnerId',
     'businessOwnerName',
     'productOwnerId',

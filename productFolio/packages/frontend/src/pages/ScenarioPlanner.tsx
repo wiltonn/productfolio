@@ -29,10 +29,17 @@ import {
   useCreateAllocation,
   useUpdateAllocation,
   useDeleteAllocation,
+  useInitiativeAllocations,
+  useAutoAllocatePreview,
+  useAutoAllocateApply,
 } from '../hooks/useScenarios';
+import type { Allocation, AutoAllocateResult } from '../hooks/useScenarios';
 import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
+import { useQuarterPeriods, deriveQuarterRange } from '../hooks/usePeriods';
 import type { InitiativeStatus, Initiative } from '../types';
+
+const LOCKED_STATUSES = ['APPROVED', 'IN_PROGRESS', 'COMPLETED'];
 
 // ============================================================================
 // TYPES
@@ -75,6 +82,7 @@ interface AllocationRow {
   employeeName: string;
   initiativeId: string;
   initiativeTitle: string;
+  initiativeStatus: string | null;
   startDate: string;
   endDate: string;
   percentage: number;
@@ -256,9 +264,13 @@ function PanelDivider({
 function SortableInitiativeCard({
   initiative,
   rank,
+  isSelected,
+  onSelect,
 }: {
   initiative: InitiativeForPlanning;
   rank: number;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
 }) {
   const {
     attributes,
@@ -279,12 +291,13 @@ function SortableInitiativeCard({
       ref={setNodeRef}
       style={style}
       className={`
-        initiative-card group relative
+        initiative-card group relative cursor-pointer
         ${isDragging ? 'z-50 shadow-xl ring-2 ring-accent-400' : ''}
+        ${isSelected ? 'ring-2 ring-accent-500 bg-accent-50' : ''}
         ${initiative.hasShortage ? 'shortage' : ''}
       `}
       {...attributes}
-      {...listeners}
+      onClick={() => onSelect(initiative.id)}
     >
       {/* Rank indicator */}
       <div className="rank-badge">
@@ -295,6 +308,11 @@ function SortableInitiativeCard({
       <div className="flex-1 min-w-0 ml-3">
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-surface-900 truncate">{initiative.title}</h4>
+          {LOCKED_STATUSES.includes(initiative.status) && (
+            <svg className="w-3.5 h-3.5 text-surface-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+            </svg>
+          )}
           {initiative.hasShortage && (
             <span className="shortage-indicator" title="Resource shortage">
               <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
@@ -304,14 +322,23 @@ function SortableInitiativeCard({
           )}
         </div>
         <div className="flex items-center gap-3 mt-1">
-          <span className="quarter-badge">{initiative.quarter}</span>
+          <span
+            className="quarter-badge"
+            title={initiative.quarter === 'Unassigned' ? 'This initiative has no target quarter set. Assign one in the initiative details.' : undefined}
+          >
+            {initiative.quarter}
+          </span>
           <span className="hours-badge">{initiative.totalHours.toLocaleString()}h</span>
           <StatusBadge status={initiative.status} />
         </div>
       </div>
 
       {/* Drag handle */}
-      <div className="drag-handle">
+      <div
+        className="drag-handle"
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+      >
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
           <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
         </svg>
@@ -549,6 +576,241 @@ function InlineEdit({
   );
 }
 
+// Initiative Allocation Panel
+function InitiativeAllocationPanel({
+  scenarioId,
+  initiativeId,
+  initiativeTitle,
+  employees,
+  onClose,
+  defaultDates,
+}: {
+  scenarioId: string;
+  initiativeId: string;
+  initiativeTitle: string;
+  employees: SelectOption[];
+  onClose: () => void;
+  defaultDates: { startDate: string; endDate: string };
+}) {
+  const { data: allocations, isLoading } = useInitiativeAllocations(scenarioId, initiativeId);
+  const createAllocation = useCreateAllocation();
+  const updateAllocation = useUpdateAllocation();
+  const deleteAllocation = useDeleteAllocation();
+
+  const [newEmployeeId, setNewEmployeeId] = useState('');
+  const [newStartDate, setNewStartDate] = useState(defaultDates.startDate);
+  const [newEndDate, setNewEndDate] = useState(defaultDates.endDate);
+  const [newPercentage, setNewPercentage] = useState(100);
+
+  // Get initiative status from first allocation
+  const firstAlloc = allocations?.[0] as Allocation | undefined;
+  const initiativeStatus = firstAlloc?.initiativeStatus ?? null;
+  const isLocked = initiativeStatus !== null && LOCKED_STATUSES.includes(initiativeStatus);
+
+  const handleAdd = useCallback(() => {
+    if (!newEmployeeId) return;
+    createAllocation.mutate({
+      scenarioId,
+      data: {
+        employeeId: newEmployeeId,
+        initiativeId,
+        startDate: newStartDate,
+        endDate: newEndDate,
+        percentage: newPercentage,
+      },
+    }, {
+      onSuccess: () => {
+        setNewEmployeeId('');
+        setNewPercentage(100);
+      },
+    });
+  }, [scenarioId, initiativeId, newEmployeeId, newStartDate, newEndDate, newPercentage, createAllocation]);
+
+  const handleUpdate = useCallback((allocationId: string, field: string, value: string) => {
+    const data: Record<string, string | number> = {};
+    if (field === 'startDate' || field === 'endDate') {
+      data[field] = value;
+    } else if (field === 'percentage') {
+      data[field] = Number(value);
+    }
+    updateAllocation.mutate({ scenarioId, allocationId, data });
+  }, [scenarioId, updateAllocation]);
+
+  const handleDelete = useCallback((allocationId: string) => {
+    deleteAllocation.mutate({ scenarioId, allocationId });
+  }, [scenarioId, deleteAllocation]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Panel header with initiative accent bar */}
+      <div className="border-b border-surface-200 bg-accent-50 border-l-4 border-l-accent-500">
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h4 className="font-semibold text-surface-900 truncate">{initiativeTitle}</h4>
+            {isLocked && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-amber-700 bg-amber-100 rounded-full flex-shrink-0">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                </svg>
+                Locked
+              </span>
+            )}
+            {initiativeStatus && <StatusBadge status={initiativeStatus as InitiativeStatus} />}
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 text-surface-400 hover:text-surface-600 rounded transition-colors flex-shrink-0"
+            title="Back to all allocations"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Allocations table */}
+      <div className="flex-1 overflow-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8 text-surface-500 text-sm">Loading...</div>
+        ) : (
+          <table className="allocations-table w-full">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>% Allocation</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allocations?.map((alloc) => (
+                <tr key={alloc.id}>
+                  <td>
+                    <div className="employee-cell">
+                      <div className="employee-avatar">
+                        {alloc.employeeName.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      <span>{alloc.employeeName}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {isLocked ? (
+                      <span className="text-surface-500">{alloc.startDate.toString().split('T')[0]}</span>
+                    ) : (
+                      <InlineEdit
+                        value={alloc.startDate.toString().split('T')[0]}
+                        onChange={(v) => handleUpdate(alloc.id, 'startDate', v)}
+                        type="date"
+                      />
+                    )}
+                  </td>
+                  <td>
+                    {isLocked ? (
+                      <span className="text-surface-500">{alloc.endDate.toString().split('T')[0]}</span>
+                    ) : (
+                      <InlineEdit
+                        value={alloc.endDate.toString().split('T')[0]}
+                        onChange={(v) => handleUpdate(alloc.id, 'endDate', v)}
+                        type="date"
+                      />
+                    )}
+                  </td>
+                  <td>
+                    <div className="percentage-cell">
+                      {isLocked ? (
+                        <span className="text-surface-500">{alloc.percentage}</span>
+                      ) : (
+                        <InlineEdit
+                          value={alloc.percentage}
+                          onChange={(v) => handleUpdate(alloc.id, 'percentage', v)}
+                          type="number"
+                          className="percentage-input"
+                        />
+                      )}
+                      <span>%</span>
+                    </div>
+                  </td>
+                  <td>
+                    {!isLocked && (
+                      <button
+                        onClick={() => handleDelete(alloc.id)}
+                        className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete allocation"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {(!allocations || allocations.length === 0) && (
+                <tr>
+                  <td colSpan={5} className="text-center py-6 text-surface-400 text-sm">
+                    No allocations for this initiative yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Add allocation inline form */}
+      {!isLocked && (
+        <div className="px-4 py-3 border-t border-surface-200 bg-surface-50">
+          <div className="text-xs font-medium text-accent-600 mb-2">
+            Adding to: <span className="font-semibold">{initiativeTitle}</span>
+          </div>
+          <div className="flex items-center gap-2">
+          <select
+            value={newEmployeeId}
+            onChange={(e) => setNewEmployeeId(e.target.value)}
+            className="flex-1 px-2 py-1.5 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+          >
+            <option value="">Select employee...</option>
+            {employees.map(emp => (
+              <option key={emp.value} value={emp.value}>{emp.label}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={newStartDate}
+            onChange={(e) => setNewStartDate(e.target.value)}
+            className="w-32 px-2 py-1.5 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+          />
+          <input
+            type="date"
+            value={newEndDate}
+            onChange={(e) => setNewEndDate(e.target.value)}
+            className="w-32 px-2 py-1.5 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+          />
+          <input
+            type="number"
+            value={newPercentage}
+            onChange={(e) => setNewPercentage(Number(e.target.value))}
+            min={1}
+            max={100}
+            className="w-16 px-2 py-1.5 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
+          />
+          <span className="text-sm text-surface-500">%</span>
+          <button
+            onClick={handleAdd}
+            disabled={!newEmployeeId || createAllocation.isPending}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-accent-600 rounded-md hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Add
+          </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Guided Mode Overlay
 function GuidedModeOverlay({
   step,
@@ -681,6 +943,12 @@ export function ScenarioPlanner() {
   const { data: capacityAnalysis, isLoading: analysisLoading } = useScenarioAnalysis(id || '');
   const { data: initiativesData, isLoading: initiativesLoading } = useInitiatives({ limit: 100 });
   const { data: employeesData } = useEmployees({ limit: 100 });
+  const { data: periodsData } = useQuarterPeriods();
+  const quarterPeriods = periodsData?.data ?? [];
+  const scenarioQuarterRange = useMemo(() => {
+    if (!scenario?.periodIds || quarterPeriods.length === 0) return '';
+    return deriveQuarterRange(scenario.periodIds, quarterPeriods);
+  }, [scenario?.periodIds, quarterPeriods]);
   const updatePriorities = useUpdatePriorities();
   const createAllocation = useCreateAllocation();
   const updateAllocation = useUpdateAllocation();
@@ -690,6 +958,9 @@ export function ScenarioPlanner() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(420);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(280);
   const [isBottomPanelCollapsed, setIsBottomPanelCollapsed] = useState(false);
+
+  // Selected initiative for focused allocation view
+  const [selectedInitiativeId, setSelectedInitiativeId] = useState<string | null>(null);
 
   // Local state for drag-and-drop ordering
   const [initiativeOrder, setInitiativeOrder] = useState<string[]>([]);
@@ -712,6 +983,12 @@ export function ScenarioPlanner() {
   // Guided mode
   const [showGuidedMode, setShowGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState(0);
+
+  // Auto-allocate hooks and state
+  const autoAllocatePreview = useAutoAllocatePreview();
+  const autoAllocateApply = useAutoAllocateApply();
+  const [isAutoAllocateModalOpen, setIsAutoAllocateModalOpen] = useState(false);
+  const [autoAllocateResult, setAutoAllocateResult] = useState<AutoAllocateResult | null>(null);
 
   // Add allocation modal state
   const [isAddAllocationModalOpen, setIsAddAllocationModalOpen] = useState(false);
@@ -783,6 +1060,7 @@ export function ScenarioPlanner() {
         employeeName: employee?.name || 'Unknown',
         initiativeId: alloc.initiativeId,
         initiativeTitle: initiative?.title || 'Unknown Initiative',
+        initiativeStatus: alloc.initiativeStatus ?? null,
         startDate: alloc.startDate.split('T')[0],
         endDate: alloc.endDate.split('T')[0],
         percentage: alloc.percentage,
@@ -792,10 +1070,10 @@ export function ScenarioPlanner() {
   }, [allocationsData, employeesData, initiativesData]);
 
   const capacityByQuarter: CapacityByQuarter[] = useMemo(() => {
-    if (!employeesData?.data || !scenario?.quarterRange) return [];
+    if (!employeesData?.data || !scenarioQuarterRange) return [];
     return calculateCapacityByQuarter(
       employeesData.data.map(e => ({ hoursPerWeek: e.defaultCapacityHours })),
-      scenario.quarterRange
+      scenarioQuarterRange
     );
   }, [employeesData, scenario]);
 
@@ -828,7 +1106,7 @@ export function ScenarioPlanner() {
 
   // Compute default dates based on scenario quarter range
   const defaultAllocationDates = useMemo(() => {
-    if (!scenario?.quarterRange) {
+    if (!scenarioQuarterRange) {
       const today = new Date();
       const threeMonthsLater = new Date(today);
       threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
@@ -837,7 +1115,7 @@ export function ScenarioPlanner() {
         endDate: threeMonthsLater.toISOString().split('T')[0],
       };
     }
-    const [startQ, endQ] = scenario.quarterRange.split(':');
+    const [startQ, endQ] = scenarioQuarterRange.split(':');
     // Convert quarter to date (e.g., 2025-Q1 -> 2025-01-01)
     const quarterToDate = (q: string, isEnd = false) => {
       const [year, qNum] = q.split('-Q').map(Number);
@@ -849,7 +1127,7 @@ export function ScenarioPlanner() {
       startDate: quarterToDate(startQ),
       endDate: quarterToDate(endQ, true),
     };
-  }, [scenario?.quarterRange]);
+  }, [scenarioQuarterRange]);
 
   // Initialize initiative order from scenario priorities
   useEffect(() => {
@@ -993,18 +1271,52 @@ export function ScenarioPlanner() {
   const openAddAllocationModal = useCallback(() => {
     setNewAllocation({
       employeeId: '',
-      initiativeId: '',
+      initiativeId: selectedInitiativeId || '',
       startDate: defaultAllocationDates.startDate,
       endDate: defaultAllocationDates.endDate,
       percentage: 100,
     });
     setIsAddAllocationModalOpen(true);
-  }, [defaultAllocationDates]);
+  }, [defaultAllocationDates, selectedInitiativeId]);
 
   const handleAutoAllocate = useCallback(() => {
-    // Placeholder for auto-allocation logic
-    console.log('Auto-allocate triggered');
-  }, []);
+    if (!id) return;
+    autoAllocatePreview.mutate(
+      { scenarioId: id },
+      {
+        onSuccess: (result) => {
+          setAutoAllocateResult(result);
+          setIsAutoAllocateModalOpen(true);
+        },
+      }
+    );
+  }, [id, autoAllocatePreview]);
+
+  const handleApplyAutoAllocate = useCallback(() => {
+    if (!id || !autoAllocateResult) return;
+    autoAllocateApply.mutate(
+      {
+        scenarioId: id,
+        proposedAllocations: autoAllocateResult.proposedAllocations,
+      },
+      {
+        onSuccess: () => {
+          setIsAutoAllocateModalOpen(false);
+          setAutoAllocateResult(null);
+        },
+      }
+    );
+  }, [id, autoAllocateResult, autoAllocateApply]);
+
+  // Handle initiative selection — auto-expand bottom panel
+  const handleSelectInitiative = useCallback((initiativeId: string) => {
+    if (selectedInitiativeId === initiativeId) {
+      setSelectedInitiativeId(null);
+    } else {
+      setSelectedInitiativeId(initiativeId);
+      setIsBottomPanelCollapsed(false);
+    }
+  }, [selectedInitiativeId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1012,6 +1324,8 @@ export function ScenarioPlanner() {
       if (e.key === 'Escape') {
         setShowCompare(false);
         setShowAssumptions(false);
+        setSelectedInitiativeId(null);
+        setIsAutoAllocateModalOpen(false);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
@@ -1053,7 +1367,7 @@ export function ScenarioPlanner() {
           </Link>
           <div className="scenario-title-group">
             <span className="scenario-name-input">{scenario?.name || 'Untitled Scenario'}</span>
-            <span className="scenario-id">{scenario?.quarterRange || ''}</span>
+            <span className="scenario-id">{scenarioQuarterRange || ''}</span>
           </div>
         </div>
 
@@ -1209,6 +1523,8 @@ export function ScenarioPlanner() {
                       key={initiative.id}
                       initiative={initiative}
                       rank={index + 1}
+                      isSelected={selectedInitiativeId === initiative.id}
+                      onSelect={handleSelectInitiative}
                     />
                   ))}
                 </SortableContext>
@@ -1300,11 +1616,19 @@ export function ScenarioPlanner() {
                   </svg>
                   Add Allocation
                 </button>
-                <button onClick={handleAutoAllocate} className="btn-primary auto-allocate">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                  </svg>
-                  Auto-allocate
+                <button
+                  onClick={handleAutoAllocate}
+                  disabled={autoAllocatePreview.isPending}
+                  className="btn-primary auto-allocate"
+                >
+                  {autoAllocatePreview.isPending ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+                    </svg>
+                  )}
+                  {autoAllocatePreview.isPending ? 'Computing...' : 'Auto-allocate'}
                 </button>
               </div>
             )}
@@ -1316,92 +1640,133 @@ export function ScenarioPlanner() {
                 orientation="vertical"
                 onResize={(delta) => setBottomPanelHeight(h => Math.max(200, Math.min(500, h - delta)))}
               />
-              <div className="allocations-table-wrapper">
-                <table className="allocations-table">
-                  <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Initiative</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>% Allocation</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allocations.map((allocation) => (
-                      <tr
-                        key={allocation.id}
-                        className={allocation.isOverallocated ? 'overallocated' : ''}
-                      >
-                        <td>
-                          <div className="employee-cell">
-                            <div className="employee-avatar">
-                              {allocation.employeeName.split(' ').map(n => n[0]).join('')}
-                            </div>
-                            <span>{allocation.employeeName}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="initiative-name">{allocation.initiativeTitle}</span>
-                        </td>
-                        <td>
-                          <InlineEdit
-                            value={allocation.startDate}
-                            onChange={(v) => handleAllocationChange(allocation.id, 'startDate', v)}
-                            type="date"
-                          />
-                        </td>
-                        <td>
-                          <InlineEdit
-                            value={allocation.endDate}
-                            onChange={(v) => handleAllocationChange(allocation.id, 'endDate', v)}
-                            type="date"
-                          />
-                        </td>
-                        <td>
-                          <div className="percentage-cell">
-                            <InlineEdit
-                              value={allocation.percentage}
-                              onChange={(v) => handleAllocationChange(allocation.id, 'percentage', v)}
-                              type="number"
-                              className="percentage-input"
-                            />
-                            <span>%</span>
-                            <div className="percentage-bar-mini">
-                              <div
-                                className={`bar ${allocation.percentage > 100 ? 'over' : ''}`}
-                                style={{ width: `${Math.min(allocation.percentage, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          {allocation.isOverallocated && (
-                            <span className="overallocation-warning" title="Employee is overallocated">
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <button
-                            onClick={() => handleDeleteAllocation(allocation.id)}
-                            className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Delete allocation"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                            </svg>
-                          </button>
-                        </td>
+              {selectedInitiativeId && id ? (
+                <InitiativeAllocationPanel
+                  scenarioId={id}
+                  initiativeId={selectedInitiativeId}
+                  initiativeTitle={initiatives.find(i => i.id === selectedInitiativeId)?.title || 'Unknown Initiative'}
+                  employees={employeeOptions}
+                  onClose={() => setSelectedInitiativeId(null)}
+                  defaultDates={defaultAllocationDates}
+                />
+              ) : (
+                <div className="allocations-table-wrapper">
+                  <table className="allocations-table">
+                    <thead>
+                      <tr>
+                        <th>Employee</th>
+                        <th>Initiative</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>% Allocation</th>
+                        <th>Status</th>
+                        <th>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {allocations.map((allocation) => {
+                        const allocLocked = allocation.initiativeStatus !== undefined
+                          && allocation.initiativeStatus !== null
+                          && LOCKED_STATUSES.includes(allocation.initiativeStatus);
+                        return (
+                          <tr
+                            key={allocation.id}
+                            className={allocation.isOverallocated ? 'overallocated' : ''}
+                          >
+                            <td>
+                              <div className="employee-cell">
+                                <div className="employee-avatar">
+                                  {allocation.employeeName.split(' ').map(n => n[0]).join('')}
+                                </div>
+                                <span>{allocation.employeeName}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-accent-100 text-accent-800">
+                                  {allocation.initiativeTitle}
+                                </span>
+                                {allocLocked && (
+                                  <svg className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              {allocLocked ? (
+                                <span className="text-surface-500">{allocation.startDate}</span>
+                              ) : (
+                                <InlineEdit
+                                  value={allocation.startDate}
+                                  onChange={(v) => handleAllocationChange(allocation.id, 'startDate', v)}
+                                  type="date"
+                                />
+                              )}
+                            </td>
+                            <td>
+                              {allocLocked ? (
+                                <span className="text-surface-500">{allocation.endDate}</span>
+                              ) : (
+                                <InlineEdit
+                                  value={allocation.endDate}
+                                  onChange={(v) => handleAllocationChange(allocation.id, 'endDate', v)}
+                                  type="date"
+                                />
+                              )}
+                            </td>
+                            <td>
+                              <div className="percentage-cell">
+                                {allocLocked ? (
+                                  <span className="text-surface-500">{allocation.percentage}</span>
+                                ) : (
+                                  <InlineEdit
+                                    value={allocation.percentage}
+                                    onChange={(v) => handleAllocationChange(allocation.id, 'percentage', v)}
+                                    type="number"
+                                    className="percentage-input"
+                                  />
+                                )}
+                                <span>%</span>
+                                <div className="percentage-bar-mini">
+                                  <div
+                                    className={`bar ${allocation.percentage > 100 ? 'over' : ''}`}
+                                    style={{ width: `${Math.min(allocation.percentage, 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              {allocation.isOverallocated && (
+                                <span className="overallocation-warning" title="Employee is overallocated">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                  </svg>
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              {allocLocked ? (
+                                <span className="text-xs text-surface-400">Locked</span>
+                              ) : (
+                                <button
+                                  onClick={() => handleDeleteAllocation(allocation.id)}
+                                  className="p-1.5 text-surface-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Delete allocation"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                  </svg>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1425,11 +1790,160 @@ export function ScenarioPlanner() {
         />
       )}
 
+      {/* Auto-Allocate Preview Modal */}
+      <Modal
+        isOpen={isAutoAllocateModalOpen}
+        onClose={() => setIsAutoAllocateModalOpen(false)}
+        title="Auto-Allocate Preview"
+        size="xl"
+      >
+        {autoAllocateResult && (
+          <div className="space-y-5">
+            {/* Summary banner */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-accent-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-accent-700">{autoAllocateResult.summary.totalAllocations}</div>
+                <div className="text-xs text-accent-600">Allocations</div>
+              </div>
+              <div className="bg-accent-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-accent-700">{autoAllocateResult.summary.employeesUsed}</div>
+                <div className="text-xs text-accent-600">Employees</div>
+              </div>
+              <div className="bg-accent-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-accent-700">{autoAllocateResult.summary.initiativesCovered}</div>
+                <div className="text-xs text-accent-600">Initiatives</div>
+              </div>
+              <div className="bg-accent-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-accent-700">{autoAllocateResult.summary.totalHoursAllocated.toLocaleString()}</div>
+                <div className="text-xs text-accent-600">Hours</div>
+              </div>
+            </div>
+
+            {/* Warnings */}
+            {autoAllocateResult.warnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <h4 className="text-sm font-medium text-amber-800 mb-1">Warnings</h4>
+                <ul className="text-xs text-amber-700 space-y-1">
+                  {autoAllocateResult.warnings.map((warning, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                      </svg>
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Coverage by initiative */}
+            <div>
+              <h4 className="text-sm font-medium text-surface-700 mb-2">Coverage by Initiative</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {autoAllocateResult.coverage.map((cov) => (
+                  <div key={cov.initiativeId} className="border border-surface-200 rounded-lg p-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-accent-600 rounded-full">
+                          {cov.rank}
+                        </span>
+                        <span className="text-sm font-medium text-surface-800 truncate">{cov.initiativeTitle}</span>
+                      </div>
+                      <span className={`text-xs font-semibold ${
+                        cov.overallCoveragePercent >= 100 ? 'text-green-600' :
+                        cov.overallCoveragePercent >= 50 ? 'text-amber-600' :
+                        'text-red-600'
+                      }`}>
+                        {cov.overallCoveragePercent}%
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      {cov.skills.map((skill) => (
+                        <div key={skill.skill} className="flex items-center gap-2">
+                          <span className="text-xs text-surface-500 w-20 truncate">{skill.skill}</span>
+                          <div className="flex-1 bg-surface-100 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full ${
+                                skill.coveragePercent >= 100 ? 'bg-green-500' :
+                                skill.coveragePercent >= 50 ? 'bg-amber-500' :
+                                'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.min(skill.coveragePercent, 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-surface-400 w-16 text-right">
+                            {skill.allocatedHours}/{skill.demandHours}h
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Proposed allocations table */}
+            {autoAllocateResult.proposedAllocations.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-surface-700 mb-2">Proposed Allocations</h4>
+                <div className="max-h-48 overflow-y-auto border border-surface-200 rounded-lg">
+                  <table className="w-full text-xs">
+                    <thead className="bg-surface-50 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-1.5 font-medium text-surface-500">Employee</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-surface-500">Initiative</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-surface-500">Skill</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-surface-500">%</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-surface-500">Hours</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-100">
+                      {autoAllocateResult.proposedAllocations.map((alloc, i) => (
+                        <tr key={i} className="hover:bg-surface-50">
+                          <td className="px-3 py-1.5 text-surface-700">{alloc.employeeName}</td>
+                          <td className="px-3 py-1.5 text-surface-700">{alloc.initiativeTitle}</td>
+                          <td className="px-3 py-1.5 text-surface-500">{alloc.skill}</td>
+                          <td className="px-3 py-1.5 text-right text-surface-700">{alloc.percentage}%</td>
+                          <td className="px-3 py-1.5 text-right text-surface-700">{alloc.hours.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-surface-200">
+              <button
+                onClick={() => setIsAutoAllocateModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-surface-700 bg-white border border-surface-300 rounded-md hover:bg-surface-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyAutoAllocate}
+                disabled={autoAllocateResult.proposedAllocations.length === 0 || autoAllocateApply.isPending}
+                className="px-4 py-2 text-sm font-medium text-white bg-accent-600 rounded-md hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {autoAllocateApply.isPending
+                  ? 'Applying...'
+                  : `Apply ${autoAllocateResult.proposedAllocations.length} Allocations`}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* Add Allocation Modal */}
       <Modal
         isOpen={isAddAllocationModalOpen}
         onClose={() => setIsAddAllocationModalOpen(false)}
-        title="Add Allocation"
+        title={
+          newAllocation.initiativeId
+            ? `Add Allocation — ${initiativeOptions.find(o => o.value === newAllocation.initiativeId)?.label || ''}`
+            : 'Add Allocation'
+        }
         size="lg"
       >
         <div className="space-y-4">

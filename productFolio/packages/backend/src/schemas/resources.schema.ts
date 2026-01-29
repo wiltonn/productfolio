@@ -78,7 +78,7 @@ export type UpdateSkillInput = z.infer<typeof UpdateSkillSchema>;
 // ============================================================================
 
 export const CapacityEntrySchema = z.object({
-  period: z.coerce.date(),
+  periodId: z.string().uuid(),
   hoursAvailable: z.number().nonnegative('Hours available must be non-negative'),
 });
 
@@ -99,3 +99,17 @@ export const AvailabilityQuerySchema = z.object({
 });
 
 export type AvailabilityQueryInput = z.infer<typeof AvailabilityQuerySchema>;
+
+// ============================================================================
+// Allocation Summary Schemas
+// ============================================================================
+
+export const AllocationSummariesQuerySchema = z.object({
+  employeeIds: z.string().min(1, 'At least one employee ID is required'),
+  currentQuarterStart: z.coerce.date(),
+  currentQuarterEnd: z.coerce.date(),
+  nextQuarterStart: z.coerce.date(),
+  nextQuarterEnd: z.coerce.date(),
+});
+
+export type AllocationSummariesQueryInput = z.infer<typeof AllocationSummariesQuerySchema>;

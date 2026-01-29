@@ -10,6 +10,7 @@ import { initiativesRoutes } from './routes/initiatives.js';
 import { scopingRoutes } from './routes/scoping.js';
 import { resourcesRoutes } from './routes/resources.js';
 import { scenariosRoutes } from './routes/scenarios.js';
+import { periodsRoutes } from './routes/periods.js';
 import { jobsRoutes } from './routes/jobs.js';
 import { getWorkerStatus } from './jobs/index.js';
 
@@ -45,6 +46,7 @@ await fastify.register(initiativesRoutes);
 await fastify.register(scopingRoutes);
 await fastify.register(resourcesRoutes);
 await fastify.register(scenariosRoutes);
+await fastify.register(periodsRoutes);
 await fastify.register(jobsRoutes);
 
 const start = async () => {

@@ -39,14 +39,6 @@ const customFieldsSchema = z
   .optional()
   .describe('Custom fields as JSON object');
 
-// Quarter format validation (e.g., "2024-Q1")
-const quarterSchema = z
-  .string()
-  .regex(/^\d{4}-Q[1-4]$/, 'Must be in format YYYY-Qn (e.g., 2024-Q1)')
-  .optional()
-  .nullable()
-  .describe('Target quarter in format YYYY-Qn');
-
 /**
  * Schema for creating a new initiative
  */
@@ -66,7 +58,7 @@ export const CreateInitiativeSchema = z.object({
     .nativeEnum(InitiativeStatus)
     .default(InitiativeStatus.DRAFT)
     .optional(),
-  targetQuarter: quarterSchema,
+  targetPeriodId: uuidSchema.optional().nullable(),
   customFields: customFieldsSchema,
 });
 
@@ -88,7 +80,7 @@ export const UpdateInitiativeSchema = z.object({
     .nullable(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetQuarter: quarterSchema,
+  targetPeriodId: uuidSchema.optional().nullable(),
   customFields: customFieldsSchema,
 });
 
@@ -101,7 +93,7 @@ export const InitiativeFiltersSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetQuarter: quarterSchema,
+  targetPeriodId: uuidSchema.optional().nullable(),
   search: z
     .string()
     .max(255, 'Search term must be 255 characters or less')
@@ -191,7 +183,7 @@ export const CsvRowSchema = z.object({
     .nativeEnum(InitiativeStatus)
     .default(InitiativeStatus.DRAFT)
     .optional(),
-  targetQuarter: quarterSchema,
+  targetPeriodId: uuidSchema.optional().nullable(),
 });
 
 export type CsvRowInput = z.infer<typeof CsvRowSchema>;
@@ -214,7 +206,7 @@ export const CsvExportSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetQuarter: quarterSchema,
+  targetPeriodId: uuidSchema.optional().nullable(),
   search: z.string().optional(),
 });
 

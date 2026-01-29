@@ -1,7 +1,7 @@
-import { InitiativeStatus, EmploymentType, UserRole } from '@prisma/client';
+import { InitiativeStatus, EmploymentType, UserRole, PeriodType } from '@prisma/client';
 
 // Re-export Prisma enums for convenience
-export { InitiativeStatus, EmploymentType, UserRole };
+export { InitiativeStatus, EmploymentType, UserRole, PeriodType };
 
 // Pagination
 export interface PaginationParams {
@@ -19,12 +19,21 @@ export interface PaginatedResponse<T> {
   };
 }
 
+// Period types
+export interface PeriodInfo {
+  periodId: string;
+  periodLabel: string;
+  periodType: PeriodType;
+  startDate: Date;
+  endDate: Date;
+}
+
 // Initiative types
 export interface InitiativeFilters {
   status?: InitiativeStatus;
   businessOwnerId?: string;
   productOwnerId?: string;
-  targetQuarter?: string;
+  targetPeriodId?: string;
   search?: string;
 }
 
@@ -33,19 +42,16 @@ export interface StatusTransition {
   to: InitiativeStatus;
 }
 
-// Skill demand and quarter distribution types (JSON fields)
+// Skill demand types (JSON fields)
 export interface SkillDemand {
   [skillName: string]: number;
-}
-
-export interface QuarterDistribution {
-  [quarter: string]: number; // quarter format: "2024-Q1", value: percentage (0-1)
 }
 
 // Capacity types
 export interface AvailabilityResult {
   employeeId: string;
-  period: string;
+  periodId: string;
+  periodLabel: string;
   baseHours: number;
   allocatedHours: number;
   ptoHours: number;
@@ -53,7 +59,7 @@ export interface AvailabilityResult {
 }
 
 export interface CapacityEntry {
-  period: Date;
+  periodId: string;
   hoursAvailable: number;
 }
 
@@ -64,7 +70,8 @@ export interface PriorityRanking {
 }
 
 export interface CapacityDemandResult {
-  quarter: string;
+  periodId: string;
+  periodLabel: string;
   skill: string;
   demand: number;
   capacity: number;
@@ -128,8 +135,9 @@ export interface ApiErrorResponse {
 }
 
 // Scenario Calculator Types
-export interface DemandBySkillQuarter {
-  quarter: string;
+export interface DemandBySkillPeriod {
+  periodId: string;
+  periodLabel: string;
   skill: string;
   totalHours: number;
   initiativeBreakdown: Array<{
@@ -140,8 +148,9 @@ export interface DemandBySkillQuarter {
   }>;
 }
 
-export interface CapacityBySkillQuarter {
-  quarter: string;
+export interface CapacityBySkillPeriod {
+  periodId: string;
+  periodLabel: string;
   skill: string;
   totalHours: number;
   effectiveHours: number;
@@ -156,7 +165,8 @@ export interface CapacityBySkillQuarter {
 }
 
 export interface Shortage {
-  quarter: string;
+  periodId: string;
+  periodLabel: string;
   skill: string;
   demandHours: number;
   capacityHours: number;
@@ -173,7 +183,8 @@ export interface Shortage {
 export interface Overallocation {
   employeeId: string;
   employeeName: string;
-  quarter: string;
+  periodId: string;
+  periodLabel: string;
   totalAllocationPercentage: number;
   overallocationPercentage: number;
   allocations: Array<{
@@ -200,18 +211,19 @@ export interface ScenarioAssumptions {
   bufferPercentage?: number;
   proficiencyWeightEnabled?: boolean;
   includeContractors?: boolean;
-  hoursPerQuarter?: number;
+  hoursPerPeriod?: number;
 }
 
 export interface CalculatorResult {
   scenarioId: string;
   scenarioName: string;
-  quarterRange: string;
+  periods: PeriodInfo[];
   calculatedAt: Date;
-  demandBySkillQuarter: DemandBySkillQuarter[];
-  capacityBySkillQuarter: CapacityBySkillQuarter[];
+  demandBySkillPeriod: DemandBySkillPeriod[];
+  capacityBySkillPeriod: CapacityBySkillPeriod[];
   gapAnalysis: Array<{
-    quarter: string;
+    periodId: string;
+    periodLabel: string;
     skill: string;
     demandHours: number;
     capacityHours: number;
@@ -231,7 +243,7 @@ export interface CalculatorResult {
     totalShortages: number;
     totalOverallocations: number;
     totalSkillMismatches: number;
-    quarterCount: number;
+    periodCount: number;
     skillCount: number;
     employeeCount: number;
     initiativeCount: number;
@@ -243,4 +255,46 @@ export interface CalculatorResult {
 export interface CalculatorOptions {
   skipCache?: boolean;
   includeBreakdown?: boolean;
+}
+
+// Auto-Allocate Types
+export interface ProposedAllocation {
+  employeeId: string;
+  employeeName: string;
+  initiativeId: string;
+  initiativeTitle: string;
+  skill: string;
+  percentage: number;
+  hours: number;
+  startDate: Date;
+  endDate: Date;
+}
+
+export interface InitiativeCoverage {
+  initiativeId: string;
+  initiativeTitle: string;
+  rank: number;
+  skills: Array<{
+    skill: string;
+    demandHours: number;
+    allocatedHours: number;
+    coveragePercent: number;
+  }>;
+  overallCoveragePercent: number;
+}
+
+export interface AutoAllocateResult {
+  proposedAllocations: ProposedAllocation[];
+  coverage: InitiativeCoverage[];
+  warnings: string[];
+  summary: {
+    totalAllocations: number;
+    employeesUsed: number;
+    initiativesCovered: number;
+    totalHoursAllocated: number;
+  };
+}
+
+export interface AutoAllocateOptions {
+  maxAllocationPercentage?: number;
 }

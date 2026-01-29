@@ -330,7 +330,7 @@ describe('Initiatives Service', () => {
           status: InitiativeStatus.DRAFT,
           businessOwnerId: businessOwner.id,
           productOwnerId: productOwner.id,
-          targetQuarter: null,
+          targetPeriodId: null,
           customFields: null,
           createdAt: new Date('2024-01-01'),
           updatedAt: new Date('2024-01-01'),

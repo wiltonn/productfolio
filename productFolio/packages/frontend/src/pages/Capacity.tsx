@@ -1,6 +1,30 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { SearchInput, Checkbox } from '../components/ui';
-import { useEmployees, useCreateEmployee, useUpdateEmployee, Employee } from '../hooks/useEmployees';
+import { SearchInput, Checkbox, StatusBadge } from '../components/ui';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocations, useEmployeeAllocationSummaries, Employee } from '../hooks/useEmployees';
+import type { EmployeeAllocation, QuarterAllocationSummary } from '../hooks/useEmployees';
+
+const LOCKED_STATUSES = ['APPROVED', 'IN_PROGRESS', 'COMPLETED'];
+
+// Allocation Badge Component
+function AllocationBadge({ percentage }: { percentage: number }) {
+  const rounded = Math.round(percentage);
+  let colorClasses: string;
+  if (rounded === 0) {
+    colorClasses = 'bg-surface-100 text-surface-500';
+  } else if (rounded <= 80) {
+    colorClasses = 'bg-emerald-50 text-emerald-700';
+  } else if (rounded <= 100) {
+    colorClasses = 'bg-amber-50 text-amber-700';
+  } else {
+    colorClasses = 'bg-red-50 text-red-700';
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums ${colorClasses}`}>
+      {rounded}%
+    </span>
+  );
+}
 
 // Types
 interface Skill {
@@ -475,6 +499,146 @@ function EmployeeForm({
   );
 }
 
+// Employee Assignments Component
+function EmployeeAssignments({
+  employeeId,
+  allocationSummary,
+  quarterLabels,
+}: {
+  employeeId: string;
+  allocationSummary?: QuarterAllocationSummary;
+  quarterLabels: { current: string; next: string };
+}) {
+  const { data: allocations, isLoading } = useEmployeeAllocations(employeeId);
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-600"></div>
+      </div>
+    );
+  }
+
+  const isEmpty = !allocations || allocations.length === 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Quarterly summary header */}
+      {allocationSummary && (
+        <div className="space-y-3">
+          <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Quarterly Allocation</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
+              <p className="text-xs text-surface-500 mb-1">{quarterLabels.current}</p>
+              <AllocationBadge percentage={allocationSummary.currentQuarterPct} />
+            </div>
+            <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
+              <p className="text-xs text-surface-500 mb-1">{quarterLabels.next}</p>
+              <AllocationBadge percentage={allocationSummary.nextQuarterPct} />
+            </div>
+          </div>
+          {/* Progress bar for current quarter */}
+          <div>
+            <div className="flex items-center justify-between text-xs text-surface-500 mb-1">
+              <span>{quarterLabels.current} utilization</span>
+              <span className="font-mono tabular-nums">{Math.round(allocationSummary.currentQuarterPct)}%</span>
+            </div>
+            <div className="h-2 bg-surface-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  allocationSummary.currentQuarterPct <= 80
+                    ? 'bg-emerald-500'
+                    : allocationSummary.currentQuarterPct <= 100
+                    ? 'bg-amber-500'
+                    : 'bg-red-500'
+                }`}
+                style={{ width: `${Math.min(allocationSummary.currentQuarterPct, 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEmpty ? (
+        <div className="text-center py-4">
+          <svg className="w-12 h-12 mx-auto text-surface-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+          </svg>
+          <p className="text-sm text-surface-500">No initiative assignments yet</p>
+          <p className="text-xs text-surface-400 mt-1">Allocate this employee to initiatives in the Scenario Planner</p>
+        </div>
+      ) : (
+        <>
+          {/* Group allocations by scenario */}
+          {Object.entries(
+            allocations!.reduce<Record<string, { scenarioName: string; allocations: EmployeeAllocation[] }>>((acc, alloc) => {
+              if (!acc[alloc.scenarioId]) {
+                acc[alloc.scenarioId] = { scenarioName: alloc.scenarioName, allocations: [] };
+              }
+              acc[alloc.scenarioId].allocations.push(alloc);
+              return acc;
+            }, {})
+          ).map(([scenarioId, group]) => (
+            <div key={scenarioId}>
+              <h4 className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">
+                {group.scenarioName}
+              </h4>
+              <div className="space-y-2">
+                {group.allocations.map((alloc) => {
+                  const isLocked = alloc.initiativeStatus !== null && LOCKED_STATUSES.includes(alloc.initiativeStatus);
+                  return (
+                    <div
+                      key={alloc.id}
+                      className="p-3 bg-surface-50 rounded-lg border border-surface-200 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-surface-900 text-sm">
+                            {alloc.initiativeTitle || 'Unassigned'}
+                          </span>
+                          {isLocked && (
+                            <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        {alloc.initiativeStatus && (
+                          <StatusBadge status={alloc.initiativeStatus as any} />
+                        )}
+                      </div>
+                      {/* Allocation bar */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-surface-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-accent-500 rounded-full"
+                            style={{ width: `${Math.min(alloc.percentage, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-mono font-semibold tabular-nums text-surface-700">{alloc.percentage}%</span>
+                      </div>
+                      {/* Date range */}
+                      <div className="flex items-center gap-1.5 text-xs text-surface-500">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                        </svg>
+                        <span>
+                          {new Date(alloc.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {' - '}
+                          {new Date(alloc.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 // Effective Capacity Preview Component
 function EffectiveCapacityPreview({
   employees,
@@ -662,9 +826,50 @@ export function Capacity() {
     }
   }, [employeesData]);
 
+  // Quarter date calculations
+  const quarterDates = useMemo(() => {
+    const now = new Date();
+    const currentQ = Math.floor(now.getMonth() / 3);
+    const currentYear = now.getFullYear();
+
+    const currentQStart = new Date(currentYear, currentQ * 3, 1);
+    const currentQEnd = new Date(currentYear, currentQ * 3 + 3, 0); // last day of quarter
+
+    const nextQ = (currentQ + 1) % 4;
+    const nextYear = currentQ === 3 ? currentYear + 1 : currentYear;
+    const nextQStart = new Date(nextYear, nextQ * 3, 1);
+    const nextQEnd = new Date(nextYear, nextQ * 3 + 3, 0);
+
+    const qLabel = (q: number, y: number) => `Q${q + 1} ${y}`;
+
+    return {
+      currentQStart: currentQStart.toISOString().split('T')[0],
+      currentQEnd: currentQEnd.toISOString().split('T')[0],
+      nextQStart: nextQStart.toISOString().split('T')[0],
+      nextQEnd: nextQEnd.toISOString().split('T')[0],
+      currentLabel: qLabel(currentQ, currentYear),
+      nextLabel: qLabel(nextQ, nextYear),
+    };
+  }, []);
+
+  // Fetch allocation summaries for all loaded employees
+  const employeeIds = useMemo(
+    () => employees.map((e) => e.id),
+    [employees]
+  );
+
+  const { data: allocationSummaries } = useEmployeeAllocationSummaries(
+    employeeIds,
+    quarterDates.currentQStart,
+    quarterDates.currentQEnd,
+    quarterDates.nextQStart,
+    quarterDates.nextQEnd
+  );
+
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [slideOverEmployee, setSlideOverEmployee] = useState<CapacityEmployee | null | 'new'>(null);
+  const [slideOverTab, setSlideOverTab] = useState<'details' | 'assignments'>('details');
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
 
@@ -819,6 +1024,8 @@ export function Capacity() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Skills</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Hours/Week</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.currentLabel}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.nextLabel}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Status</th>
                     <th className="w-10"></th>
                   </tr>
@@ -829,7 +1036,7 @@ export function Capacity() {
                       key={employee.id}
                       className="hover:bg-surface-50 transition-colors cursor-pointer group"
                       style={{ animationDelay: `${index * 30}ms` }}
-                      onClick={() => setSlideOverEmployee(employee)}
+                      onClick={() => { setSlideOverEmployee(employee); setSlideOverTab('details'); }}
                     >
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -868,6 +1075,12 @@ export function Capacity() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-mono text-surface-700 tabular-nums">{employee.hoursPerWeek}h</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <AllocationBadge percentage={allocationSummaries?.[employee.id]?.currentQuarterPct ?? 0} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <AllocationBadge percentage={allocationSummaries?.[employee.id]?.nextQuarterPct ?? 0} />
                       </td>
                       <td className="px-4 py-3">
                         {getStatusBadge(employee.status)}
@@ -1025,14 +1238,48 @@ export function Capacity() {
       {/* Employee Slide-over */}
       <SlideOver
         isOpen={slideOverEmployee !== null}
-        onClose={() => setSlideOverEmployee(null)}
+        onClose={() => { setSlideOverEmployee(null); setSlideOverTab('details'); }}
         title={slideOverEmployee === 'new' ? 'Add Employee' : slideOverEmployee?.name || ''}
       >
-        <EmployeeForm
-          employee={slideOverEmployee === 'new' ? null : slideOverEmployee}
-          onSave={handleSaveEmployee}
-          onCancel={() => setSlideOverEmployee(null)}
-        />
+        {/* Tab bar — only for existing employees */}
+        {slideOverEmployee !== null && slideOverEmployee !== 'new' && (
+          <div className="flex border-b border-surface-200 px-6">
+            <button
+              onClick={() => setSlideOverTab('details')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                slideOverTab === 'details'
+                  ? 'border-accent-500 text-accent-700'
+                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+              }`}
+            >
+              Details
+            </button>
+            <button
+              onClick={() => setSlideOverTab('assignments')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                slideOverTab === 'assignments'
+                  ? 'border-accent-500 text-accent-700'
+                  : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+              }`}
+            >
+              Assignments
+            </button>
+          </div>
+        )}
+
+        {slideOverTab === 'details' || slideOverEmployee === 'new' ? (
+          <EmployeeForm
+            employee={slideOverEmployee === 'new' ? null : slideOverEmployee}
+            onSave={handleSaveEmployee}
+            onCancel={() => setSlideOverEmployee(null)}
+          />
+        ) : slideOverEmployee && slideOverEmployee !== 'new' ? (
+          <EmployeeAssignments
+            employeeId={slideOverEmployee.id}
+            allocationSummary={allocationSummaries?.[slideOverEmployee.id]}
+            quarterLabels={{ current: quarterDates.currentLabel, next: quarterDates.nextLabel }}
+          />
+        ) : null}
       </SlideOver>
     </div>
   );

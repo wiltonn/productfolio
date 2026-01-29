@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useScenarios, useCreateScenario } from '../hooks/useScenarios';
+import { useQuarterPeriods, getQuarterPeriodIds, deriveQuarterRange } from '../hooks/usePeriods';
 import { Modal } from '../components/ui';
 
 // Helper to get current quarter
@@ -32,6 +33,8 @@ export function ScenariosList() {
   const { data: scenariosData, isLoading } = useScenarios();
   const scenarios = scenariosData?.data ?? [];
   const createScenario = useCreateScenario();
+  const { data: periodsData } = useQuarterPeriods();
+  const quarterPeriods = periodsData?.data ?? [];
   const quarterOptions = getQuarterOptions();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,10 +46,13 @@ export function ScenariosList() {
     e.preventDefault();
     if (!newScenarioName.trim()) return;
 
+    const periodIds = getQuarterPeriodIds(quarterPeriods, startQuarter, endQuarter);
+    if (periodIds.length === 0) return;
+
     createScenario.mutate(
       {
         name: newScenarioName.trim(),
-        quarterRange: `${startQuarter}:${endQuarter}`,
+        periodIds,
       },
       {
         onSuccess: () => {
@@ -99,7 +105,7 @@ export function ScenariosList() {
                   {scenario.name}
                 </h3>
                 <p className="mt-1 text-sm text-surface-500 font-mono">
-                  {scenario.quarterRange}
+                  {scenario.quarterRange || deriveQuarterRange(scenario.periodIds || [], quarterPeriods)}
                 </p>
               </div>
               <svg
@@ -155,7 +161,7 @@ export function ScenariosList() {
                       <span className="font-medium text-surface-900">{scenario.name}</span>
                     </td>
                     <td className="text-center font-mono text-sm">
-                      {scenario.quarterRange}
+                      {scenario.quarterRange || deriveQuarterRange(scenario.periodIds || [], quarterPeriods)}
                     </td>
                     <td className="text-center font-mono text-sm">
                       {new Date(scenario.createdAt).toLocaleDateString()}

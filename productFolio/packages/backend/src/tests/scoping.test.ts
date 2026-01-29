@@ -137,7 +137,7 @@ describe('ScopingService', () => {
         skillDemand: scopeItem.skillDemand as Record<string, number>,
         estimateP50: scopeItem.estimateP50,
         estimateP90: scopeItem.estimateP90,
-        quarterDistribution: scopeItem.quarterDistribution as Record<string, number>,
+        periodDistributions: scopeItem.periodDistributions as Array<{ periodId: string; distribution: number }>,
       });
 
       expect(result).toEqual(scopeItem);

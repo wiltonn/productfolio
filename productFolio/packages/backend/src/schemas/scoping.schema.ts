@@ -1,10 +1,8 @@
 import { z } from 'zod';
+import { periodDistributionEntrySchema } from './periods.schema.js';
 
 // Skill Demand: { skillName: number }
 const skillDemandSchema = z.record(z.string(), z.number()).optional();
-
-// Quarter Distribution: { quarter: number (0-1) }
-const quarterDistributionSchema = z.record(z.string(), z.number().min(0).max(1)).optional();
 
 export const CreateScopeItemSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -12,7 +10,7 @@ export const CreateScopeItemSchema = z.object({
   skillDemand: skillDemandSchema,
   estimateP50: z.number().positive('Estimate P50 must be positive').optional(),
   estimateP90: z.number().positive('Estimate P90 must be positive').optional(),
-  quarterDistribution: quarterDistributionSchema,
+  periodDistributions: z.array(periodDistributionEntrySchema).optional(),
 });
 
 export type CreateScopeItemInput = z.infer<typeof CreateScopeItemSchema>;
@@ -23,7 +21,7 @@ export const UpdateScopeItemSchema = z.object({
   skillDemand: skillDemandSchema,
   estimateP50: z.number().positive().optional(),
   estimateP90: z.number().positive().optional(),
-  quarterDistribution: quarterDistributionSchema,
+  periodDistributions: z.array(periodDistributionEntrySchema).optional(),
 });
 
 export type UpdateScopeItemInput = z.infer<typeof UpdateScopeItemSchema>;

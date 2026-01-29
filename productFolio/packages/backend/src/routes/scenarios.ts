@@ -7,6 +7,7 @@ import {
   updateAllocationSchema,
   compareQuerySchema,
   paginationSchema,
+  autoAllocateOptionsSchema,
 } from '../schemas/scenarios.schema.js';
 import { calculatorQuerySchema } from '../schemas/calculator.schema.js';
 import { scenariosService } from '../services/scenarios.service.js';
@@ -87,6 +88,18 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
+  // GET /api/scenarios/:id/initiatives/:initiativeId/allocations - List allocations for an initiative within a scenario
+  fastify.get<{ Params: { id: string; initiativeId: string } }>(
+    '/api/scenarios/:id/initiatives/:initiativeId/allocations',
+    async (request, reply) => {
+      const allocations = await allocationService.listByInitiative(
+        request.params.id,
+        request.params.initiativeId
+      );
+      return reply.code(200).send(allocations);
+    }
+  );
+
   // POST /api/scenarios/:id/allocations - Create allocation
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/allocations',
@@ -160,6 +173,45 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       await scenarioCalculatorService.invalidateCache(request.params.id);
       return reply.code(204).send();
+    }
+  );
+
+  // POST /api/scenarios/:id/auto-allocate - Preview auto-allocations (no side effects)
+  fastify.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/scenarios/:id/auto-allocate',
+    async (request, reply) => {
+      const options = autoAllocateOptionsSchema.parse(request.body || {});
+      const result = await allocationService.autoAllocate(request.params.id, options);
+      return reply.code(200).send(result);
+    }
+  );
+
+  // POST /api/scenarios/:id/auto-allocate/apply - Apply auto-allocations
+  fastify.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/scenarios/:id/auto-allocate/apply',
+    async (request, reply) => {
+      const { proposedAllocations } = request.body as {
+        proposedAllocations: Array<{
+          employeeId: string;
+          employeeName: string;
+          initiativeId: string;
+          initiativeTitle: string;
+          skill: string;
+          percentage: number;
+          hours: number;
+          startDate: string;
+          endDate: string;
+        }>;
+      };
+      const result = await allocationService.applyAutoAllocate(
+        request.params.id,
+        proposedAllocations.map((a) => ({
+          ...a,
+          startDate: new Date(a.startDate),
+          endDate: new Date(a.endDate),
+        }))
+      );
+      return reply.code(200).send(result);
     }
   );
 }

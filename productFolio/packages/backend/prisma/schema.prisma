@@ -36,6 +36,12 @@ enum UserRole {
   VIEWER
 }
 
+enum PeriodType {
+  WEEK
+  MONTH
+  QUARTER
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -79,6 +85,42 @@ model RefreshToken {
 }
 
 // ============================================================================
+// Period (Time-Bucket Dimension)
+// ============================================================================
+
+model Period {
+  id        String     @id @default(uuid()) @db.Uuid
+  type      PeriodType
+  startDate DateTime   @db.Date @map("start_date")
+  endDate   DateTime   @db.Date @map("end_date")
+  label     String     // "2024-Q1", "2024-01", "2024-W01"
+  year      Int
+  ordinal   Int        // Q: 1-4, M: 1-12, W: 1-53
+
+  parentId  String?    @db.Uuid @map("parent_id")
+  parent    Period?    @relation("PeriodHierarchy", fields: [parentId], references: [id])
+  children  Period[]   @relation("PeriodHierarchy")
+
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  // Relations to other models
+  targetedInitiatives            Initiative[]
+  capacityCalendars              CapacityCalendar[]
+  scenarioPeriods                ScenarioPeriod[]
+  allocationPeriods              AllocationPeriod[]
+  scopeItemPeriodDistributions   ScopeItemPeriodDistribution[]
+  activeStartEmployees           Employee[] @relation("ActiveStartPeriod")
+  activeEndEmployees             Employee[] @relation("ActiveEndPeriod")
+
+  @@unique([type, year, ordinal])
+  @@index([type])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([parentId])
+  @@map("periods")
+}
+
+// ============================================================================
 // Initiative & Related
 // ============================================================================
 
@@ -89,7 +131,7 @@ model Initiative {
   businessOwnerId String           @db.Uuid
   productOwnerId  String           @db.Uuid
   status          InitiativeStatus @default(DRAFT)
-  targetQuarter   String? // e.g., "2024-Q1"
+  targetPeriodId  String?          @db.Uuid @map("target_period_id")
   customFields    Json?            @db.JsonB
 
   createdAt DateTime @default(now())
@@ -98,6 +140,7 @@ model Initiative {
   // Relations
   businessOwner User        @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
   productOwner  User        @relation("ProductOwner", fields: [productOwnerId], references: [id])
+  targetPeriod  Period?     @relation(fields: [targetPeriodId], references: [id])
   scopeItems    ScopeItem[]
   approvals     Approval[]
   allocations   Allocation[]
@@ -105,7 +148,7 @@ model Initiative {
   @@index([businessOwnerId])
   @@index([productOwnerId])
   @@index([status])
-  @@index([targetQuarter])
+  @@index([targetPeriodId])
 }
 
 model ScopeItem {
@@ -116,15 +159,28 @@ model ScopeItem {
   skillDemand         Json?  @db.JsonB // e.g., { "frontend": 2, "backend": 3 }
   estimateP50         Float? // 50th percentile estimate in hours
   estimateP90         Float? // 90th percentile estimate in hours
-  quarterDistribution Json?  @db.JsonB // e.g., { "2024-Q1": 0.6, "2024-Q2": 0.4 }
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  initiative          Initiative                    @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  periodDistributions ScopeItemPeriodDistribution[]
 
   @@index([initiativeId])
+}
+
+model ScopeItemPeriodDistribution {
+  scopeItemId  String @db.Uuid @map("scope_item_id")
+  periodId     String @db.Uuid @map("period_id")
+  distribution Float  // 0.0-1.0
+
+  scopeItem    ScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+  period       Period    @relation(fields: [periodId], references: [id])
+
+  @@id([scopeItemId, periodId])
+  @@index([periodId])
+  @@map("scope_item_period_distributions")
 }
 
 model Approval {
@@ -149,24 +205,28 @@ model Approval {
 // ============================================================================
 
 model Employee {
-  id             String         @id @default(uuid()) @db.Uuid
-  name           String
-  role           String
-  managerId      String?        @db.Uuid
-  employmentType EmploymentType @default(FULL_TIME)
-  hoursPerWeek   Float          @default(40)
-  activeStart    DateTime       @default(now())
-  activeEnd      DateTime?
+  id                   String         @id @default(uuid()) @db.Uuid
+  name                 String
+  role                 String
+  managerId            String?        @db.Uuid
+  employmentType       EmploymentType @default(FULL_TIME)
+  hoursPerWeek         Float          @default(40)
+  activeStart          DateTime       @default(now())
+  activeEnd            DateTime?
+  activeStartPeriodId  String?        @db.Uuid @map("active_start_period_id")
+  activeEndPeriodId    String?        @db.Uuid @map("active_end_period_id")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  manager          Employee?          @relation("EmployeeManager", fields: [managerId], references: [id])
-  directReports    Employee[]         @relation("EmployeeManager")
-  skills           Skill[]
-  capacityCalendar CapacityCalendar[]
-  allocations      Allocation[]
+  manager            Employee?          @relation("EmployeeManager", fields: [managerId], references: [id])
+  directReports      Employee[]         @relation("EmployeeManager")
+  activeStartPeriod  Period?            @relation("ActiveStartPeriod", fields: [activeStartPeriodId], references: [id])
+  activeEndPeriod    Period?            @relation("ActiveEndPeriod", fields: [activeEndPeriodId], references: [id])
+  skills             Skill[]
+  capacityCalendar   CapacityCalendar[]
+  allocations        Allocation[]
 
   @@index([managerId])
   @@index([employmentType])
@@ -191,8 +251,8 @@ model Skill {
 }
 
 model CapacityCalendar {
-  employeeId     String   @db.Uuid
-  period         DateTime @db.Date // First day of the period (week/month)
+  employeeId     String @db.Uuid
+  periodId       String @db.Uuid @map("period_id")
   hoursAvailable Float
 
   createdAt DateTime @default(now())
@@ -200,9 +260,10 @@ model CapacityCalendar {
 
   // Relations
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period   Period   @relation(fields: [periodId], references: [id])
 
-  @@id([employeeId, period])
-  @@index([period])
+  @@id([employeeId, periodId])
+  @@index([periodId])
 }
 
 // ============================================================================
@@ -212,7 +273,6 @@ model CapacityCalendar {
 model Scenario {
   id               String @id @default(uuid()) @db.Uuid
   name             String
-  quarterRange     String // e.g., "2024-Q1:2024-Q4"
   assumptions      Json?  @db.JsonB // Flexible assumptions storage
   priorityRankings Json?  @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
   version          Int    @default(1)
@@ -221,10 +281,21 @@ model Scenario {
   updatedAt DateTime @updatedAt
 
   // Relations
-  allocations Allocation[]
+  allocations     Allocation[]
+  scenarioPeriods ScenarioPeriod[]
 
   @@index([name])
-  @@index([quarterRange])
+}
+
+model ScenarioPeriod {
+  scenarioId String @db.Uuid @map("scenario_id")
+  periodId   String @db.Uuid @map("period_id")
+
+  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  period     Period   @relation(fields: [periodId], references: [id])
+
+  @@id([scenarioId, periodId])
+  @@map("scenario_periods")
 }
 
 model Allocation {
@@ -240,12 +311,27 @@ model Allocation {
   updatedAt DateTime @updatedAt
 
   // Relations
-  scenario   Scenario    @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  scenario          Scenario           @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  employee          Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  initiative        Initiative?        @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  allocationPeriods AllocationPeriod[]
 
   @@index([scenarioId])
   @@index([employeeId])
   @@index([initiativeId])
   @@index([startDate, endDate])
+}
+
+model AllocationPeriod {
+  allocationId  String @db.Uuid @map("allocation_id")
+  periodId      String @db.Uuid @map("period_id")
+  hoursInPeriod Float  @map("hours_in_period")
+  overlapRatio  Float  @map("overlap_ratio") // 0.0-1.0, for debugging
+
+  allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  period        Period     @relation(fields: [periodId], references: [id])
+
+  @@id([allocationId, periodId])
+  @@index([periodId])
+  @@map("allocation_periods")
 }

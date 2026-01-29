@@ -7,9 +7,11 @@ import {
   UpdateSkillSchema,
   UpdateCapacitySchema,
   AvailabilityQuerySchema,
+  AllocationSummariesQuerySchema,
 } from '../schemas/resources.schema.js';
 import * as resourcesService from '../services/resources.service.js';
 import * as capacityService from '../services/capacity.service.js';
+import { allocationService } from '../services/allocation.service.js';
 
 // ============================================================================
 // Employee Routes
@@ -30,6 +32,23 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
       });
 
       return reply.status(200).send(result);
+    }
+  );
+
+  // GET /api/employees/allocation-summaries - Batch allocation summaries
+  fastify.get<{ Querystring: Record<string, unknown> }>(
+    '/api/employees/allocation-summaries',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const query = AllocationSummariesQuerySchema.parse(request.query);
+      const employeeIds = query.employeeIds.split(',').map((id) => id.trim());
+      const summaries = await allocationService.listAllocationSummaries(
+        employeeIds,
+        query.currentQuarterStart,
+        query.currentQuarterEnd,
+        query.nextQuarterStart,
+        query.nextQuarterEnd
+      );
+      return reply.status(200).send(summaries);
     }
   );
 
@@ -71,6 +90,16 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const result = await resourcesService.deleteEmployee(id);
       return reply.status(200).send(result);
+    }
+  );
+
+  // GET /api/employees/:id/allocations - Get employee allocations across scenarios
+  fastify.get<{ Params: { id: string } }>(
+    '/api/employees/:id/allocations',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const allocations = await allocationService.listByEmployee(id);
+      return reply.status(200).send(allocations);
     }
   );
 

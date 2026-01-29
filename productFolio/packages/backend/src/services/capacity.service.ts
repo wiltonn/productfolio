@@ -1,13 +1,16 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { periodService } from './period.service.js';
 import type { CapacityEntry } from '../schemas/resources.schema.js';
+import { PeriodType } from '@prisma/client';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
 export interface AvailabilityPeriod {
-  period: Date;
+  periodId: string;
+  periodLabel: string;
   baseHours: number;
   allocatedHours: number;
   ptoHours: number;
@@ -30,10 +33,27 @@ export async function getCapacityCalendar(employeeId: string) {
 
   const capacityEntries = await prisma.capacityCalendar.findMany({
     where: { employeeId },
-    orderBy: { period: 'asc' },
+    include: {
+      period: true,
+    },
+    orderBy: {
+      period: {
+        startDate: 'asc',
+      },
+    },
   });
 
-  return capacityEntries;
+  return capacityEntries.map((entry) => ({
+    employeeId: entry.employeeId,
+    periodId: entry.periodId,
+    periodLabel: entry.period.label,
+    periodType: entry.period.type,
+    startDate: entry.period.startDate,
+    endDate: entry.period.endDate,
+    hoursAvailable: entry.hoursAvailable,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  }));
 }
 
 export async function updateCapacity(
@@ -54,14 +74,26 @@ export async function updateCapacity(
     throw new ValidationError('At least one capacity entry is required');
   }
 
+  // Verify all period IDs exist
+  const periodIds = entries.map((e) => e.periodId);
+  const periods = await prisma.period.findMany({
+    where: { id: { in: periodIds } },
+  });
+
+  const foundIds = new Set(periods.map((p) => p.id));
+  const missingIds = periodIds.filter((id) => !foundIds.has(id));
+  if (missingIds.length > 0) {
+    throw new ValidationError(`Periods not found: ${missingIds.join(', ')}`);
+  }
+
   // Upsert capacity entries
   const updated = await Promise.all(
     entries.map((entry) =>
       prisma.capacityCalendar.upsert({
         where: {
-          employeeId_period: {
+          employeeId_periodId: {
             employeeId,
-            period: normalizeDate(entry.period),
+            periodId: entry.periodId,
           },
         },
         update: {
@@ -69,14 +101,24 @@ export async function updateCapacity(
         },
         create: {
           employeeId,
-          period: normalizeDate(entry.period),
+          periodId: entry.periodId,
           hoursAvailable: entry.hoursAvailable,
+        },
+        include: {
+          period: true,
         },
       })
     )
   );
 
-  return updated;
+  return updated.map((entry) => ({
+    employeeId: entry.employeeId,
+    periodId: entry.periodId,
+    periodLabel: entry.period.label,
+    hoursAvailable: entry.hoursAvailable,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  }));
 }
 
 export async function calculateAvailability(
@@ -84,11 +126,7 @@ export async function calculateAvailability(
   startDate: Date,
   endDate: Date
 ): Promise<AvailabilityPeriod[]> {
-  // Validate dates
-  const start = normalizeDate(startDate);
-  const end = normalizeDate(endDate);
-
-  if (start > end) {
+  if (startDate > endDate) {
     throw new ValidationError('Start date must be before or equal to end date');
   }
 
@@ -101,138 +139,67 @@ export async function calculateAvailability(
     throw new NotFoundError('Employee', employeeId);
   }
 
-  // Get capacity calendar entries for the period
+  // Find week periods in the date range
+  const weekPeriods = await periodService.findPeriodsInRange(
+    startDate,
+    endDate,
+    PeriodType.WEEK
+  );
+
+  // Get capacity calendar entries for these periods
+  const periodIds = weekPeriods.map((p) => p.id);
   const capacityEntries = await prisma.capacityCalendar.findMany({
     where: {
       employeeId,
-      period: {
-        gte: start,
-        lte: end,
-      },
+      periodId: { in: periodIds },
     },
   });
 
-  // Create a map for quick lookup
-  const capacityMap = new Map<string, number>();
-  capacityEntries.forEach((entry) => {
-    const key = dateToString(entry.period);
-    capacityMap.set(key, entry.hoursAvailable);
-  });
+  const capacityMap = new Map(
+    capacityEntries.map((e) => [e.periodId, e.hoursAvailable])
+  );
 
-  // Get allocations for the period
+  // Get allocations for the employee that overlap this date range
   const allocations = await prisma.allocation.findMany({
     where: {
       employeeId,
-      startDate: { lte: end },
-      endDate: { gte: start },
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
+    include: {
+      allocationPeriods: true,
     },
   });
 
-  // Generate weekly periods and calculate availability
+  // Build result for each week period
   const periods: AvailabilityPeriod[] = [];
-  let currentPeriodStart = new Date(start);
 
-  while (currentPeriodStart <= end) {
-    const periodStart = new Date(currentPeriodStart);
-    const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodEnd.getDate() + 7); // Add 7 days for a week
+  for (const period of weekPeriods) {
+    const baseHours = employee.hoursPerWeek;
 
-    const periodKey = dateToString(periodStart);
-
-    // Calculate weeks in period (for base hours calculation)
-    const weeksInPeriod = calculateWeeksInPeriod(periodStart, periodEnd, end);
-
-    // Base hours = hoursPerWeek * weeksInPeriod
-    const baseHours = employee.hoursPerWeek * weeksInPeriod;
-
-    // Allocated hours = sum of allocation percentages for this period
-    const allocatedHours = allocations.reduce((sum, allocation) => {
-      const allocationInPeriod = calculateAllocationInPeriod(
-        allocation.startDate,
-        allocation.endDate,
-        periodStart,
-        periodEnd
-      );
-
-      if (allocationInPeriod > 0) {
-        return sum + (allocation.percentage / 100) * baseHours * allocationInPeriod;
+    // Sum allocation hours for this period from AllocationPeriod junction
+    let allocatedHours = 0;
+    for (const allocation of allocations) {
+      const ap = allocation.allocationPeriods.find((a) => a.periodId === period.id);
+      if (ap) {
+        allocatedHours += ap.hoursInPeriod;
       }
+    }
 
-      return sum;
-    }, 0);
+    // PTO hours from capacity calendar
+    const ptoHours = capacityMap.get(period.id) || 0;
 
-    // PTO hours = capacity calendar reductions
-    const ptoHours = capacityMap.get(periodKey) || 0;
-
-    // Available hours
     const availableHours = Math.max(0, baseHours - allocatedHours - ptoHours);
 
     periods.push({
-      period: periodStart,
+      periodId: period.id,
+      periodLabel: period.label,
       baseHours,
       allocatedHours: Math.min(allocatedHours, baseHours),
       ptoHours: Math.min(ptoHours, baseHours),
       availableHours,
     });
-
-    // Move to next period
-    currentPeriodStart.setDate(currentPeriodStart.getDate() + 7);
-
-    // Ensure we don't go past end
-    if (currentPeriodStart > end) {
-      break;
-    }
   }
 
   return periods;
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-function normalizeDate(date: Date): Date {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  return normalized;
-}
-
-function dateToString(date: Date): string {
-  const normalized = normalizeDate(date);
-  return normalized.toISOString().split('T')[0];
-}
-
-function calculateWeeksInPeriod(
-  periodStart: Date,
-  periodEnd: Date,
-  maxEnd: Date
-): number {
-  const actualEnd = periodEnd > maxEnd ? maxEnd : periodEnd;
-  const diffMs = actualEnd.getTime() - periodStart.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(diffDays / 7, 1);
-}
-
-function calculateAllocationInPeriod(
-  allocationStart: Date,
-  allocationEnd: Date,
-  periodStart: Date,
-  periodEnd: Date
-): number {
-  // Find overlap between allocation and period
-  const overlapStart = new Date(
-    Math.max(allocationStart.getTime(), periodStart.getTime())
-  );
-  const overlapEnd = new Date(
-    Math.min(allocationEnd.getTime(), periodEnd.getTime())
-  );
-
-  if (overlapStart > overlapEnd) {
-    return 0; // No overlap
-  }
-
-  const overlapMs = overlapEnd.getTime() - overlapStart.getTime();
-  const periodMs = periodEnd.getTime() - periodStart.getTime();
-
-  return overlapMs / periodMs;
 }

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { scenarioCalculatorService } from './scenario-calculator.service.js';
@@ -8,9 +9,9 @@ import type { PaginatedResponse } from '../types/index.js';
 interface ScenarioWithMetadata {
   id: string;
   name: string;
-  quarterRange: string;
   assumptions: Record<string, unknown> | null;
   priorityRankings: PriorityRanking[] | null;
+  periodIds: string[];
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -33,6 +34,11 @@ export class ScenariosService {
               allocations: true,
             },
           },
+          scenarioPeriods: {
+            select: {
+              periodId: true,
+            },
+          },
         },
         orderBy: {
           createdAt: 'desc',
@@ -45,6 +51,7 @@ export class ScenariosService {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
       assumptions: scenario.assumptions as Record<string, unknown> | null,
+      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
       allocationsCount: scenario._count.allocations,
     }));
 
@@ -68,6 +75,11 @@ export class ScenariosService {
             allocations: true,
           },
         },
+        scenarioPeriods: {
+          select: {
+            periodId: true,
+          },
+        },
       },
     });
 
@@ -79,33 +91,38 @@ export class ScenariosService {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
       assumptions: scenario.assumptions as Record<string, unknown> | null,
+      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
       allocationsCount: scenario._count.allocations,
     };
   }
 
   async create(data: CreateScenario): Promise<ScenarioWithMetadata> {
-    const scenario = await prisma.scenario.create({
-      data: {
-        name: data.name,
-        quarterRange: data.quarterRange,
-        assumptions: data.assumptions || null,
-        priorityRankings: data.priorityRankings || null,
-      },
-      include: {
-        _count: {
-          select: {
-            allocations: true,
-          },
-        },
-      },
+    // Validate period IDs exist
+    const periods = await prisma.period.findMany({
+      where: { id: { in: data.periodIds } },
     });
 
-    return {
-      ...scenario,
-      priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
-      assumptions: scenario.assumptions as Record<string, unknown> | null,
-      allocationsCount: scenario._count.allocations,
-    };
+    if (periods.length !== data.periodIds.length) {
+      const foundIds = new Set(periods.map((p) => p.id));
+      const missingIds = data.periodIds.filter((id) => !foundIds.has(id));
+      throw new ValidationError(`Periods not found: ${missingIds.join(', ')}`);
+    }
+
+    const created = await prisma.scenario.create({
+      data: {
+        name: data.name,
+        assumptions: (data.assumptions ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        priorityRankings: (data.priorityRankings ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        scenarioPeriods: {
+          create: data.periodIds.map((periodId) => ({
+            periodId,
+          })),
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.getById(created.id);
   }
 
   async update(id: string, data: UpdateScenario): Promise<ScenarioWithMetadata> {
@@ -114,20 +131,38 @@ export class ScenariosService {
 
     const updateData: Record<string, unknown> = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.quarterRange !== undefined) updateData.quarterRange = data.quarterRange;
     if (data.assumptions !== undefined) updateData.assumptions = data.assumptions;
     if (data.priorityRankings !== undefined) updateData.priorityRankings = data.priorityRankings;
 
-    const scenario = await prisma.scenario.update({
+    // Handle periodIds update
+    if (data.periodIds !== undefined) {
+      // Validate period IDs exist
+      const periods = await prisma.period.findMany({
+        where: { id: { in: data.periodIds } },
+      });
+
+      if (periods.length !== data.periodIds.length) {
+        const foundIds = new Set(periods.map((p) => p.id));
+        const missingIds = data.periodIds.filter((pid) => !foundIds.has(pid));
+        throw new ValidationError(`Periods not found: ${missingIds.join(', ')}`);
+      }
+
+      // Delete existing scenario periods and create new ones
+      await prisma.scenarioPeriod.deleteMany({
+        where: { scenarioId: id },
+      });
+
+      await prisma.scenarioPeriod.createMany({
+        data: data.periodIds.map((periodId) => ({
+          scenarioId: id,
+          periodId,
+        })),
+      });
+    }
+
+    await prisma.scenario.update({
       where: { id },
       data: updateData,
-      include: {
-        _count: {
-          select: {
-            allocations: true,
-          },
-        },
-      },
     });
 
     // Invalidate calculator cache and enqueue background recomputation
@@ -135,12 +170,8 @@ export class ScenariosService {
     await enqueueScenarioRecompute(id, 'priority_change');
     await enqueueViewRefresh('all', 'allocation_change', [id]);
 
-    return {
-      ...scenario,
-      priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
-      assumptions: scenario.assumptions as Record<string, unknown> | null,
-      allocationsCount: scenario._count.allocations,
-    };
+    // Re-fetch with all includes
+    return this.getById(id);
   }
 
   async delete(id: string): Promise<void> {
@@ -167,6 +198,11 @@ export class ScenariosService {
             allocations: true,
           },
         },
+        scenarioPeriods: {
+          select: {
+            periodId: true,
+          },
+        },
       },
     });
 
@@ -179,6 +215,7 @@ export class ScenariosService {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
       assumptions: scenario.assumptions as Record<string, unknown> | null,
+      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
       allocationsCount: scenario._count.allocations,
     };
   }

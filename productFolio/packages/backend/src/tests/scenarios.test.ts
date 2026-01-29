@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { ScenariosService } from '../services/scenarios.service.js';
 import { AllocationService } from '../services/allocation.service.js';
-import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { NotFoundError, ValidationError, WorkflowError } from '../lib/errors.js';
 import type { CreateScenario, UpdateScenario, CreateAllocation, UpdateAllocation } from '../schemas/scenarios.schema.js';
 
 // Mock Prisma Client
@@ -30,6 +30,13 @@ vi.mock('../lib/prisma.js', () => {
       findMany: vi.fn(),
       findUnique: vi.fn(),
     },
+    allocationPeriod: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    period: {
+      findMany: vi.fn(),
+    },
   };
 
   return {
@@ -55,7 +62,7 @@ describe('ScenariosService', () => {
         {
           id: '00000000-0000-0000-0000-000000000001',
           name: 'Scenario 1',
-          quarterRange: '2024-Q1:2024-Q4',
+          periodIds: [],
           assumptions: null,
           priorityRankings: null,
           version: 1,
@@ -66,7 +73,7 @@ describe('ScenariosService', () => {
         {
           id: '00000000-0000-0000-0000-000000000002',
           name: 'Scenario 2',
-          quarterRange: '2025-Q1:2025-Q4',
+          periodIds: [],
           assumptions: null,
           priorityRankings: null,
           version: 1,
@@ -109,7 +116,7 @@ describe('ScenariosService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -140,7 +147,7 @@ describe('ScenariosService', () => {
       const scenarioId = '00000000-0000-0000-0000-000000000001';
       const createData: CreateScenario = {
         name: 'New Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: { budget: 100000 },
         priorityRankings: [
           {
@@ -171,7 +178,7 @@ describe('ScenariosService', () => {
     it('should create scenario with minimal data', async () => {
       const createData: CreateScenario = {
         name: 'Simple Scenario',
-        quarterRange: '2024-Q1:2024-Q2',
+        periodIds: [],
       };
 
       const mockScenario = {
@@ -205,7 +212,7 @@ describe('ScenariosService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Updated Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -237,7 +244,7 @@ describe('ScenariosService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -276,7 +283,7 @@ describe('ScenariosService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: priorities,
         version: 1,
@@ -311,7 +318,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -372,7 +379,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -400,7 +407,7 @@ describe('AllocationService', () => {
         businessOwnerId: '00000000-0000-0000-0000-000000000100',
         productOwnerId: '00000000-0000-0000-0000-000000000101',
         status: 'DRAFT',
-        targetQuarter: '2024-Q1',
+        targetPeriodId: null,
         customFields: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -440,7 +447,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -499,7 +506,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: '00000000-0000-0000-0000-000000000001',
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -523,7 +530,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: '00000000-0000-0000-0000-000000000001',
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q4',
+        periodIds: [],
         assumptions: null,
         priorityRankings: null,
         version: 1,
@@ -642,7 +649,7 @@ describe('AllocationService', () => {
       const mockScenario = {
         id: scenarioId,
         name: 'Test Scenario',
-        quarterRange: '2024-Q1:2024-Q2',
+        periodIds: [],
         assumptions: null,
         priorityRankings: [
           { initiativeId: '00000000-0000-0000-0000-000000000010', rank: 1 },
@@ -673,7 +680,7 @@ describe('AllocationService', () => {
           businessOwnerId: '00000000-0000-0000-0000-000000000100',
           productOwnerId: '00000000-0000-0000-0000-000000000101',
           status: 'DRAFT',
-          targetQuarter: '2024-Q1',
+          targetPeriodId: null,
           customFields: null,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -686,7 +693,7 @@ describe('AllocationService', () => {
               skillDemand: { frontend: 100, backend: 150 },
               estimateP50: 250,
               estimateP90: 350,
-              quarterDistribution: { '2024-Q1': 0.6, '2024-Q2': 0.4 },
+              periodDistributions: [],
               createdAt: new Date(),
               updatedAt: new Date(),
             },
@@ -778,7 +785,7 @@ describe('AllocationService', () => {
         {
           id: scenarioIds[0],
           name: 'Scenario 1',
-          quarterRange: '2024-Q1:2024-Q4',
+          periodIds: [],
           assumptions: null,
           priorityRankings: [
             { initiativeId: '00000000-0000-0000-0000-000000000010', rank: 1 },
@@ -825,7 +832,7 @@ describe('AllocationService', () => {
         {
           id: scenarioIds[1],
           name: 'Scenario 2',
-          quarterRange: '2024-Q1:2024-Q4',
+          periodIds: [],
           assumptions: null,
           priorityRankings: [
             { initiativeId: '00000000-0000-0000-0000-000000000011', rank: 1 },
@@ -847,7 +854,7 @@ describe('AllocationService', () => {
             businessOwnerId: '00000000-0000-0000-0000-000000000100',
             productOwnerId: '00000000-0000-0000-0000-000000000101',
             status: 'DRAFT',
-            targetQuarter: '2024-Q1',
+            targetPeriodId: null,
             customFields: null,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -860,7 +867,7 @@ describe('AllocationService', () => {
                 skillDemand: { frontend: 100 },
                 estimateP50: 100,
                 estimateP90: 150,
-                quarterDistribution: { '2024-Q1': 0.5 },
+                periodDistributions: [],
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -875,7 +882,7 @@ describe('AllocationService', () => {
             businessOwnerId: '00000000-0000-0000-0000-000000000100',
             productOwnerId: '00000000-0000-0000-0000-000000000101',
             status: 'DRAFT',
-            targetQuarter: '2024-Q2',
+            targetPeriodId: null,
             customFields: null,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -903,7 +910,7 @@ describe('AllocationService', () => {
         {
           id: scenarioIds[0],
           name: 'Scenario 1',
-          quarterRange: '2024-Q1:2024-Q4',
+          periodIds: [],
           assumptions: null,
           priorityRankings: null,
           version: 1,
@@ -916,6 +923,271 @@ describe('AllocationService', () => {
       await expect(
         allocationService.compareScenarios(scenarioIds)
       ).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('allocation locking', () => {
+    it('should reject create when initiative is APPROVED', async () => {
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
+      const employeeId = '00000000-0000-0000-0000-000000000020';
+      const initiativeId = '00000000-0000-0000-0000-000000000010';
+
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+      });
+      mockPrisma.employee.findUnique.mockResolvedValue({
+        id: employeeId,
+        name: 'John Doe',
+        hoursPerWeek: 40,
+      });
+      mockPrisma.initiative.findUnique.mockResolvedValue({
+        id: initiativeId,
+        title: 'Locked Initiative',
+        status: 'APPROVED',
+      });
+
+      await expect(
+        allocationService.create(scenarioId, {
+          employeeId,
+          initiativeId,
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-03-31'),
+          percentage: 100,
+        })
+      ).rejects.toThrow(WorkflowError);
+    });
+
+    it('should reject update when initiative is IN_PROGRESS', async () => {
+      const allocationId = '00000000-0000-0000-0000-000000000001';
+      const initiativeId = '00000000-0000-0000-0000-000000000010';
+
+      mockPrisma.allocation.findUnique.mockResolvedValue({
+        id: allocationId,
+        scenarioId: '00000000-0000-0000-0000-000000000001',
+        employeeId: '00000000-0000-0000-0000-000000000020',
+        initiativeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+      });
+      mockPrisma.initiative.findUnique.mockResolvedValue({
+        id: initiativeId,
+        title: 'In Progress Initiative',
+        status: 'IN_PROGRESS',
+      });
+
+      await expect(
+        allocationService.update(allocationId, { percentage: 50 })
+      ).rejects.toThrow(WorkflowError);
+    });
+
+    it('should reject delete when initiative is COMPLETED', async () => {
+      const allocationId = '00000000-0000-0000-0000-000000000001';
+      const initiativeId = '00000000-0000-0000-0000-000000000010';
+
+      mockPrisma.allocation.findUnique.mockResolvedValue({
+        id: allocationId,
+        scenarioId: '00000000-0000-0000-0000-000000000001',
+        initiativeId,
+      });
+      mockPrisma.initiative.findUnique.mockResolvedValue({
+        id: initiativeId,
+        title: 'Completed Initiative',
+        status: 'COMPLETED',
+      });
+
+      await expect(
+        allocationService.delete(allocationId)
+      ).rejects.toThrow(WorkflowError);
+    });
+
+    it('should allow create when initiative is DRAFT', async () => {
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
+      const employeeId = '00000000-0000-0000-0000-000000000020';
+      const initiativeId = '00000000-0000-0000-0000-000000000010';
+      const allocationId = '00000000-0000-0000-0000-000000000002';
+
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+      });
+      mockPrisma.employee.findUnique.mockResolvedValue({
+        id: employeeId,
+        name: 'John Doe',
+        hoursPerWeek: 40,
+      });
+      // findUnique is called twice: once for existence check, once for lock check
+      mockPrisma.initiative.findUnique
+        .mockResolvedValueOnce({
+          id: initiativeId,
+          title: 'Draft Initiative',
+          status: 'DRAFT',
+        })
+        .mockResolvedValueOnce({
+          id: initiativeId,
+          title: 'Draft Initiative',
+          status: 'DRAFT',
+        });
+
+      mockPrisma.allocation.create.mockResolvedValue({
+        id: allocationId,
+        scenarioId,
+        employeeId,
+        initiativeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        employee: { id: employeeId, name: 'John Doe' },
+        initiative: { id: initiativeId, title: 'Draft Initiative', status: 'DRAFT' },
+      });
+
+      // Mock period and allocationPeriod for computeAllocationPeriods
+      mockPrisma.allocationPeriod.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.period.findMany.mockResolvedValue([]);
+
+      const result = await allocationService.create(scenarioId, {
+        employeeId,
+        initiativeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+      });
+
+      expect(result.id).toBe(allocationId);
+      expect(result.initiativeStatus).toBe('DRAFT');
+    });
+
+    it('should allow create with null initiativeId (never locked)', async () => {
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
+      const employeeId = '00000000-0000-0000-0000-000000000020';
+      const allocationId = '00000000-0000-0000-0000-000000000002';
+
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+      });
+      mockPrisma.employee.findUnique.mockResolvedValue({
+        id: employeeId,
+        name: 'John Doe',
+        hoursPerWeek: 40,
+      });
+
+      mockPrisma.allocation.create.mockResolvedValue({
+        id: allocationId,
+        scenarioId,
+        employeeId,
+        initiativeId: null,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        employee: { id: employeeId, name: 'John Doe' },
+        initiative: null,
+      });
+
+      // Mock period and allocationPeriod for computeAllocationPeriods
+      mockPrisma.allocationPeriod.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.period.findMany.mockResolvedValue([]);
+
+      const result = await allocationService.create(scenarioId, {
+        employeeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+      });
+
+      expect(result.initiativeId).toBeNull();
+      expect(result.initiativeStatus).toBeNull();
+    });
+  });
+
+  describe('listByInitiative', () => {
+    it('should return filtered allocations for a specific initiative', async () => {
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
+      const initiativeId = '00000000-0000-0000-0000-000000000010';
+
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+      });
+
+      mockPrisma.allocation.findMany.mockResolvedValue([
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          scenarioId,
+          employeeId: '00000000-0000-0000-0000-000000000020',
+          initiativeId,
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-03-31'),
+          percentage: 100,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          employee: { id: '00000000-0000-0000-0000-000000000020', name: 'John Doe' },
+          initiative: { id: initiativeId, title: 'Initiative A', status: 'DRAFT' },
+        },
+      ]);
+
+      const result = await allocationService.listByInitiative(scenarioId, initiativeId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].initiativeId).toBe(initiativeId);
+      expect(result[0].initiativeStatus).toBe('DRAFT');
+      expect(mockPrisma.allocation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { scenarioId, initiativeId },
+        })
+      );
+    });
+  });
+
+  describe('listByEmployee', () => {
+    it('should return allocations across scenarios for an employee', async () => {
+      const employeeId = '00000000-0000-0000-0000-000000000020';
+
+      mockPrisma.employee.findUnique.mockResolvedValue({
+        id: employeeId,
+        name: 'John Doe',
+      });
+
+      mockPrisma.allocation.findMany.mockResolvedValue([
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          scenarioId: '00000000-0000-0000-0000-000000000050',
+          employeeId,
+          initiativeId: '00000000-0000-0000-0000-000000000010',
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-03-31'),
+          percentage: 50,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          scenario: { id: '00000000-0000-0000-0000-000000000050', name: 'Scenario A' },
+          initiative: { id: '00000000-0000-0000-0000-000000000010', title: 'Initiative X', status: 'IN_PROGRESS' },
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000002',
+          scenarioId: '00000000-0000-0000-0000-000000000051',
+          employeeId,
+          initiativeId: '00000000-0000-0000-0000-000000000011',
+          startDate: new Date('2024-04-01'),
+          endDate: new Date('2024-06-30'),
+          percentage: 100,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          scenario: { id: '00000000-0000-0000-0000-000000000051', name: 'Scenario B' },
+          initiative: { id: '00000000-0000-0000-0000-000000000011', title: 'Initiative Y', status: 'DRAFT' },
+        },
+      ]);
+
+      const result = await allocationService.listByEmployee(employeeId);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].scenarioName).toBe('Scenario A');
+      expect(result[0].initiativeTitle).toBe('Initiative X');
+      expect(result[0].initiativeStatus).toBe('IN_PROGRESS');
+      expect(result[1].scenarioName).toBe('Scenario B');
     });
   });
 });

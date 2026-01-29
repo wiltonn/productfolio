@@ -114,7 +114,7 @@ describe('API Integration Tests', () => {
           status: InitiativeStatus.DRAFT,
           businessOwnerId: adminUser.id,
           productOwnerId: adminUser.id,
-          targetQuarter: '2024-Q1',
+          targetPeriodId: null,
         },
       })
     ).id;
@@ -123,7 +123,7 @@ describe('API Integration Tests', () => {
       await prisma.scenario.create({
         data: {
           name: 'Test Scenario',
-          quarterRange: '2024-Q1:2024-Q4',
+          periodIds: [],
         },
       })
     ).id;
@@ -314,7 +314,7 @@ describe('API Integration Tests', () => {
           description: 'Created via API test',
           businessOwnerId: testUserId,
           productOwnerId: testUserId,
-          targetQuarter: '2024-Q2',
+          targetPeriodId: null,
         },
       });
 
@@ -555,7 +555,7 @@ describe('API Integration Tests', () => {
         cookies: { access_token: plannerToken },
         payload: {
           name: 'API Test Scenario',
-          quarterRange: '2024-Q2:2024-Q4',
+          periodIds: [],
         },
       });
 
@@ -640,7 +640,7 @@ describe('API Integration Tests', () => {
         cookies: { access_token: plannerToken },
         payload: {
           name: 'Planner Scenario',
-          quarterRange: '2024-Q1:2024-Q2',
+          periodIds: [],
         },
       });
 

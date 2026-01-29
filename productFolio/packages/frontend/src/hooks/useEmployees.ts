@@ -76,6 +76,36 @@ export interface EmployeeFilters {
   search?: string;
 }
 
+export interface EmployeeAllocation {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  initiativeId: string | null;
+  initiativeTitle: string | null;
+  initiativeStatus: string | null;
+  startDate: string;
+  endDate: string;
+  percentage: number;
+}
+
+export interface QuarterAllocationSummary {
+  currentQuarterPct: number;
+  nextQuarterPct: number;
+  allocations: {
+    id: string;
+    scenarioId: string;
+    scenarioName: string;
+    initiativeId: string | null;
+    initiativeTitle: string | null;
+    initiativeStatus: string | null;
+    startDate: string;
+    endDate: string;
+    percentage: number;
+  }[];
+}
+
+export type AllocationSummariesResponse = Record<string, QuarterAllocationSummary>;
+
 export const employeeKeys = {
   all: ['employees'] as const,
   lists: () => [...employeeKeys.all, 'list'] as const,
@@ -84,8 +114,11 @@ export const employeeKeys = {
   detail: (id: string) => [...employeeKeys.details(), id] as const,
   skills: (id: string) => [...employeeKeys.detail(id), 'skills'] as const,
   capacity: (id: string) => [...employeeKeys.detail(id), 'capacity'] as const,
+  allocations: (id: string) => [...employeeKeys.detail(id), 'allocations'] as const,
   availability: (id: string, startDate: string, endDate: string) =>
     [...employeeKeys.detail(id), 'availability', startDate, endDate] as const,
+  allocationSummaries: (ids: string[], dates: string) =>
+    [...employeeKeys.all, 'allocation-summaries', ids.join(','), dates] as const,
 };
 
 export function useEmployees(filters: EmployeeFilters = {}) {
@@ -110,6 +143,14 @@ export function useEmployee(id: string) {
     queryKey: employeeKeys.detail(id),
     queryFn: () => api.get<Employee>(`/employees/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useEmployeeAllocations(employeeId: string) {
+  return useQuery({
+    queryKey: employeeKeys.allocations(employeeId),
+    queryFn: () => api.get<EmployeeAllocation[]>(`/employees/${employeeId}/allocations`),
+    enabled: !!employeeId,
   });
 }
 
@@ -270,5 +311,31 @@ export function useEmployeeAvailability(employeeId: string, startDate: string, e
     queryFn: () =>
       api.get<{ availability: Availability }>(`/employees/${employeeId}/availability?${params}`),
     enabled: !!employeeId && !!startDate && !!endDate,
+  });
+}
+
+export function useEmployeeAllocationSummaries(
+  employeeIds: string[],
+  currentQuarterStart: string,
+  currentQuarterEnd: string,
+  nextQuarterStart: string,
+  nextQuarterEnd: string
+) {
+  const params = new URLSearchParams({
+    employeeIds: employeeIds.join(','),
+    currentQuarterStart,
+    currentQuarterEnd,
+    nextQuarterStart,
+    nextQuarterEnd,
+  });
+
+  const datesKey = `${currentQuarterStart}-${currentQuarterEnd}-${nextQuarterStart}-${nextQuarterEnd}`;
+
+  return useQuery({
+    queryKey: employeeKeys.allocationSummaries(employeeIds, datesKey),
+    queryFn: () =>
+      api.get<AllocationSummariesResponse>(`/employees/allocation-summaries?${params}`),
+    enabled: employeeIds.length > 0,
+    staleTime: 30_000,
   });
 }

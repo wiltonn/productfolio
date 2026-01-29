@@ -5,7 +5,8 @@ import { toast } from '../stores/toast';
 export interface Scenario {
   id: string;
   name: string;
-  quarterRange: string;
+  periodIds: string[];
+  quarterRange?: string; // Computed on the frontend from periodIds
   assumptions?: Record<string, unknown>;
   priorityRankings?: Array<{ initiativeId: string; rank: number }>;
   version: number;
@@ -18,6 +19,7 @@ export interface Allocation {
   scenarioId: string;
   employeeId: string;
   initiativeId: string;
+  initiativeStatus: string | null;
   startDate: string;
   endDate: string;
   percentage: number;
@@ -75,6 +77,8 @@ export const scenarioKeys = {
   details: () => [...scenarioKeys.all, 'detail'] as const,
   detail: (id: string) => [...scenarioKeys.details(), id] as const,
   allocations: (id: string) => [...scenarioKeys.detail(id), 'allocations'] as const,
+  initiativeAllocations: (scenarioId: string, initiativeId: string) =>
+    [...scenarioKeys.detail(scenarioId), 'initiativeAllocations', initiativeId] as const,
   analysis: (id: string) => [...scenarioKeys.detail(id), 'analysis'] as const,
   calculator: (id: string, options?: { includeBreakdown?: boolean }) =>
     [...scenarioKeys.detail(id), 'calculator', options] as const,
@@ -101,6 +105,15 @@ export function useScenarioAllocations(id: string) {
     queryKey: scenarioKeys.allocations(id),
     queryFn: () => api.get<Allocation[]>(`/scenarios/${id}/allocations`),
     enabled: !!id,
+  });
+}
+
+export function useInitiativeAllocations(scenarioId: string, initiativeId: string) {
+  return useQuery({
+    queryKey: scenarioKeys.initiativeAllocations(scenarioId, initiativeId),
+    queryFn: () =>
+      api.get<Allocation[]>(`/scenarios/${scenarioId}/initiatives/${initiativeId}/allocations`),
+    enabled: !!scenarioId && !!initiativeId,
   });
 }
 
@@ -144,7 +157,8 @@ export function useCreateScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Partial<Scenario>) => api.post<Scenario>('/scenarios', data),
+    mutationFn: (data: { name: string; periodIds: string[]; assumptions?: Record<string, unknown> }) =>
+      api.post<Scenario>('/scenarios', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
       toast.success('Scenario created successfully');
@@ -231,12 +245,18 @@ export function useCreateAllocation() {
   return useMutation({
     mutationFn: ({ scenarioId, data }: { scenarioId: string; data: Partial<Allocation> }) =>
       api.post<Allocation>(`/scenarios/${scenarioId}/allocations`, data),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(variables.scenarioId) });
       queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
       queryClient.invalidateQueries({
         queryKey: scenarioKeys.calculator(variables.scenarioId),
       });
+      // Invalidate initiative-specific allocations
+      if (variables.data.initiativeId) {
+        queryClient.invalidateQueries({
+          queryKey: scenarioKeys.initiativeAllocations(variables.scenarioId, variables.data.initiativeId),
+        });
+      }
       toast.success('Allocation created successfully');
     },
     onError: (error) => {
@@ -287,10 +307,100 @@ export function useDeleteAllocation() {
       queryClient.invalidateQueries({
         queryKey: scenarioKeys.calculator(result.scenarioId),
       });
+      // Invalidate all initiative-specific allocation queries for this scenario
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.detail(result.scenarioId),
+        predicate: (query) =>
+          Array.isArray(query.queryKey) && query.queryKey.includes('initiativeAllocations'),
+      });
       toast.success('Allocation deleted successfully');
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to delete allocation');
+    },
+  });
+}
+
+// Auto-Allocate Types
+export interface ProposedAllocation {
+  employeeId: string;
+  employeeName: string;
+  initiativeId: string;
+  initiativeTitle: string;
+  skill: string;
+  percentage: number;
+  hours: number;
+  startDate: string;
+  endDate: string;
+}
+
+export interface InitiativeCoverage {
+  initiativeId: string;
+  initiativeTitle: string;
+  rank: number;
+  skills: Array<{
+    skill: string;
+    demandHours: number;
+    allocatedHours: number;
+    coveragePercent: number;
+  }>;
+  overallCoveragePercent: number;
+}
+
+export interface AutoAllocateResult {
+  proposedAllocations: ProposedAllocation[];
+  coverage: InitiativeCoverage[];
+  warnings: string[];
+  summary: {
+    totalAllocations: number;
+    employeesUsed: number;
+    initiativesCovered: number;
+    totalHoursAllocated: number;
+  };
+}
+
+export function useAutoAllocatePreview() {
+  return useMutation({
+    mutationFn: ({
+      scenarioId,
+      options,
+    }: {
+      scenarioId: string;
+      options?: { maxAllocationPercentage?: number };
+    }) => api.post<AutoAllocateResult>(`/scenarios/${scenarioId}/auto-allocate`, options || {}),
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to compute auto-allocations');
+    },
+  });
+}
+
+export function useAutoAllocateApply() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      scenarioId,
+      proposedAllocations,
+    }: {
+      scenarioId: string;
+      proposedAllocations: ProposedAllocation[];
+    }) =>
+      api.post<{ created: number }>(`/scenarios/${scenarioId}/auto-allocate/apply`, {
+        proposedAllocations,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(variables.scenarioId) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.calculator(variables.scenarioId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: scenarioKeys.detail(variables.scenarioId),
+      });
+      toast.success('Auto-allocations applied successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to apply auto-allocations');
     },
   });
 }

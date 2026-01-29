@@ -38,12 +38,15 @@ export {
   useEmployeeCapacity,
   useUpdateCapacity,
   useEmployeeAvailability,
+  useEmployeeAllocationSummaries,
   employeeKeys,
   type Employee,
   type EmployeeFilters,
   type Skill,
   type CapacityEntry,
   type Availability,
+  type QuarterAllocationSummary,
+  type AllocationSummariesResponse,
 } from './useEmployees';
 
 // Scenario hooks
@@ -86,6 +89,15 @@ export {
   type ScopeItem,
   type ApprovalHistoryEntry,
 } from './useScoping';
+
+// Period hooks
+export {
+  useQuarterPeriods,
+  getQuarterPeriodIds,
+  deriveQuarterRange,
+  periodKeys,
+  type Period,
+} from './usePeriods';
 
 // Route prefetch hooks
 export { useRoutePrefetch, usePrefetchOnHover } from './useRoutePrefetch';
