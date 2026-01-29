@@ -40,7 +40,7 @@ The following test users are created by the test seed script:
 | Email | Password | Role | Access |
 |-------|----------|------|--------|
 | admin@productfolio.test | Admin123! | ADMIN | Full access |
-| planner@productfolio.test | Planner123! | PLANNER | Initiatives & scenarios |
+| planner@productfolio.test | Planner123! | PRODUCT_OWNER | Initiatives & scenarios |
 | viewer@productfolio.test | Viewer123! | VIEWER | Read-only |
 
 ## Test Coverage

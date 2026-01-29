@@ -12,13 +12,19 @@ datasource db {
 // ============================================================================
 
 enum InitiativeStatus {
-  DRAFT
-  PENDING_APPROVAL
-  APPROVED
-  IN_PROGRESS
-  COMPLETED
+  PROPOSED
+  SCOPING
+  RESOURCING
+  IN_EXECUTION
+  COMPLETE
   ON_HOLD
   CANCELLED
+}
+
+enum DeliveryHealth {
+  ON_TRACK
+  AT_RISK
+  DELAYED
 }
 
 enum EmploymentType {
@@ -130,7 +136,9 @@ model Initiative {
   description     String?          @db.Text
   businessOwnerId String           @db.Uuid
   productOwnerId  String           @db.Uuid
-  status          InitiativeStatus @default(DRAFT)
+  status          InitiativeStatus @default(PROPOSED)
+  targetQuarter   String?
+  deliveryHealth  DeliveryHealth?
   targetPeriodId  String?          @db.Uuid @map("target_period_id")
   customFields    Json?            @db.JsonB
 
@@ -148,6 +156,7 @@ model Initiative {
   @@index([businessOwnerId])
   @@index([productOwnerId])
   @@index([status])
+  @@index([targetQuarter])
   @@index([targetPeriodId])
 }
 

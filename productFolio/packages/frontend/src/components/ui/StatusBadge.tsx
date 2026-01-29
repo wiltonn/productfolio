@@ -11,31 +11,31 @@ const statusConfig: Record<InitiativeStatus, {
   text: string;
   dot: string;
 }> = {
-  DRAFT: {
-    label: 'Draft',
+  PROPOSED: {
+    label: 'Proposed',
     bg: 'bg-surface-100',
     text: 'text-surface-600',
     dot: 'bg-surface-400',
   },
-  PENDING_APPROVAL: {
-    label: 'Pending',
+  SCOPING: {
+    label: 'Scoping',
     bg: 'bg-amber-50',
     text: 'text-amber-700',
     dot: 'bg-amber-500',
   },
-  APPROVED: {
-    label: 'Approved',
+  RESOURCING: {
+    label: 'Resourcing',
     bg: 'bg-sky-50',
     text: 'text-sky-700',
     dot: 'bg-sky-500',
   },
-  IN_PROGRESS: {
-    label: 'Active',
+  IN_EXECUTION: {
+    label: 'In Execution',
     bg: 'bg-emerald-50',
     text: 'text-emerald-700',
     dot: 'bg-emerald-500',
   },
-  COMPLETED: {
+  COMPLETE: {
     label: 'Complete',
     bg: 'bg-violet-50',
     text: 'text-violet-700',
@@ -56,7 +56,7 @@ const statusConfig: Record<InitiativeStatus, {
 };
 
 export function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {
-  const config = statusConfig[status] || statusConfig.DRAFT;
+  const config = statusConfig[status] || statusConfig.PROPOSED;
 
   return (
     <span

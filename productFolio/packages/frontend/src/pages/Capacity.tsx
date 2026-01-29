@@ -3,7 +3,7 @@ import { SearchInput, Checkbox, StatusBadge } from '../components/ui';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocations, useEmployeeAllocationSummaries, Employee } from '../hooks/useEmployees';
 import type { EmployeeAllocation, QuarterAllocationSummary } from '../hooks/useEmployees';
 
-const LOCKED_STATUSES = ['APPROVED', 'IN_PROGRESS', 'COMPLETED'];
+const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
 // Allocation Badge Component
 function AllocationBadge({ percentage }: { percentage: number }) {

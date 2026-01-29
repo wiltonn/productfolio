@@ -33,23 +33,23 @@ interface ActivityEvent {
   user: { name: string };
 }
 
-// Status workflow transitions
+// Status workflow transitions (milestone flow)
 const statusTransitions: Record<InitiativeStatus, InitiativeStatus[]> = {
-  DRAFT: ['PENDING_APPROVAL', 'CANCELLED'],
-  PENDING_APPROVAL: ['APPROVED', 'DRAFT', 'CANCELLED'],
-  APPROVED: ['IN_PROGRESS', 'ON_HOLD', 'CANCELLED'],
-  IN_PROGRESS: ['COMPLETED', 'ON_HOLD', 'CANCELLED'],
-  COMPLETED: [],
-  ON_HOLD: ['IN_PROGRESS', 'CANCELLED'],
-  CANCELLED: ['DRAFT'],
+  PROPOSED: ['SCOPING', 'ON_HOLD', 'CANCELLED'],
+  SCOPING: ['RESOURCING', 'ON_HOLD', 'CANCELLED'],
+  RESOURCING: ['IN_EXECUTION', 'ON_HOLD', 'CANCELLED'],
+  IN_EXECUTION: ['COMPLETE', 'ON_HOLD', 'CANCELLED'],
+  COMPLETE: [],
+  ON_HOLD: ['PROPOSED', 'SCOPING', 'RESOURCING', 'IN_EXECUTION', 'CANCELLED'],
+  CANCELLED: [],
 };
 
 const statusLabels: Record<InitiativeStatus, string> = {
-  DRAFT: 'Draft',
-  PENDING_APPROVAL: 'Submit for Approval',
-  APPROVED: 'Approve',
-  IN_PROGRESS: 'Start Work',
-  COMPLETED: 'Mark Complete',
+  PROPOSED: 'Proposed',
+  SCOPING: 'Begin Scoping',
+  RESOURCING: 'Begin Resourcing',
+  IN_EXECUTION: 'Start Execution',
+  COMPLETE: 'Mark Complete',
   ON_HOLD: 'Put On Hold',
   CANCELLED: 'Cancel',
 };
@@ -76,9 +76,9 @@ const mockActivity: ActivityEvent[] = [
   { id: '3', action: 'added_scope_item', newValue: 'Design System Migration', createdAt: '2024-01-12T14:00:00Z', user: { name: 'Mike Torres' } },
   { id: '4', action: 'added_scope_item', newValue: 'Authentication Flow Redesign', createdAt: '2024-01-12T14:15:00Z', user: { name: 'Mike Torres' } },
   { id: '5', action: 'updated', field: 'targetQuarter', oldValue: '2024-Q1', newValue: '2024-Q2', createdAt: '2024-01-14T09:00:00Z', user: { name: 'Sarah Chen' } },
-  { id: '6', action: 'status_changed', oldValue: 'DRAFT', newValue: 'PENDING_APPROVAL', createdAt: '2024-01-15T10:30:00Z', user: { name: 'Sarah Chen' } },
-  { id: '7', action: 'status_changed', oldValue: 'PENDING_APPROVAL', newValue: 'APPROVED', createdAt: '2024-01-19T16:45:00Z', user: { name: 'James Wilson' } },
-  { id: '8', action: 'status_changed', oldValue: 'APPROVED', newValue: 'IN_PROGRESS', createdAt: '2024-01-22T08:30:00Z', user: { name: 'Sarah Chen' } },
+  { id: '6', action: 'status_changed', oldValue: 'PROPOSED', newValue: 'SCOPING', createdAt: '2024-01-15T10:30:00Z', user: { name: 'Sarah Chen' } },
+  { id: '7', action: 'status_changed', oldValue: 'SCOPING', newValue: 'RESOURCING', createdAt: '2024-01-19T16:45:00Z', user: { name: 'James Wilson' } },
+  { id: '8', action: 'status_changed', oldValue: 'RESOURCING', newValue: 'IN_EXECUTION', createdAt: '2024-01-22T08:30:00Z', user: { name: 'Sarah Chen' } },
 ];
 
 // Skill color mapping
@@ -126,7 +126,7 @@ export function InitiativeDetail() {
     id: id || 'demo',
     title: 'Customer Portal Redesign',
     description: 'Complete redesign of the customer-facing portal to improve user experience, modernize the interface, and add new self-service capabilities. This initiative includes migration to a new component library and implementation of accessibility improvements.',
-    status: 'IN_PROGRESS' as InitiativeStatus,
+    status: 'IN_EXECUTION' as InitiativeStatus,
     targetQuarter: '2024-Q2',
     businessOwnerId: 'bo-1',
     productOwnerId: 'po-1',

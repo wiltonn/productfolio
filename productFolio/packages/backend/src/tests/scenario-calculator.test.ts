@@ -119,7 +119,7 @@ describe('ScenarioCalculatorService', () => {
     {
       id: initiativeId,
       title: 'Test Initiative',
-      status: 'APPROVED',
+      status: 'RESOURCING',
       scopeItems: [
         {
           id: '00000000-0000-0000-0000-000000000040',
@@ -347,14 +347,14 @@ describe('ScenarioCalculatorService', () => {
   });
 
   describe('calculateDemand', () => {
-    it('should only include APPROVED initiatives', async () => {
+    it('should only include RESOURCING/IN_EXECUTION initiatives', async () => {
       const result = await calculatorService.calculate(scenarioId);
 
       // Verify that initiative.findMany was called with APPROVED status filter
       expect(mockPrisma.initiative.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            status: 'APPROVED',
+            status: 'RESOURCING',
           }),
         })
       );

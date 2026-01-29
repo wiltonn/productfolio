@@ -29,15 +29,6 @@ interface OverallocatedPerson {
   avatar: string;
 }
 
-interface DeliveryItem {
-  id: string;
-  title: string;
-  quarter: string;
-  status: 'on-track' | 'at-risk' | 'delayed';
-  progress: number;
-  endDate: string;
-}
-
 interface ScenarioMetrics {
   id: string;
   name: string;
@@ -69,15 +60,6 @@ const mockOverallocated: OverallocatedPerson[] = [
   { id: '1', name: 'Sarah Chen', allocation: 120, initiatives: ['Portal Redesign', 'Mobile App v2'], avatar: 'SC' },
   { id: '2', name: 'Priya Patel', allocation: 110, initiatives: ['API Gateway', 'Security Audit'], avatar: 'PP' },
   { id: '3', name: 'Alex Rivera', allocation: 105, initiatives: ['Analytics Dashboard', 'Data Pipeline'], avatar: 'AR' },
-];
-
-const mockDeliveryItems: DeliveryItem[] = [
-  { id: '1', title: 'Customer Portal Redesign', quarter: '2026-Q1', status: 'on-track', progress: 68, endDate: '2026-03-27' },
-  { id: '2', title: 'API Gateway Migration', quarter: '2026-Q1', status: 'at-risk', progress: 45, endDate: '2026-03-20' },
-  { id: '3', title: 'Mobile App v2', quarter: '2026-Q2', status: 'on-track', progress: 22, endDate: '2026-06-15' },
-  { id: '4', title: 'Data Pipeline Optimization', quarter: '2026-Q1', status: 'delayed', progress: 35, endDate: '2026-02-28' },
-  { id: '5', title: 'Analytics Dashboard', quarter: '2026-Q2', status: 'on-track', progress: 12, endDate: '2026-05-30' },
-  { id: '6', title: 'Security Audit Implementation', quarter: '2026-Q1', status: 'on-track', progress: 55, endDate: '2026-03-15' },
 ];
 
 const mockScenarios: ScenarioMetrics[] = [
@@ -148,49 +130,6 @@ function Sparkline({
         fill={color}
       />
     </svg>
-  );
-}
-
-// ============================================================================
-// PROGRESS BAR COMPONENT
-// ============================================================================
-
-function ProgressBar({
-  value,
-  max = 100,
-  size = 'md',
-  status = 'default',
-  showValue = false,
-}: {
-  value: number;
-  max?: number;
-  size?: 'sm' | 'md' | 'lg';
-  status?: 'default' | 'success' | 'warning' | 'danger';
-  showValue?: boolean;
-}) {
-  const percentage = Math.min((value / max) * 100, 100);
-  const heights = { sm: 'h-1', md: 'h-1.5', lg: 'h-2' };
-  const colors = {
-    default: 'bg-accent-500',
-    success: 'bg-emerald-500',
-    warning: 'bg-amber-500',
-    danger: 'bg-red-500',
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`flex-1 bg-surface-200 rounded-full overflow-hidden ${heights[size]}`}>
-        <div
-          className={`${heights[size]} ${colors[status]} rounded-full transition-all duration-500`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-      {showValue && (
-        <span className="text-xs font-mono text-surface-500 tabular-nums w-8 text-right">
-          {Math.round(percentage)}%
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -398,92 +337,6 @@ function OverallocatedCard({ data }: { data: OverallocatedPerson[] }) {
                     }}
                   />
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// DELIVERY FORECAST TIMELINE
-// ============================================================================
-
-function DeliveryForecastCard({ data }: { data: DeliveryItem[] }) {
-  const quarters = [...new Set(data.map(d => d.quarter))].sort();
-
-  const statusConfig = {
-    'on-track': { color: 'bg-emerald-500', label: 'On Track', badge: 'bg-emerald-100 text-emerald-800' },
-    'at-risk': { color: 'bg-amber-500', label: 'At Risk', badge: 'bg-amber-100 text-amber-800' },
-    'delayed': { color: 'bg-red-500', label: 'Delayed', badge: 'bg-red-100 text-red-800' },
-  };
-
-  return (
-    <div className="report-card col-span-full">
-      <div className="report-card-header">
-        <div className="flex items-center gap-2">
-          <div className="report-card-icon accent">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-          </div>
-          <h3 className="report-card-title">Delivery Forecast</h3>
-        </div>
-        <div className="flex items-center gap-4 text-xs">
-          {Object.entries(statusConfig).map(([key, config]) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${config.color}`} />
-              <span className="text-surface-500">{config.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="delivery-timeline">
-        {quarters.map((quarter) => {
-          const items = data.filter(d => d.quarter === quarter);
-
-          return (
-            <div key={quarter} className="timeline-quarter">
-              <div className="timeline-quarter-header">
-                <span className="font-mono font-semibold text-surface-900">{quarter}</span>
-                <span className="text-xs text-surface-400">{items.length} initiatives</span>
-              </div>
-              <div className="timeline-items">
-                {items.map((item, i) => {
-                  const config = statusConfig[item.status];
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="timeline-item"
-                      style={{ animationDelay: `${i * 75}ms` }}
-                    >
-                      <div className="timeline-item-header">
-                        <span className={`timeline-status-dot ${config.color}`} />
-                        <span className="timeline-item-title">{item.title}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${config.badge}`}>
-                          {config.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-2">
-                        <ProgressBar
-                          value={item.progress}
-                          size="sm"
-                          status={item.status === 'on-track' ? 'success' : item.status === 'at-risk' ? 'warning' : 'danger'}
-                        />
-                        <span className="text-xs font-mono text-surface-500 whitespace-nowrap">
-                          {item.progress}%
-                        </span>
-                        <span className="text-xs text-surface-400 whitespace-nowrap">
-                          Due {new Date(item.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
           );
@@ -771,7 +624,6 @@ export function Reports() {
       <div className="reports-grid">
         <SkillGapsCard data={mockSkillGaps} />
         <OverallocatedCard data={mockOverallocated} />
-        <DeliveryForecastCard data={mockDeliveryItems} />
         <ScenarioComparisonCard
           scenarios={mockScenarios}
           selectedIds={comparisonScenarios}

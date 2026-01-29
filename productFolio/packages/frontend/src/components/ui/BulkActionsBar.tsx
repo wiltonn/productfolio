@@ -12,12 +12,13 @@ interface BulkActionsBarProps {
 }
 
 const statusOptions: { value: InitiativeStatus; label: string }[] = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'PROPOSED', label: 'Proposed' },
+  { value: 'SCOPING', label: 'Scoping' },
+  { value: 'RESOURCING', label: 'Resourcing' },
+  { value: 'IN_EXECUTION', label: 'In Execution' },
+  { value: 'COMPLETE', label: 'Complete' },
   { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
 export function BulkActionsBar({

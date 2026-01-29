@@ -48,110 +48,110 @@ describe('Initiatives Service', () => {
 
     it('isValidStatusTransition is defined and working', () => {
       expect(typeof isValidStatusTransition).toBe('function');
-      expect(isValidStatusTransition(InitiativeStatus.DRAFT, InitiativeStatus.PENDING_APPROVAL)).toBe(true);
+      expect(isValidStatusTransition(InitiativeStatus.PROPOSED, InitiativeStatus.SCOPING)).toBe(true);
     });
   });
 
   describe('Status Workflow Validation', () => {
     describe('isValidStatusTransition', () => {
-      it('should allow valid transitions from DRAFT', () => {
+      it('should allow valid transitions from PROPOSED', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.DRAFT,
-            InitiativeStatus.PENDING_APPROVAL
+            InitiativeStatus.PROPOSED,
+            InitiativeStatus.SCOPING
           )
         ).toBe(true);
       });
 
-      it('should reject invalid transitions from DRAFT', () => {
+      it('should reject invalid transitions from PROPOSED', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.DRAFT,
-            InitiativeStatus.APPROVED
+            InitiativeStatus.PROPOSED,
+            InitiativeStatus.RESOURCING
           )
         ).toBe(false);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.DRAFT,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.PROPOSED,
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(false);
       });
 
-      it('should allow valid transitions from PENDING_APPROVAL', () => {
+      it('should allow valid transitions from SCOPING', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.PENDING_APPROVAL,
-            InitiativeStatus.APPROVED
+            InitiativeStatus.SCOPING,
+            InitiativeStatus.RESOURCING
           )
         ).toBe(true);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.PENDING_APPROVAL,
+            InitiativeStatus.SCOPING,
             InitiativeStatus.CANCELLED
           )
         ).toBe(true);
       });
 
-      it('should reject invalid transitions from PENDING_APPROVAL', () => {
+      it('should reject invalid transitions from SCOPING', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.PENDING_APPROVAL,
-            InitiativeStatus.DRAFT
+            InitiativeStatus.SCOPING,
+            InitiativeStatus.PROPOSED
           )
         ).toBe(false);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.PENDING_APPROVAL,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.SCOPING,
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(false);
       });
 
-      it('should allow valid transitions from APPROVED', () => {
+      it('should allow valid transitions from RESOURCING', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.APPROVED,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.RESOURCING,
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(true);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.APPROVED,
+            InitiativeStatus.RESOURCING,
             InitiativeStatus.ON_HOLD
           )
         ).toBe(true);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.APPROVED,
+            InitiativeStatus.RESOURCING,
             InitiativeStatus.CANCELLED
           )
         ).toBe(true);
       });
 
-      it('should allow valid transitions from IN_PROGRESS', () => {
+      it('should allow valid transitions from IN_EXECUTION', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.IN_PROGRESS,
-            InitiativeStatus.COMPLETED
+            InitiativeStatus.IN_EXECUTION,
+            InitiativeStatus.COMPLETE
           )
         ).toBe(true);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.IN_PROGRESS,
+            InitiativeStatus.IN_EXECUTION,
             InitiativeStatus.ON_HOLD
           )
         ).toBe(true);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.IN_PROGRESS,
+            InitiativeStatus.IN_EXECUTION,
             InitiativeStatus.CANCELLED
           )
         ).toBe(true);
@@ -161,7 +161,7 @@ describe('Initiatives Service', () => {
         expect(
           isValidStatusTransition(
             InitiativeStatus.ON_HOLD,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(true);
 
@@ -176,14 +176,14 @@ describe('Initiatives Service', () => {
       it('should reject transitions from terminal states', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.COMPLETED,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.COMPLETE,
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(false);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.COMPLETED,
+            InitiativeStatus.COMPLETE,
             InitiativeStatus.ON_HOLD
           )
         ).toBe(false);
@@ -191,7 +191,7 @@ describe('Initiatives Service', () => {
         expect(
           isValidStatusTransition(
             InitiativeStatus.CANCELLED,
-            InitiativeStatus.APPROVED
+            InitiativeStatus.RESOURCING
           )
         ).toBe(false);
       });
@@ -199,15 +199,15 @@ describe('Initiatives Service', () => {
       it('should reject same status transitions', () => {
         expect(
           isValidStatusTransition(
-            InitiativeStatus.DRAFT,
-            InitiativeStatus.DRAFT
+            InitiativeStatus.PROPOSED,
+            InitiativeStatus.PROPOSED
           )
         ).toBe(false);
 
         expect(
           isValidStatusTransition(
-            InitiativeStatus.IN_PROGRESS,
-            InitiativeStatus.IN_PROGRESS
+            InitiativeStatus.IN_EXECUTION,
+            InitiativeStatus.IN_EXECUTION
           )
         ).toBe(false);
       });
@@ -240,14 +240,14 @@ describe('Initiatives Service', () => {
         vi.mocked(prisma.initiative.count).mockResolvedValue(0);
 
         await initiativesService.list(
-          { status: InitiativeStatus.APPROVED },
+          { status: InitiativeStatus.RESOURCING },
           { page: 1, limit: 20 }
         );
 
         expect(vi.mocked(prisma.initiative.findMany)).toHaveBeenCalledWith(
           expect.objectContaining({
             where: expect.objectContaining({
-              status: InitiativeStatus.APPROVED,
+              status: InitiativeStatus.RESOURCING,
             }),
           })
         );
@@ -327,10 +327,11 @@ describe('Initiatives Service', () => {
           id: testUuid('1'),
           title: 'New Initiative',
           description: 'Description',
-          status: InitiativeStatus.DRAFT,
+          status: InitiativeStatus.PROPOSED,
           businessOwnerId: businessOwner.id,
           productOwnerId: productOwner.id,
-          targetPeriodId: null,
+          targetQuarter: null,
+          deliveryHealth: null,
           customFields: null,
           createdAt: new Date('2024-01-01'),
           updatedAt: new Date('2024-01-01'),
@@ -360,7 +361,7 @@ describe('Initiatives Service', () => {
           expect.objectContaining({
             data: expect.objectContaining({
               title: 'New Initiative',
-              status: InitiativeStatus.DRAFT,
+              status: InitiativeStatus.PROPOSED,
             }),
           })
         );
@@ -470,9 +471,9 @@ describe('Initiatives Service', () => {
         const id = testUuid('1');
         const initiative = mockData.initiative({
           id,
-          status: InitiativeStatus.DRAFT,
+          status: InitiativeStatus.PROPOSED,
         });
-        const transitioned = { ...initiative, status: InitiativeStatus.PENDING_APPROVAL };
+        const transitioned = { ...initiative, status: InitiativeStatus.SCOPING };
 
         vi.mocked(prisma.initiative.findUnique).mockResolvedValueOnce(
           initiative as any
@@ -483,17 +484,17 @@ describe('Initiatives Service', () => {
 
         const result = await initiativesService.transitionStatus(
           id,
-          InitiativeStatus.PENDING_APPROVAL
+          InitiativeStatus.SCOPING
         );
 
-        expect(result.status).toBe(InitiativeStatus.PENDING_APPROVAL);
+        expect(result.status).toBe(InitiativeStatus.SCOPING);
       });
 
       it('should throw WorkflowError for invalid transition', async () => {
         const id = testUuid('1');
         const initiative = mockData.initiative({
           id,
-          status: InitiativeStatus.DRAFT,
+          status: InitiativeStatus.PROPOSED,
         });
 
         vi.mocked(prisma.initiative.findUnique).mockResolvedValueOnce(
@@ -503,7 +504,7 @@ describe('Initiatives Service', () => {
         await expect(
           initiativesService.transitionStatus(
             id,
-            InitiativeStatus.APPROVED
+            InitiativeStatus.RESOURCING
           )
         ).rejects.toThrow(WorkflowError);
       });
@@ -514,7 +515,7 @@ describe('Initiatives Service', () => {
         await expect(
           initiativesService.transitionStatus(
             testUuid('999'),
-            InitiativeStatus.APPROVED
+            InitiativeStatus.RESOURCING
           )
         ).rejects.toThrow(NotFoundError);
       });
@@ -620,13 +621,13 @@ describe('Initiatives Service', () => {
         vi.mocked(prisma.initiative.findMany).mockResolvedValue([]);
 
         await initiativesService.exportToCsv({
-          status: InitiativeStatus.APPROVED,
+          status: InitiativeStatus.RESOURCING,
         });
 
         expect(vi.mocked(prisma.initiative.findMany)).toHaveBeenCalledWith(
           expect.objectContaining({
             where: expect.objectContaining({
-              status: InitiativeStatus.APPROVED,
+              status: InitiativeStatus.RESOURCING,
             }),
           })
         );

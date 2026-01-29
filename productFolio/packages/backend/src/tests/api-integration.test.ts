@@ -111,10 +111,10 @@ describe('API Integration Tests', () => {
         data: {
           title: 'Test Initiative',
           description: 'Test Description',
-          status: InitiativeStatus.DRAFT,
+          status: InitiativeStatus.PROPOSED,
           businessOwnerId: adminUser.id,
           productOwnerId: adminUser.id,
-          targetPeriodId: null,
+          targetQuarter: null,
         },
       })
     ).id;
@@ -257,14 +257,14 @@ describe('API Integration Tests', () => {
     it('GET /api/initiatives - should filter by status', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/api/initiatives?status=DRAFT',
+        url: '/api/initiatives?status=PROPOSED',
         cookies: { access_token: adminToken },
       });
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
       body.data.forEach((initiative: any) => {
-        expect(initiative.status).toBe('DRAFT');
+        expect(initiative.status).toBe('PROPOSED');
       });
     });
 
@@ -321,7 +321,7 @@ describe('API Integration Tests', () => {
       expect(response.statusCode).toBe(201);
       const body = JSON.parse(response.body);
       expect(body.title).toBe('New API Test Initiative');
-      expect(body.status).toBe(InitiativeStatus.DRAFT);
+      expect(body.status).toBe(InitiativeStatus.PROPOSED);
 
       // Clean up
       await prisma.initiative.delete({ where: { id: body.id } });
@@ -362,20 +362,20 @@ describe('API Integration Tests', () => {
         url: `/api/initiatives/${testInitiativeId}/transition`,
         cookies: { access_token: adminToken },
         payload: {
-          newStatus: InitiativeStatus.PENDING_APPROVAL,
+          newStatus: InitiativeStatus.SCOPING,
         },
       });
 
       expect(response.statusCode).toBe(200);
       const body = JSON.parse(response.body);
-      expect(body.status).toBe(InitiativeStatus.PENDING_APPROVAL);
+      expect(body.status).toBe(InitiativeStatus.SCOPING);
     });
 
     it('POST /api/initiatives/:id/transition - should reject invalid transition', async () => {
-      // Reset to DRAFT first
+      // Reset to PROPOSED first
       await prisma.initiative.update({
         where: { id: testInitiativeId },
-        data: { status: InitiativeStatus.DRAFT },
+        data: { status: InitiativeStatus.PROPOSED },
       });
 
       const response = await app.inject({
@@ -383,7 +383,7 @@ describe('API Integration Tests', () => {
         url: `/api/initiatives/${testInitiativeId}/transition`,
         cookies: { access_token: adminToken },
         payload: {
-          newStatus: InitiativeStatus.IN_PROGRESS, // Invalid from DRAFT
+          newStatus: InitiativeStatus.IN_EXECUTION, // Invalid from PROPOSED
         },
       });
 

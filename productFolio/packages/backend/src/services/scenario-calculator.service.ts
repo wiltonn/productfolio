@@ -183,7 +183,7 @@ export class ScenarioCalculatorService {
     const initiatives = await prisma.initiative.findMany({
       where: {
         id: { in: priorityRankings.map((pr) => pr.initiativeId) },
-        status: InitiativeStatus.APPROVED,
+        status: { in: [InitiativeStatus.RESOURCING, InitiativeStatus.IN_EXECUTION] },
       },
       include: {
         scopeItems: {

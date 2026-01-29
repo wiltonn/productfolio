@@ -39,7 +39,7 @@ import { useEmployees } from '../hooks/useEmployees';
 import { useQuarterPeriods, deriveQuarterRange } from '../hooks/usePeriods';
 import type { InitiativeStatus, Initiative } from '../types';
 
-const LOCKED_STATUSES = ['APPROVED', 'IN_PROGRESS', 'COMPLETED'];
+const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
 // ============================================================================
 // TYPES
@@ -1165,7 +1165,7 @@ export function ScenarioPlanner() {
   // Filter initiatives
   const filteredInitiatives = useMemo(() => {
     return initiatives.filter(init => {
-      if (approvedOnly && init.status !== 'APPROVED' && init.status !== 'IN_PROGRESS') {
+      if (approvedOnly && init.status !== 'RESOURCING' && init.status !== 'IN_EXECUTION') {
         return false;
       }
       if (searchQuery) {

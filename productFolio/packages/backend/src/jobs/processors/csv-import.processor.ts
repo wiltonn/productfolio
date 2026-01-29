@@ -141,8 +141,8 @@ async function processBatch(
         description: validatedRow.description || null,
         businessOwnerId: validatedRow.businessOwnerId,
         productOwnerId: validatedRow.productOwnerId,
-        status: validatedRow.status || InitiativeStatus.DRAFT,
-        targetPeriodId: validatedRow.targetPeriodId || null,
+        status: validatedRow.status || InitiativeStatus.PROPOSED,
+        targetQuarter: validatedRow.targetQuarter || null,
         customFields: Prisma.JsonNull,
       });
 

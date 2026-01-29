@@ -44,51 +44,57 @@ export async function apiRequest<T>(
     },
   });
 
-  // Handle 401 - attempt token refresh
+  // Handle 401 - attempt token refresh (skip for auth endpoints)
   if (response.status === 401) {
-    // Avoid multiple concurrent refresh attempts
-    if (!isRefreshing) {
-      isRefreshing = true;
-      refreshPromise = refreshAccessToken();
-    }
+    const isAuthEndpoint = endpoint.startsWith('/auth/');
 
-    const refreshed = await refreshPromise;
-    isRefreshing = false;
-    refreshPromise = null;
+    if (!isAuthEndpoint) {
+      // Avoid multiple concurrent refresh attempts
+      if (!isRefreshing) {
+        isRefreshing = true;
+        refreshPromise = refreshAccessToken();
+      }
 
-    if (refreshed) {
-      // Retry the original request
-      const retryResponse = await fetch(url, {
-        ...options,
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
+      const refreshed = await refreshPromise;
+      isRefreshing = false;
+      refreshPromise = null;
 
-      if (retryResponse.ok) {
-        if (retryResponse.status === 204) {
-          return undefined as T;
+      if (refreshed) {
+        // Retry the original request
+        const retryResponse = await fetch(url, {
+          ...options,
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+        });
+
+        if (retryResponse.ok) {
+          if (retryResponse.status === 204) {
+            return undefined as T;
+          }
+          return retryResponse.json();
         }
-        return retryResponse.json();
+
+        // If retry also fails, throw the error
+        const errorBody = await retryResponse.text();
+        let message: string;
+        try {
+          const parsed = JSON.parse(errorBody);
+          message = parsed.message || parsed.error || retryResponse.statusText;
+        } catch {
+          message = errorBody || retryResponse.statusText;
+        }
+        throw new ApiError(retryResponse.status, retryResponse.statusText, message);
       }
 
-      // If retry also fails, throw the error
-      const errorBody = await retryResponse.text();
-      let message: string;
-      try {
-        const parsed = JSON.parse(errorBody);
-        message = parsed.message || parsed.error || retryResponse.statusText;
-      } catch {
-        message = errorBody || retryResponse.statusText;
-      }
-      throw new ApiError(retryResponse.status, retryResponse.statusText, message);
+      // Refresh failed - user needs to login again
+      // Don't redirect here, let the ProtectedRoute handle it
+      throw new ApiError(401, 'Unauthorized', 'Session expired. Please log in again.');
     }
 
-    // Refresh failed - user needs to login again
-    // Don't redirect here, let the ProtectedRoute handle it
-    throw new ApiError(401, 'Unauthorized', 'Session expired. Please log in again.');
+    // For auth endpoints, fall through to the standard error handling below
   }
 
   if (!response.ok) {

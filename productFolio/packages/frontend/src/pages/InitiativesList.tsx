@@ -24,11 +24,11 @@ import { getQuarterOptions } from '../types';
 
 // Status filter options
 const statusOptions = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
-  { value: 'APPROVED', label: 'Approved' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'PROPOSED', label: 'Proposed' },
+  { value: 'SCOPING', label: 'Scoping' },
+  { value: 'RESOURCING', label: 'Resourcing' },
+  { value: 'IN_EXECUTION', label: 'In Execution' },
+  { value: 'COMPLETE', label: 'Complete' },
   { value: 'ON_HOLD', label: 'On Hold' },
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
@@ -102,10 +102,10 @@ export function InitiativesList() {
   // Stats computed from real data
   const stats = useMemo(() => {
     const total = apiData?.pagination?.total ?? initiatives.length;
-    const inProgress = initiatives.filter((i) => i.status === 'IN_PROGRESS').length;
-    const pending = initiatives.filter((i) => i.status === 'PENDING_APPROVAL').length;
-    const completed = initiatives.filter((i) => i.status === 'COMPLETED').length;
-    return { total, inProgress, pending, completed };
+    const inExecution = initiatives.filter((i) => i.status === 'IN_EXECUTION').length;
+    const scopingResourcing = initiatives.filter((i) => i.status === 'SCOPING' || i.status === 'RESOURCING').length;
+    const complete = initiatives.filter((i) => i.status === 'COMPLETE').length;
+    return { total, inExecution, scopingResourcing, complete };
   }, [apiData?.pagination?.total, initiatives]);
 
   // Handlers
@@ -304,8 +304,8 @@ export function InitiativesList() {
             ),
           },
           {
-            label: 'In Progress',
-            value: stats.inProgress.toString(),
+            label: 'In Execution',
+            value: stats.inExecution.toString(),
             accent: 'text-emerald-600',
             icon: (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -314,8 +314,8 @@ export function InitiativesList() {
             ),
           },
           {
-            label: 'Pending Review',
-            value: stats.pending.toString(),
+            label: 'Scoping / Resourcing',
+            value: stats.scopingResourcing.toString(),
             accent: 'text-amber-600',
             icon: (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -324,8 +324,8 @@ export function InitiativesList() {
             ),
           },
           {
-            label: 'Completed',
-            value: stats.completed.toString(),
+            label: 'Complete',
+            value: stats.complete.toString(),
             accent: 'text-violet-600',
             icon: (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

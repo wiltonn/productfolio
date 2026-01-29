@@ -15,7 +15,7 @@ import type {
 } from '../types/index.js';
 import { PeriodType } from '@prisma/client';
 
-const LOCKED_STATUSES = ['APPROVED', 'IN_PROGRESS', 'COMPLETED'];
+const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
 interface AllocationWithDetails {
   id: string;

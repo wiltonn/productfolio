@@ -35,6 +35,18 @@ const Reports = lazy(() =>
   import('./pages/Reports').then((m) => ({ default: m.Reports }))
 );
 
+const DeliveryForecast = lazy(() =>
+  import('./pages/DeliveryForecast').then((m) => ({ default: m.DeliveryForecast }))
+);
+
+const OrgTreeAdmin = lazy(() =>
+  import('./pages/OrgTreeAdmin').then((m) => ({ default: m.OrgTreeAdmin }))
+);
+
+const Approvals = lazy(() =>
+  import('./pages/Approvals').then((m) => ({ default: m.Approvals }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -161,6 +173,36 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <Reports />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'delivery',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <DeliveryForecast />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/org-tree',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <OrgTreeAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'approvals',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <Approvals />
             </LazyPage>
           </ErrorBoundary>
         ),

@@ -242,7 +242,7 @@ async function refreshGlobalDemandSummary(job: Job): Promise<void> {
 
   // Aggregate demand across all approved initiatives
   const initiatives = await prisma.initiative.findMany({
-    where: { status: 'APPROVED' },
+    where: { status: { in: ['RESOURCING', 'IN_EXECUTION'] } },
     include: { scopeItems: true },
   });
 

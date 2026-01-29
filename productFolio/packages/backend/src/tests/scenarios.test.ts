@@ -406,8 +406,8 @@ describe('AllocationService', () => {
         description: null,
         businessOwnerId: '00000000-0000-0000-0000-000000000100',
         productOwnerId: '00000000-0000-0000-0000-000000000101',
-        status: 'DRAFT',
-        targetPeriodId: null,
+        status: 'PROPOSED',
+        targetQuarter: null,
         customFields: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -679,8 +679,8 @@ describe('AllocationService', () => {
           description: null,
           businessOwnerId: '00000000-0000-0000-0000-000000000100',
           productOwnerId: '00000000-0000-0000-0000-000000000101',
-          status: 'DRAFT',
-          targetPeriodId: null,
+          status: 'PROPOSED',
+          targetQuarter: null,
           customFields: null,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -853,8 +853,8 @@ describe('AllocationService', () => {
             description: null,
             businessOwnerId: '00000000-0000-0000-0000-000000000100',
             productOwnerId: '00000000-0000-0000-0000-000000000101',
-            status: 'DRAFT',
-            targetPeriodId: null,
+            status: 'PROPOSED',
+            targetQuarter: null,
             customFields: null,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -881,8 +881,8 @@ describe('AllocationService', () => {
             description: null,
             businessOwnerId: '00000000-0000-0000-0000-000000000100',
             productOwnerId: '00000000-0000-0000-0000-000000000101',
-            status: 'DRAFT',
-            targetPeriodId: null,
+            status: 'PROPOSED',
+            targetQuarter: null,
             customFields: null,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -927,7 +927,7 @@ describe('AllocationService', () => {
   });
 
   describe('allocation locking', () => {
-    it('should reject create when initiative is APPROVED', async () => {
+    it('should reject create when initiative is RESOURCING', async () => {
       const scenarioId = '00000000-0000-0000-0000-000000000001';
       const employeeId = '00000000-0000-0000-0000-000000000020';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
@@ -944,7 +944,7 @@ describe('AllocationService', () => {
       mockPrisma.initiative.findUnique.mockResolvedValue({
         id: initiativeId,
         title: 'Locked Initiative',
-        status: 'APPROVED',
+        status: 'RESOURCING',
       });
 
       await expect(
@@ -958,7 +958,7 @@ describe('AllocationService', () => {
       ).rejects.toThrow(WorkflowError);
     });
 
-    it('should reject update when initiative is IN_PROGRESS', async () => {
+    it('should reject update when initiative is IN_EXECUTION', async () => {
       const allocationId = '00000000-0000-0000-0000-000000000001';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
 
@@ -974,7 +974,7 @@ describe('AllocationService', () => {
       mockPrisma.initiative.findUnique.mockResolvedValue({
         id: initiativeId,
         title: 'In Progress Initiative',
-        status: 'IN_PROGRESS',
+        status: 'IN_EXECUTION',
       });
 
       await expect(
@@ -982,7 +982,7 @@ describe('AllocationService', () => {
       ).rejects.toThrow(WorkflowError);
     });
 
-    it('should reject delete when initiative is COMPLETED', async () => {
+    it('should reject delete when initiative is COMPLETE', async () => {
       const allocationId = '00000000-0000-0000-0000-000000000001';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
 
@@ -994,7 +994,7 @@ describe('AllocationService', () => {
       mockPrisma.initiative.findUnique.mockResolvedValue({
         id: initiativeId,
         title: 'Completed Initiative',
-        status: 'COMPLETED',
+        status: 'COMPLETE',
       });
 
       await expect(
@@ -1002,7 +1002,7 @@ describe('AllocationService', () => {
       ).rejects.toThrow(WorkflowError);
     });
 
-    it('should allow create when initiative is DRAFT', async () => {
+    it('should allow create when initiative is PROPOSED', async () => {
       const scenarioId = '00000000-0000-0000-0000-000000000001';
       const employeeId = '00000000-0000-0000-0000-000000000020';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
@@ -1022,12 +1022,12 @@ describe('AllocationService', () => {
         .mockResolvedValueOnce({
           id: initiativeId,
           title: 'Draft Initiative',
-          status: 'DRAFT',
+          status: 'PROPOSED',
         })
         .mockResolvedValueOnce({
           id: initiativeId,
           title: 'Draft Initiative',
-          status: 'DRAFT',
+          status: 'PROPOSED',
         });
 
       mockPrisma.allocation.create.mockResolvedValue({
@@ -1041,7 +1041,7 @@ describe('AllocationService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         employee: { id: employeeId, name: 'John Doe' },
-        initiative: { id: initiativeId, title: 'Draft Initiative', status: 'DRAFT' },
+        initiative: { id: initiativeId, title: 'Draft Initiative', status: 'PROPOSED' },
       });
 
       // Mock period and allocationPeriod for computeAllocationPeriods
@@ -1057,7 +1057,7 @@ describe('AllocationService', () => {
       });
 
       expect(result.id).toBe(allocationId);
-      expect(result.initiativeStatus).toBe('DRAFT');
+      expect(result.initiativeStatus).toBe('PROPOSED');
     });
 
     it('should allow create with null initiativeId (never locked)', async () => {
@@ -1126,7 +1126,7 @@ describe('AllocationService', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           employee: { id: '00000000-0000-0000-0000-000000000020', name: 'John Doe' },
-          initiative: { id: initiativeId, title: 'Initiative A', status: 'DRAFT' },
+          initiative: { id: initiativeId, title: 'Initiative A', status: 'PROPOSED' },
         },
       ]);
 
@@ -1134,7 +1134,7 @@ describe('AllocationService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].initiativeId).toBe(initiativeId);
-      expect(result[0].initiativeStatus).toBe('DRAFT');
+      expect(result[0].initiativeStatus).toBe('PROPOSED');
       expect(mockPrisma.allocation.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { scenarioId, initiativeId },
@@ -1164,7 +1164,7 @@ describe('AllocationService', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           scenario: { id: '00000000-0000-0000-0000-000000000050', name: 'Scenario A' },
-          initiative: { id: '00000000-0000-0000-0000-000000000010', title: 'Initiative X', status: 'IN_PROGRESS' },
+          initiative: { id: '00000000-0000-0000-0000-000000000010', title: 'Initiative X', status: 'IN_EXECUTION' },
         },
         {
           id: '00000000-0000-0000-0000-000000000002',
@@ -1177,7 +1177,7 @@ describe('AllocationService', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           scenario: { id: '00000000-0000-0000-0000-000000000051', name: 'Scenario B' },
-          initiative: { id: '00000000-0000-0000-0000-000000000011', title: 'Initiative Y', status: 'DRAFT' },
+          initiative: { id: '00000000-0000-0000-0000-000000000011', title: 'Initiative Y', status: 'PROPOSED' },
         },
       ]);
 
@@ -1186,7 +1186,7 @@ describe('AllocationService', () => {
       expect(result).toHaveLength(2);
       expect(result[0].scenarioName).toBe('Scenario A');
       expect(result[0].initiativeTitle).toBe('Initiative X');
-      expect(result[0].initiativeStatus).toBe('IN_PROGRESS');
+      expect(result[0].initiativeStatus).toBe('IN_EXECUTION');
       expect(result[1].scenarioName).toBe('Scenario B');
     });
   });

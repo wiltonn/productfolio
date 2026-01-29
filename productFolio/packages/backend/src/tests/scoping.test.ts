@@ -251,19 +251,19 @@ describe('ScopingService', () => {
   });
 
   describe('submitForApproval', () => {
-    it('should submit initiative for approval from DRAFT status', async () => {
-      const initiative = mockData.initiative({ status: 'DRAFT' });
-      const updated = { ...initiative, status: 'PENDING_APPROVAL' };
+    it('should submit initiative for scoping from PROPOSED status', async () => {
+      const initiative = mockData.initiative({ status: 'PROPOSED' });
+      const updated = { ...initiative, status: 'SCOPING' };
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
       vi.mocked(prisma.initiative.update).mockResolvedValue(updated as Initiative);
 
       const result = await service.submitForApproval(initiative.id, 'Test notes');
 
-      expect(result.status).toBe('PENDING_APPROVAL');
+      expect(result.status).toBe('SCOPING');
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         where: { id: initiative.id },
-        data: { status: 'PENDING_APPROVAL' },
+        data: { status: 'SCOPING' },
       });
     });
 
@@ -275,8 +275,8 @@ describe('ScopingService', () => {
       await expect(service.submitForApproval(id)).rejects.toThrow(NotFoundError);
     });
 
-    it('should throw WorkflowError if not in DRAFT status', async () => {
-      const initiative = mockData.initiative({ status: 'APPROVED' });
+    it('should throw WorkflowError if not in PROPOSED status', async () => {
+      const initiative = mockData.initiative({ status: 'RESOURCING' });
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
 
@@ -286,9 +286,9 @@ describe('ScopingService', () => {
 
   describe('approve', () => {
     it('should approve an initiative and create approval record', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
+      const initiative = mockData.initiative({ status: 'SCOPING' });
       const approverId = testUuid('100');
-      const updatedInitiative = { ...initiative, status: 'APPROVED' };
+      const updatedInitiative = { ...initiative, status: 'RESOURCING' };
       const approval = {
         id: testUuid('10'),
         initiativeId: initiative.id,
@@ -306,7 +306,7 @@ describe('ScopingService', () => {
 
       const result = await service.approve(initiative.id, approverId, 'Approved');
 
-      expect(result.initiative.status).toBe('APPROVED');
+      expect(result.initiative.status).toBe('RESOURCING');
       expect(result.approval.version).toBe(1);
       expect(prisma.approval.create).toHaveBeenCalledWith({
         data: {
@@ -319,7 +319,7 @@ describe('ScopingService', () => {
     });
 
     it('should increment version for subsequent approvals', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
+      const initiative = mockData.initiative({ status: 'SCOPING' });
       const approverId = testUuid('100');
       const lastApproval = {
         id: testUuid('9'),
@@ -335,7 +335,7 @@ describe('ScopingService', () => {
       vi.mocked(prisma.approval.findFirst).mockResolvedValue(lastApproval as Approval);
       vi.mocked(prisma.initiative.update).mockResolvedValue({
         ...initiative,
-        status: 'APPROVED',
+        status: 'RESOURCING',
       } as Initiative);
       vi.mocked(prisma.approval.create).mockResolvedValue({
         ...lastApproval,
@@ -359,7 +359,7 @@ describe('ScopingService', () => {
     });
 
     it('should throw NotFoundError if approver does not exist', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
+      const initiative = mockData.initiative({ status: 'SCOPING' });
       const approverId = testUuid('999');
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
@@ -368,8 +368,8 @@ describe('ScopingService', () => {
       await expect(service.approve(initiative.id, approverId)).rejects.toThrow(NotFoundError);
     });
 
-    it('should throw WorkflowError if not in PENDING_APPROVAL status', async () => {
-      const initiative = mockData.initiative({ status: 'DRAFT' });
+    it('should throw WorkflowError if not in SCOPING status', async () => {
+      const initiative = mockData.initiative({ status: 'PROPOSED' });
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
 
@@ -378,19 +378,19 @@ describe('ScopingService', () => {
   });
 
   describe('reject', () => {
-    it('should reject an initiative and change status back to DRAFT', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
-      const updated = { ...initiative, status: 'DRAFT' };
+    it('should reject an initiative and change status back to PROPOSED', async () => {
+      const initiative = mockData.initiative({ status: 'SCOPING' });
+      const updated = { ...initiative, status: 'PROPOSED' };
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
       vi.mocked(prisma.initiative.update).mockResolvedValue(updated as Initiative);
 
       const result = await service.reject(initiative.id, 'Needs revision');
 
-      expect(result.status).toBe('DRAFT');
+      expect(result.status).toBe('PROPOSED');
       expect(prisma.initiative.update).toHaveBeenCalledWith({
         where: { id: initiative.id },
-        data: { status: 'DRAFT' },
+        data: { status: 'PROPOSED' },
       });
     });
 
@@ -402,8 +402,8 @@ describe('ScopingService', () => {
       await expect(service.reject(id)).rejects.toThrow(NotFoundError);
     });
 
-    it('should throw WorkflowError if not in PENDING_APPROVAL status', async () => {
-      const initiative = mockData.initiative({ status: 'APPROVED' });
+    it('should throw WorkflowError if not in SCOPING status', async () => {
+      const initiative = mockData.initiative({ status: 'RESOURCING' });
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
 
@@ -601,8 +601,8 @@ describe('Scoping Routes', () => {
 
   describe('POST /api/initiatives/:id/submit-approval', () => {
     it('should submit initiative for approval', async () => {
-      const initiative = mockData.initiative({ status: 'DRAFT' });
-      const updated = { ...initiative, status: 'PENDING_APPROVAL' };
+      const initiative = mockData.initiative({ status: 'PROPOSED' });
+      const updated = { ...initiative, status: 'SCOPING' };
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
       vi.mocked(prisma.initiative.update).mockResolvedValue(updated as Initiative);
@@ -615,13 +615,13 @@ describe('Scoping Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = parseJsonResponse(response);
-      expect(body.status).toBe('PENDING_APPROVAL');
+      expect(body.status).toBe('SCOPING');
     });
   });
 
   describe('POST /api/initiatives/:id/approve', () => {
     it('should be registered and handle approve requests', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
+      const initiative = mockData.initiative({ status: 'SCOPING' });
       const approverId = testUuid('100');
 
       // Test that the route is properly registered by checking for common response codes
@@ -631,7 +631,7 @@ describe('Scoping Routes', () => {
       vi.mocked(prisma.approval.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.initiative.update).mockResolvedValue({
         ...initiative,
-        status: 'APPROVED',
+        status: 'RESOURCING',
       } as Initiative);
       vi.mocked(prisma.approval.create).mockResolvedValue({
         id: testUuid('1'),
@@ -655,8 +655,8 @@ describe('Scoping Routes', () => {
 
   describe('POST /api/initiatives/:id/reject', () => {
     it('should reject an initiative', async () => {
-      const initiative = mockData.initiative({ status: 'PENDING_APPROVAL' });
-      const updated = { ...initiative, status: 'DRAFT' };
+      const initiative = mockData.initiative({ status: 'SCOPING' });
+      const updated = { ...initiative, status: 'PROPOSED' };
 
       vi.mocked(prisma.initiative.findUnique).mockResolvedValue(initiative as Initiative);
       vi.mocked(prisma.initiative.update).mockResolvedValue(updated as Initiative);
@@ -669,7 +669,7 @@ describe('Scoping Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = parseJsonResponse(response);
-      expect(body.status).toBe('DRAFT');
+      expect(body.status).toBe('PROPOSED');
     });
   });
 

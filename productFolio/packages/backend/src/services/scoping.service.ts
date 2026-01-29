@@ -170,8 +170,8 @@ export class ScopingService {
   }
 
   /**
-   * Submit initiative for approval
-   * Can only submit from DRAFT status
+   * Submit initiative for scoping
+   * Can only submit from PROPOSED status
    */
   async submitForApproval(initiativeId: string, notes?: string): Promise<Initiative> {
     const initiative = await prisma.initiative.findUnique({
@@ -182,18 +182,18 @@ export class ScopingService {
       throw new NotFoundError('Initiative', initiativeId);
     }
 
-    if (initiative.status !== 'DRAFT') {
+    if (initiative.status !== 'PROPOSED') {
       throw new WorkflowError(
-        `Cannot submit for approval from ${initiative.status} status`,
+        `Cannot begin scoping from ${initiative.status} status`,
         initiative.status,
-        'PENDING_APPROVAL',
+        'SCOPING',
       );
     }
 
     const updated = await prisma.initiative.update({
       where: { id: initiativeId },
       data: {
-        status: 'PENDING_APPROVAL',
+        status: 'SCOPING',
       },
     });
 
@@ -201,8 +201,8 @@ export class ScopingService {
   }
 
   /**
-   * Approve an initiative
-   * Changes status to APPROVED and creates an Approval record with version
+   * Approve an initiative (advance from SCOPING to RESOURCING)
+   * Creates an Approval record with version
    */
   async approve(initiativeId: string, approverId: string, notes?: string): Promise<{
     initiative: Initiative;
@@ -216,11 +216,11 @@ export class ScopingService {
       throw new NotFoundError('Initiative', initiativeId);
     }
 
-    if (initiative.status !== 'PENDING_APPROVAL') {
+    if (initiative.status !== 'SCOPING') {
       throw new WorkflowError(
         `Cannot approve from ${initiative.status} status`,
         initiative.status,
-        'APPROVED',
+        'RESOURCING',
       );
     }
 
@@ -246,7 +246,7 @@ export class ScopingService {
       prisma.initiative.update({
         where: { id: initiativeId },
         data: {
-          status: 'APPROVED',
+          status: 'RESOURCING',
         },
       }),
       prisma.approval.create({
@@ -267,7 +267,7 @@ export class ScopingService {
 
   /**
    * Reject an initiative
-   * Changes status back to DRAFT
+   * Changes status back to PROPOSED
    */
   async reject(initiativeId: string, notes?: string): Promise<Initiative> {
     const initiative = await prisma.initiative.findUnique({
@@ -278,18 +278,18 @@ export class ScopingService {
       throw new NotFoundError('Initiative', initiativeId);
     }
 
-    if (initiative.status !== 'PENDING_APPROVAL') {
+    if (initiative.status !== 'SCOPING') {
       throw new WorkflowError(
         `Cannot reject from ${initiative.status} status`,
         initiative.status,
-        'DRAFT',
+        'PROPOSED',
       );
     }
 
     const updated = await prisma.initiative.update({
       where: { id: initiativeId },
       data: {
-        status: 'DRAFT',
+        status: 'PROPOSED',
       },
     });
 

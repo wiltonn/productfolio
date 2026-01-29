@@ -1,28 +1,36 @@
 import { z } from 'zod';
-import { InitiativeStatus } from '@prisma/client';
+import { InitiativeStatus, DeliveryHealth } from '@prisma/client';
 
-// Valid status transitions
+// Valid status transitions (milestone flow)
 const STATUS_TRANSITIONS: Record<InitiativeStatus, InitiativeStatus[]> = {
-  [InitiativeStatus.DRAFT]: [InitiativeStatus.PENDING_APPROVAL],
-  [InitiativeStatus.PENDING_APPROVAL]: [
-    InitiativeStatus.APPROVED,
-    InitiativeStatus.CANCELLED,
-  ],
-  [InitiativeStatus.APPROVED]: [
-    InitiativeStatus.IN_PROGRESS,
+  [InitiativeStatus.PROPOSED]: [
+    InitiativeStatus.SCOPING,
     InitiativeStatus.ON_HOLD,
     InitiativeStatus.CANCELLED,
   ],
-  [InitiativeStatus.IN_PROGRESS]: [
-    InitiativeStatus.COMPLETED,
+  [InitiativeStatus.SCOPING]: [
+    InitiativeStatus.RESOURCING,
+    InitiativeStatus.ON_HOLD,
+    InitiativeStatus.CANCELLED,
+  ],
+  [InitiativeStatus.RESOURCING]: [
+    InitiativeStatus.IN_EXECUTION,
+    InitiativeStatus.ON_HOLD,
+    InitiativeStatus.CANCELLED,
+  ],
+  [InitiativeStatus.IN_EXECUTION]: [
+    InitiativeStatus.COMPLETE,
     InitiativeStatus.ON_HOLD,
     InitiativeStatus.CANCELLED,
   ],
   [InitiativeStatus.ON_HOLD]: [
-    InitiativeStatus.IN_PROGRESS,
+    InitiativeStatus.PROPOSED,
+    InitiativeStatus.SCOPING,
+    InitiativeStatus.RESOURCING,
+    InitiativeStatus.IN_EXECUTION,
     InitiativeStatus.CANCELLED,
   ],
-  [InitiativeStatus.COMPLETED]: [],
+  [InitiativeStatus.COMPLETE]: [],
   [InitiativeStatus.CANCELLED]: [],
 };
 
@@ -38,6 +46,13 @@ const customFieldsSchema = z
   .nullable()
   .optional()
   .describe('Custom fields as JSON object');
+
+// Target quarter validation (e.g., "2026-Q1")
+const targetQuarterSchema = z
+  .string()
+  .regex(/^\d{4}-Q[1-4]$/, 'Must be in format YYYY-QN (e.g., 2026-Q1)')
+  .nullable()
+  .optional();
 
 /**
  * Schema for creating a new initiative
@@ -56,9 +71,10 @@ export const CreateInitiativeSchema = z.object({
   productOwnerId: uuidSchema,
   status: z
     .nativeEnum(InitiativeStatus)
-    .default(InitiativeStatus.DRAFT)
+    .default(InitiativeStatus.PROPOSED)
     .optional(),
-  targetPeriodId: uuidSchema.optional().nullable(),
+  targetQuarter: targetQuarterSchema,
+  deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
 });
 
@@ -80,7 +96,8 @@ export const UpdateInitiativeSchema = z.object({
     .nullable(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetPeriodId: uuidSchema.optional().nullable(),
+  targetQuarter: targetQuarterSchema,
+  deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
 });
 
@@ -93,7 +110,8 @@ export const InitiativeFiltersSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetPeriodId: uuidSchema.optional().nullable(),
+  targetQuarter: z.string().optional(),
+  deliveryHealth: z.nativeEnum(DeliveryHealth).optional(),
   search: z
     .string()
     .max(255, 'Search term must be 255 characters or less')
@@ -117,12 +135,7 @@ export type InitiativeFiltersInput = z.infer<typeof InitiativeFiltersSchema>;
  * Schema for status transitions
  */
 export const StatusTransitionSchema = z.object({
-  newStatus: z
-    .nativeEnum(InitiativeStatus)
-    .refine(
-      (status) => status !== InitiativeStatus.DRAFT,
-      'Cannot transition to DRAFT status'
-    ),
+  newStatus: z.nativeEnum(InitiativeStatus),
 });
 
 export type StatusTransitionInput = z.infer<typeof StatusTransitionSchema>;
@@ -181,9 +194,10 @@ export const CsvRowSchema = z.object({
   productOwnerId: uuidSchema,
   status: z
     .nativeEnum(InitiativeStatus)
-    .default(InitiativeStatus.DRAFT)
+    .default(InitiativeStatus.PROPOSED)
     .optional(),
-  targetPeriodId: uuidSchema.optional().nullable(),
+  targetQuarter: targetQuarterSchema,
+  deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
 });
 
 export type CsvRowInput = z.infer<typeof CsvRowSchema>;
@@ -206,7 +220,8 @@ export const CsvExportSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
-  targetPeriodId: uuidSchema.optional().nullable(),
+  targetQuarter: z.string().optional(),
+  deliveryHealth: z.nativeEnum(DeliveryHealth).optional(),
   search: z.string().optional(),
 });
 

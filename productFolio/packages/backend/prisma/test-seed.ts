@@ -33,7 +33,7 @@ async function main() {
       email: 'planner@productfolio.test',
       name: 'Test Planner',
       passwordHash: await argon2.hash('Planner123!'),
-      role: UserRole.PLANNER,
+      role: UserRole.PRODUCT_OWNER,
     },
   });
   console.log('✓ Created planner user');
@@ -57,11 +57,16 @@ async function main() {
     await prisma.employee.create({
       data: {
         name: 'Alice Johnson',
-        email: 'alice@productfolio.test',
         role: 'Senior Frontend Engineer',
         employmentType: EmploymentType.FULL_TIME,
         hoursPerWeek: 40,
-        skills: { frontend: 5, react: 5, typescript: 4 },
+        skills: {
+          create: [
+            { name: 'frontend', proficiency: 5 },
+            { name: 'react', proficiency: 5 },
+            { name: 'typescript', proficiency: 4 },
+          ],
+        },
       },
     })
   );
@@ -70,11 +75,16 @@ async function main() {
     await prisma.employee.create({
       data: {
         name: 'Bob Smith',
-        email: 'bob@productfolio.test',
         role: 'Backend Engineer',
         employmentType: EmploymentType.FULL_TIME,
         hoursPerWeek: 40,
-        skills: { backend: 5, nodejs: 4, python: 3 },
+        skills: {
+          create: [
+            { name: 'backend', proficiency: 5 },
+            { name: 'nodejs', proficiency: 4 },
+            { name: 'python', proficiency: 3 },
+          ],
+        },
       },
     })
   );
@@ -83,11 +93,16 @@ async function main() {
     await prisma.employee.create({
       data: {
         name: 'Carol Davis',
-        email: 'carol@productfolio.test',
         role: 'Full Stack Engineer',
         employmentType: EmploymentType.FULL_TIME,
         hoursPerWeek: 40,
-        skills: { frontend: 4, backend: 4, devops: 3 },
+        skills: {
+          create: [
+            { name: 'frontend', proficiency: 4 },
+            { name: 'backend', proficiency: 4 },
+            { name: 'devops', proficiency: 3 },
+          ],
+        },
       },
     })
   );
@@ -96,11 +111,16 @@ async function main() {
     await prisma.employee.create({
       data: {
         name: 'David Lee',
-        email: 'david@productfolio.test',
         role: 'Product Designer',
         employmentType: EmploymentType.FULL_TIME,
         hoursPerWeek: 40,
-        skills: { design: 5, ux: 5, frontend: 2 },
+        skills: {
+          create: [
+            { name: 'design', proficiency: 5 },
+            { name: 'ux', proficiency: 5 },
+            { name: 'frontend', proficiency: 2 },
+          ],
+        },
       },
     })
   );
@@ -109,11 +129,16 @@ async function main() {
     await prisma.employee.create({
       data: {
         name: 'Eve Martinez',
-        email: 'eve@productfolio.test',
         role: 'DevOps Engineer',
         employmentType: EmploymentType.CONTRACTOR,
         hoursPerWeek: 32,
-        skills: { devops: 5, infrastructure: 4, security: 3 },
+        skills: {
+          create: [
+            { name: 'devops', proficiency: 5 },
+            { name: 'infrastructure', proficiency: 4 },
+            { name: 'security', proficiency: 3 },
+          ],
+        },
       },
     })
   );
@@ -128,8 +153,8 @@ async function main() {
       data: {
         title: 'Customer Portal Redesign',
         description: 'Modernize the customer portal with improved UX and performance',
-        status: InitiativeStatus.IN_PROGRESS,
-        targetQuarter: '2024-Q2',
+        status: InitiativeStatus.IN_EXECUTION,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -145,8 +170,8 @@ async function main() {
       data: {
         title: 'API Gateway Migration',
         description: 'Migrate from legacy gateway to modern API infrastructure',
-        status: InitiativeStatus.APPROVED,
-        targetQuarter: '2024-Q2',
+        status: InitiativeStatus.RESOURCING,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -162,8 +187,8 @@ async function main() {
       data: {
         title: 'Mobile App v2',
         description: 'Build next generation mobile app with offline support',
-        status: InitiativeStatus.PENDING_APPROVAL,
-        targetQuarter: '2024-Q3',
+        status: InitiativeStatus.SCOPING,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -179,8 +204,8 @@ async function main() {
       data: {
         title: 'Analytics Dashboard',
         description: 'Real-time analytics dashboard for business intelligence',
-        status: InitiativeStatus.DRAFT,
-        targetQuarter: '2024-Q3',
+        status: InitiativeStatus.PROPOSED,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -196,8 +221,8 @@ async function main() {
       data: {
         title: 'Security Audit Implementation',
         description: 'Implement recommendations from security audit',
-        status: InitiativeStatus.APPROVED,
-        targetQuarter: '2024-Q2',
+        status: InitiativeStatus.RESOURCING,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -213,8 +238,8 @@ async function main() {
       data: {
         title: 'Performance Optimization',
         description: 'Improve application performance and reduce load times',
-        status: InitiativeStatus.COMPLETED,
-        targetQuarter: '2024-Q1',
+        status: InitiativeStatus.COMPLETE,
+        // targetQuarter removed — DB uses target_period_id
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         customFields: {
@@ -236,9 +261,6 @@ async function main() {
       skillDemand: { design: 2, frontend: 3 },
       estimateP50: 160,
       estimateP90: 200,
-      quarterDistribution: { '2024-Q2': 1.0 },
-      approvalStatus: 'APPROVED',
-      version: 1,
     },
   });
 
@@ -250,9 +272,6 @@ async function main() {
       skillDemand: { frontend: 4 },
       estimateP50: 120,
       estimateP90: 160,
-      quarterDistribution: { '2024-Q2': 1.0 },
-      approvalStatus: 'APPROVED',
-      version: 1,
     },
   });
 
@@ -264,9 +283,6 @@ async function main() {
       skillDemand: { backend: 3, devops: 2 },
       estimateP50: 200,
       estimateP90: 280,
-      quarterDistribution: { '2024-Q2': 0.7, '2024-Q3': 0.3 },
-      approvalStatus: 'APPROVED',
-      version: 1,
     },
   });
 
@@ -276,7 +292,6 @@ async function main() {
   const scenario = await prisma.scenario.create({
     data: {
       name: 'Q2 2024 Planning',
-      quarterRange: '2024-Q2:2024-Q3',
       assumptions: {
         averageVelocity: 40,
         bufferPercentage: 20,

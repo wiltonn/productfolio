@@ -3,6 +3,8 @@ export { MultiSelect, type SelectOption } from './MultiSelect';
 export { Select } from './Select';
 export { Checkbox } from './Checkbox';
 export { StatusBadge } from './StatusBadge';
+export { DeliveryHealthBadge } from './DeliveryHealthBadge';
+export { ProgressBar } from './ProgressBar';
 export { Tag } from './Tag';
 export { SearchInput } from './SearchInput';
 export { BulkActionsBar } from './BulkActionsBar';
