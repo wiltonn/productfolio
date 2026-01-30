@@ -10,6 +10,8 @@ import type {
   EmployeeFiltersInput,
   CreateSkillInput,
   UpdateSkillInput,
+  CreateDomainInput,
+  UpdateDomainInput,
 } from '../schemas/resources.schema.js';
 
 // ============================================================================
@@ -62,8 +64,13 @@ export async function listEmployees(
             name: true,
           },
         },
+        domains: {
+          select: {
+            name: true,
+          },
+        },
         _count: {
-          select: { skills: true, allocations: true },
+          select: { skills: true, domains: true, allocations: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -80,6 +87,7 @@ export async function listEmployees(
     department: null, // Not in schema
     managerId: emp.managerId,
     skills: emp.skills.map(s => s.name),
+    domains: emp.domains.map(d => d.name),
     defaultCapacityHours: emp.hoursPerWeek,
     createdAt: emp.createdAt.toISOString(),
     updatedAt: emp.updatedAt.toISOString(),
@@ -112,6 +120,7 @@ export async function getEmployeeById(id: string) {
         },
       },
       skills: true,
+      domains: true,
       _count: {
         select: { allocations: true },
       },
@@ -351,4 +360,121 @@ export async function removeSkill(
   });
 
   return { id: skillId };
+}
+
+// ============================================================================
+// Domain Service Methods
+// ============================================================================
+
+export async function getEmployeeDomains(employeeId: string) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new NotFoundError('Employee', employeeId);
+  }
+
+  const domains = await prisma.domain.findMany({
+    where: { employeeId },
+    orderBy: { name: 'asc' },
+  });
+
+  return domains;
+}
+
+export async function addDomain(
+  employeeId: string,
+  data: CreateDomainInput
+) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new NotFoundError('Employee', employeeId);
+  }
+
+  const existingDomain = await prisma.domain.findUnique({
+    where: {
+      employeeId_name: {
+        employeeId,
+        name: data.name,
+      },
+    },
+  });
+
+  if (existingDomain) {
+    throw new ConflictError(
+      `Domain "${data.name}" already exists for this employee`
+    );
+  }
+
+  const domain = await prisma.domain.create({
+    data: {
+      name: data.name,
+      proficiency: data.proficiency,
+      employeeId,
+    },
+  });
+
+  return domain;
+}
+
+export async function updateDomain(
+  employeeId: string,
+  domainId: string,
+  data: UpdateDomainInput
+) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new NotFoundError('Employee', employeeId);
+  }
+
+  const domain = await prisma.domain.findUnique({
+    where: { id: domainId },
+  });
+
+  if (!domain || domain.employeeId !== employeeId) {
+    throw new NotFoundError('Domain', domainId);
+  }
+
+  const updated = await prisma.domain.update({
+    where: { id: domainId },
+    data: {
+      proficiency: data.proficiency,
+    },
+  });
+
+  return updated;
+}
+
+export async function removeDomain(
+  employeeId: string,
+  domainId: string
+) {
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new NotFoundError('Employee', employeeId);
+  }
+
+  const domain = await prisma.domain.findUnique({
+    where: { id: domainId },
+  });
+
+  if (!domain || domain.employeeId !== employeeId) {
+    throw new NotFoundError('Domain', domainId);
+  }
+
+  await prisma.domain.delete({
+    where: { id: domainId },
+  });
+
+  return { id: domainId };
 }

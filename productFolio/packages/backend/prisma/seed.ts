@@ -67,16 +67,16 @@ async function main() {
     console.log('Creating employees...');
 
     const employeesData = [
-      { name: 'Sarah Chen', role: 'Senior Frontend Engineer', skills: ['Frontend', 'React', 'TypeScript'], hoursPerWeek: 40 },
-      { name: 'Mike Johnson', role: 'Backend Engineer', skills: ['Backend', 'Go', 'PostgreSQL'], hoursPerWeek: 40 },
-      { name: 'Alex Rivera', role: 'Full Stack Developer', skills: ['Frontend', 'Backend', 'React', 'Python'], hoursPerWeek: 40 },
-      { name: 'Emily Watson', role: 'Data Engineer', skills: ['Data', 'Python', 'PostgreSQL', 'AWS'], hoursPerWeek: 40 },
-      { name: 'Priya Patel', role: 'DevOps Engineer', skills: ['DevOps', 'AWS', 'Docker', 'Kubernetes'], hoursPerWeek: 40 },
-      { name: 'James Lee', role: 'Senior Backend Engineer', skills: ['Backend', 'Go', 'Redis', 'PostgreSQL'], hoursPerWeek: 40 },
-      { name: 'Maria Garcia', role: 'UX Designer', skills: ['Design', 'Figma', 'Research'], hoursPerWeek: 40 },
-      { name: 'David Kim', role: 'Frontend Engineer', skills: ['Frontend', 'React', 'TypeScript', 'CSS'], hoursPerWeek: 40 },
-      { name: 'Lisa Thompson', role: 'Product Manager', skills: ['Product', 'Strategy', 'Analytics'], hoursPerWeek: 40 },
-      { name: 'Ryan Martinez', role: 'Security Engineer', skills: ['Security', 'Backend', 'DevOps'], hoursPerWeek: 32 },
+      { name: 'Sarah Chen', role: 'Senior Frontend Engineer', skills: ['Frontend', 'React', 'TypeScript'], domains: ['E-Commerce', 'Customer Portal'], hoursPerWeek: 40 },
+      { name: 'Mike Johnson', role: 'Backend Engineer', skills: ['Backend', 'Go', 'PostgreSQL'], domains: ['Payments', 'Infrastructure'], hoursPerWeek: 40 },
+      { name: 'Alex Rivera', role: 'Full Stack Developer', skills: ['Frontend', 'Backend', 'React', 'Python'], domains: ['E-Commerce', 'Analytics'], hoursPerWeek: 40 },
+      { name: 'Emily Watson', role: 'Data Engineer', skills: ['Data', 'Python', 'PostgreSQL', 'AWS'], domains: ['Analytics', 'Data Platform'], hoursPerWeek: 40 },
+      { name: 'Priya Patel', role: 'DevOps Engineer', skills: ['DevOps', 'AWS', 'Docker', 'Kubernetes'], domains: ['Infrastructure', 'CI/CD'], hoursPerWeek: 40 },
+      { name: 'James Lee', role: 'Senior Backend Engineer', skills: ['Backend', 'Go', 'Redis', 'PostgreSQL'], domains: ['Payments', 'Search'], hoursPerWeek: 40 },
+      { name: 'Maria Garcia', role: 'UX Designer', skills: ['Design', 'Figma', 'Research'], domains: ['Customer Portal', 'Design Systems'], hoursPerWeek: 40 },
+      { name: 'David Kim', role: 'Frontend Engineer', skills: ['Frontend', 'React', 'TypeScript', 'CSS'], domains: ['E-Commerce', 'Design Systems'], hoursPerWeek: 40 },
+      { name: 'Lisa Thompson', role: 'Product Manager', skills: ['Product', 'Strategy', 'Analytics'], domains: ['Strategy', 'Customer Portal'], hoursPerWeek: 40 },
+      { name: 'Ryan Martinez', role: 'Security Engineer', skills: ['Security', 'Backend', 'DevOps'], domains: ['Security', 'Infrastructure'], hoursPerWeek: 32 },
     ];
 
     for (const empData of employeesData) {
@@ -96,6 +96,17 @@ async function main() {
           data: {
             employeeId: employee.id,
             name: empData.skills[i],
+            proficiency: 3 + Math.floor(Math.random() * 2), // 3-4 proficiency
+          },
+        });
+      }
+
+      // Create domains for the employee
+      for (let i = 0; i < empData.domains.length; i++) {
+        await prisma.domain.create({
+          data: {
+            employeeId: employee.id,
+            name: empData.domains[i],
             proficiency: 3 + Math.floor(Math.random() * 2), // 3-4 proficiency
           },
         });

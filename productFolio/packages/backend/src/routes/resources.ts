@@ -5,6 +5,8 @@ import {
   EmployeeFiltersSchema,
   CreateSkillSchema,
   UpdateSkillSchema,
+  CreateDomainSchema,
+  UpdateDomainSchema,
   UpdateCapacitySchema,
   AvailabilityQuerySchema,
   AllocationSummariesQuerySchema,
@@ -147,6 +149,54 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, skillId } = request.params as { id: string; skillId: string };
       const result = await resourcesService.removeSkill(id, skillId);
+      return reply.status(200).send(result);
+    }
+  );
+
+  // =========================================================================
+  // Domain Routes
+  // =========================================================================
+
+  // GET /api/employees/:id/domains - Get domains
+  fastify.get<{ Params: { id: string } }>(
+    '/api/employees/:id/domains',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const domains = await resourcesService.getEmployeeDomains(id);
+      return reply.status(200).send({ domains });
+    }
+  );
+
+  // POST /api/employees/:id/domains - Add domain
+  fastify.post<{ Params: { id: string } }>(
+    '/api/employees/:id/domains',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const data = CreateDomainSchema.parse(request.body);
+      const domain = await resourcesService.addDomain(id, data);
+      return reply.status(201).send(domain);
+    }
+  );
+
+  // PUT /api/employees/:id/domains/:domainId - Update domain
+  fastify.put<{
+    Params: { id: string; domainId: string };
+  }>(
+    '/api/employees/:id/domains/:domainId',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, domainId } = request.params as { id: string; domainId: string };
+      const data = UpdateDomainSchema.parse(request.body);
+      const domain = await resourcesService.updateDomain(id, domainId, data);
+      return reply.status(200).send(domain);
+    }
+  );
+
+  // DELETE /api/employees/:id/domains/:domainId - Remove domain
+  fastify.delete<{ Params: { id: string; domainId: string } }>(
+    '/api/employees/:id/domains/:domainId',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, domainId } = request.params as { id: string; domainId: string };
+      const result = await resourcesService.removeDomain(id, domainId);
       return reply.status(200).send(result);
     }
   );

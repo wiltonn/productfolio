@@ -241,6 +241,7 @@ model Employee {
   activeStartPeriod  Period?            @relation("ActiveStartPeriod", fields: [activeStartPeriodId], references: [id])
   activeEndPeriod    Period?            @relation("ActiveEndPeriod", fields: [activeEndPeriodId], references: [id])
   skills             Skill[]
+  domains            Domain[]
   capacityCalendar   CapacityCalendar[]
   allocations        Allocation[]
 
@@ -250,6 +251,23 @@ model Employee {
 }
 
 model Skill {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String
+  employeeId  String @db.Uuid
+  proficiency Int    @default(3) // 1-5 scale
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, name])
+  @@index([name])
+  @@index([proficiency])
+}
+
+model Domain {
   id          String @id @default(uuid()) @db.Uuid
   name        String
   employeeId  String @db.Uuid

@@ -10,7 +10,17 @@ export interface Employee {
   department: string | null;
   managerId: string | null;
   skills: string[];
+  domains: string[];
   defaultCapacityHours: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Domain {
+  id: string;
+  employeeId: string;
+  name: string;
+  proficiency: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,6 +123,7 @@ export const employeeKeys = {
   details: () => [...employeeKeys.all, 'detail'] as const,
   detail: (id: string) => [...employeeKeys.details(), id] as const,
   skills: (id: string) => [...employeeKeys.detail(id), 'skills'] as const,
+  domains: (id: string) => [...employeeKeys.detail(id), 'domains'] as const,
   capacity: (id: string) => [...employeeKeys.detail(id), 'capacity'] as const,
   allocations: (id: string) => [...employeeKeys.detail(id), 'allocations'] as const,
   availability: (id: string, startDate: string, endDate: string) =>
@@ -269,6 +280,79 @@ export function useRemoveSkill() {
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to remove skill');
+    },
+  });
+}
+
+// Domain hooks
+export function useEmployeeDomains(employeeId: string) {
+  return useQuery({
+    queryKey: employeeKeys.domains(employeeId),
+    queryFn: () => api.get<{ domains: Domain[] }>(`/employees/${employeeId}/domains`),
+    enabled: !!employeeId,
+  });
+}
+
+export function useAddDomain() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      data,
+    }: {
+      employeeId: string;
+      data: { name: string; proficiency?: number };
+    }) => api.post<Domain>(`/employees/${employeeId}/domains`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: employeeKeys.domains(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.detail(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
+      toast.success('Domain added successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to add domain');
+    },
+  });
+}
+
+export function useUpdateDomain() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      domainId,
+      data,
+    }: {
+      employeeId: string;
+      domainId: string;
+      data: { proficiency: number };
+    }) => api.put<Domain>(`/employees/${employeeId}/domains/${domainId}`, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: employeeKeys.domains(variables.employeeId) });
+      toast.success('Domain updated successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update domain');
+    },
+  });
+}
+
+export function useRemoveDomain() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ employeeId, domainId }: { employeeId: string; domainId: string }) =>
+      api.delete(`/employees/${employeeId}/domains/${domainId}`),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: employeeKeys.domains(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.detail(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: employeeKeys.lists() });
+      toast.success('Domain removed successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to remove domain');
     },
   });
 }

@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { SearchInput, Checkbox, StatusBadge } from '../components/ui';
 import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocations, useEmployeeAllocationSummaries, Employee } from '../hooks/useEmployees';
 import type { EmployeeAllocation, QuarterAllocationSummary } from '../hooks/useEmployees';
+import { api } from '../api/client';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -32,6 +34,11 @@ interface Skill {
   proficiency: number; // 1-5
 }
 
+interface Domain {
+  name: string;
+  proficiency: number; // 1-5
+}
+
 interface CapacityEmployee {
   id: string;
   name: string;
@@ -39,6 +46,7 @@ interface CapacityEmployee {
   role: string;
   department: string;
   skills: Skill[];
+  domains: Domain[];
   hoursPerWeek: number;
   status: 'ACTIVE' | 'ON_LEAVE' | 'CONTRACTOR';
   avatarColor: string;
@@ -63,6 +71,11 @@ const SKILL_OPTIONS = [
   'PostgreSQL', 'Redis', 'AWS', 'DevOps', 'Design', 'Data', 'ML/AI'
 ];
 
+const DOMAIN_OPTIONS = [
+  'E-Commerce', 'Payments', 'Analytics', 'Infrastructure', 'Customer Portal',
+  'Search', 'Security', 'Data Platform', 'CI/CD', 'Design Systems', 'Strategy'
+];
+
 const AVATAR_COLORS = [
   'from-rose-400 to-rose-600',
   'from-amber-400 to-amber-600',
@@ -80,7 +93,8 @@ function mapEmployeeToCapacity(employee: Employee, index: number): CapacityEmplo
     email: employee.email,
     role: employee.title || 'Team Member',
     department: employee.department || 'Engineering',
-    skills: employee.skills.map(s => ({ name: s, proficiency: 3 })), // Default proficiency
+    skills: employee.skills.map(s => ({ name: s, proficiency: 3 })),
+    domains: (employee.domains || []).map(d => ({ name: d, proficiency: 3 })),
     hoursPerWeek: employee.defaultCapacityHours,
     status: 'ACTIVE',
     avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
@@ -277,10 +291,12 @@ function EmployeeForm({
     hoursPerWeek: employee?.hoursPerWeek || 40,
     status: employee?.status || 'ACTIVE',
     skills: employee?.skills || [],
+    domains: employee?.domains || [],
     ptoHours: employee?.ptoHours || 0,
   });
 
   const [newSkill, setNewSkill] = useState('');
+  const [newDomain, setNewDomain] = useState('');
 
   const addSkill = (skillName: string) => {
     if (skillName && !formData.skills?.find(s => s.name === skillName)) {
@@ -304,6 +320,32 @@ function EmployeeForm({
       ...prev,
       skills: prev.skills?.map(s =>
         s.name === skillName ? { ...s, proficiency } : s
+      ) || []
+    }));
+  };
+
+  const addDomain = (domainName: string) => {
+    if (domainName && !formData.domains?.find(d => d.name === domainName)) {
+      setFormData(prev => ({
+        ...prev,
+        domains: [...(prev.domains || []), { name: domainName, proficiency: 3 }]
+      }));
+    }
+    setNewDomain('');
+  };
+
+  const removeDomain = (domainName: string) => {
+    setFormData(prev => ({
+      ...prev,
+      domains: prev.domains?.filter(d => d.name !== domainName) || []
+    }));
+  };
+
+  const updateDomainProficiency = (domainName: string, proficiency: number) => {
+    setFormData(prev => ({
+      ...prev,
+      domains: prev.domains?.map(d =>
+        d.name === domainName ? { ...d, proficiency } : d
       ) || []
     }));
   };
@@ -389,7 +431,7 @@ function EmployeeForm({
 
       {/* Skills */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Skills & Proficiency</h3>
+        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Technology</h3>
 
         {/* Add Skill */}
         <div className="flex gap-2">
@@ -451,6 +493,82 @@ function EmployeeForm({
                 <button
                   type="button"
                   onClick={() => removeSkill(skill.name)}
+                  className="p-1 rounded text-surface-400 hover:text-danger hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Domains */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Domain</h3>
+
+        {/* Add Domain */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addDomain(newDomain)}
+              className="input"
+              placeholder="Add a domain..."
+              list="domain-suggestions"
+            />
+            <datalist id="domain-suggestions">
+              {DOMAIN_OPTIONS.filter(d => !formData.domains?.find(fd => fd.name === d)).map(domain => (
+                <option key={domain} value={domain} />
+              ))}
+            </datalist>
+          </div>
+          <button
+            type="button"
+            onClick={() => addDomain(newDomain)}
+            className="btn-secondary"
+          >
+            Add
+          </button>
+        </div>
+
+        {/* Quick Add */}
+        <div className="flex flex-wrap gap-1.5">
+          {DOMAIN_OPTIONS.filter(d => !formData.domains?.find(fd => fd.name === d)).slice(0, 6).map(domain => (
+            <button
+              key={domain}
+              type="button"
+              onClick={() => addDomain(domain)}
+              className="px-2 py-1 text-xs font-medium text-surface-600 bg-surface-100 rounded-md hover:bg-surface-200 transition-colors"
+            >
+              + {domain}
+            </button>
+          ))}
+        </div>
+
+        {/* Domains List */}
+        {formData.domains && formData.domains.length > 0 && (
+          <div className="space-y-3 pt-2">
+            {formData.domains.map(domain => (
+              <div
+                key={domain.name}
+                className="flex items-center justify-between p-3 bg-surface-50 rounded-lg group"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-medium text-surface-800">{domain.name}</span>
+                  <StarRating
+                    value={domain.proficiency}
+                    onChange={(v) => updateDomainProficiency(domain.name, v)}
+                    size="sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeDomain(domain.name)}
                   className="p-1 rounded text-surface-400 hover:text-danger hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -881,6 +999,7 @@ export function Capacity() {
   const { data: employeesData, isLoading } = useEmployees({ limit: 100 });
   const createEmployee = useCreateEmployee();
   const updateEmployee = useUpdateEmployee();
+  const queryClient = useQueryClient();
 
   // State
   const [employees, setEmployees] = useState<CapacityEmployee[]>([]);
@@ -954,7 +1073,8 @@ export function Capacity() {
       e.name.toLowerCase().includes(lower) ||
       e.role.toLowerCase().includes(lower) ||
       e.department.toLowerCase().includes(lower) ||
-      e.skills.some(s => s.name.toLowerCase().includes(lower))
+      e.skills.some(s => s.name.toLowerCase().includes(lower)) ||
+      e.domains.some(d => d.name.toLowerCase().includes(lower))
     );
   }, [employees, search]);
 
@@ -979,7 +1099,7 @@ export function Capacity() {
     });
   }, []);
 
-  const handleSaveEmployee = useCallback((data: Partial<CapacityEmployee>) => {
+  const handleSaveEmployee = useCallback(async (data: Partial<CapacityEmployee>) => {
     // Map frontend fields to backend API fields
     const apiData = {
       name: data.name || '',
@@ -988,18 +1108,65 @@ export function Capacity() {
       employmentType: data.status === 'CONTRACTOR' ? 'CONTRACTOR' as const : 'FULL_TIME' as const,
     };
 
-    if (slideOverEmployee === 'new') {
-      // Create new employee via API
-      createEmployee.mutate(apiData);
-    } else if (slideOverEmployee) {
-      // Update existing employee via API
-      updateEmployee.mutate({
-        id: slideOverEmployee.id,
-        data: apiData,
-      });
+    try {
+      let employeeId: string | undefined;
+
+      if (slideOverEmployee === 'new') {
+        const result = await createEmployee.mutateAsync(apiData);
+        employeeId = result.id;
+      } else if (slideOverEmployee) {
+        await updateEmployee.mutateAsync({
+          id: slideOverEmployee.id,
+          data: apiData,
+        });
+        employeeId = slideOverEmployee.id;
+      }
+
+      // Sync domains
+      if (employeeId && data.domains) {
+        const { domains: currentDomains } = await api.get<{
+          domains: Array<{ id: string; name: string; proficiency: number }>;
+        }>(`/employees/${employeeId}/domains`);
+
+        const formDomains = data.domains;
+        const formDomainNames = new Set(formDomains.map(d => d.name));
+        const currentDomainMap = new Map(currentDomains.map(d => [d.name, d]));
+
+        // Add new domains
+        for (const fd of formDomains) {
+          if (!currentDomainMap.has(fd.name)) {
+            await api.post(`/employees/${employeeId}/domains`, {
+              name: fd.name,
+              proficiency: fd.proficiency,
+            });
+          }
+        }
+
+        // Remove deleted domains
+        for (const cd of currentDomains) {
+          if (!formDomainNames.has(cd.name)) {
+            await api.delete(`/employees/${employeeId}/domains/${cd.id}`);
+          }
+        }
+
+        // Update proficiency changes
+        for (const fd of formDomains) {
+          const current = currentDomainMap.get(fd.name);
+          if (current && current.proficiency !== fd.proficiency) {
+            await api.put(`/employees/${employeeId}/domains/${current.id}`, {
+              proficiency: fd.proficiency,
+            });
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['employees'] });
+      }
+    } catch {
+      // Errors already handled by mutation hooks' onError callbacks
     }
+
     setSlideOverEmployee(null);
-  }, [slideOverEmployee, createEmployee, updateEmployee]);
+  }, [slideOverEmployee, createEmployee, updateEmployee, queryClient]);
 
   const handleAddHoliday = useCallback(() => {
     if (!newHolidayDate) return;
@@ -1096,6 +1263,7 @@ export function Capacity() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Name</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Skills</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Domain</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Hours/Week</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.currentLabel}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.nextLabel}</th>
@@ -1135,14 +1303,27 @@ export function Capacity() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap max-w-[200px]">
-                          {employee.skills.slice(0, 3).map(skill => (
+                          {employee.skills.slice(0, 2).map(skill => (
                             <span key={skill.name} className="badge-default flex items-center gap-1">
                               {skill.name}
                               <span className="text-amber-500">{'★'.repeat(skill.proficiency)}</span>
                             </span>
                           ))}
-                          {employee.skills.length > 3 && (
-                            <span className="text-xs text-surface-500">+{employee.skills.length - 3}</span>
+                          {employee.skills.length > 2 && (
+                            <span className="text-xs text-surface-500">+{employee.skills.length - 2}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap max-w-[200px]">
+                          {employee.domains.slice(0, 2).map(domain => (
+                            <span key={domain.name} className="badge-default flex items-center gap-1">
+                              {domain.name}
+                              <span className="text-amber-500">{'★'.repeat(domain.proficiency)}</span>
+                            </span>
+                          ))}
+                          {employee.domains.length > 2 && (
+                            <span className="text-xs text-surface-500">+{employee.domains.length - 2}</span>
                           )}
                         </div>
                       </td>

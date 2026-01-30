@@ -74,6 +74,33 @@ export const UpdateSkillSchema = z.object({
 export type UpdateSkillInput = z.infer<typeof UpdateSkillSchema>;
 
 // ============================================================================
+// Domain Schemas
+// ============================================================================
+
+export const CreateDomainSchema = z.object({
+  name: z.string().min(1, 'Domain name is required').max(255),
+  proficiency: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .default(3),
+});
+
+export type CreateDomainInput = z.infer<typeof CreateDomainSchema>;
+
+export const UpdateDomainSchema = z.object({
+  proficiency: z
+    .number()
+    .int()
+    .min(1, 'Proficiency must be between 1 and 5')
+    .max(5, 'Proficiency must be between 1 and 5'),
+});
+
+export type UpdateDomainInput = z.infer<typeof UpdateDomainSchema>;
+
+// ============================================================================
 // Capacity Schemas
 // ============================================================================
 
