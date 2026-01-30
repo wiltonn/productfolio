@@ -55,6 +55,12 @@ enum ScenarioStatus {
   LOCKED
 }
 
+enum AllocationType {
+  PROJECT
+  RUN
+  SUPPORT
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -309,6 +315,7 @@ model Scenario {
   name             String
   periodId         String         @db.Uuid @map("period_id")
   status           ScenarioStatus @default(DRAFT)
+  isPrimary        Boolean        @default(false) @map("is_primary")
   planLockDate     DateTime?      @map("plan_lock_date")
   assumptions      Json?          @db.JsonB // Flexible assumptions storage
   priorityRankings Json?          @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
@@ -324,16 +331,18 @@ model Scenario {
   @@index([name])
   @@index([periodId])
   @@index([status])
+  @@index([isPrimary])
 }
 
 model Allocation {
-  id           String   @id @default(uuid()) @db.Uuid
-  scenarioId   String   @db.Uuid
-  employeeId   String   @db.Uuid
-  initiativeId String?  @db.Uuid // Nullable for unallocated capacity
-  startDate    DateTime @db.Date
-  endDate      DateTime @db.Date
-  percentage   Float    @default(100) // Allocation percentage (0-100)
+  id             String         @id @default(uuid()) @db.Uuid
+  scenarioId     String         @db.Uuid
+  employeeId     String         @db.Uuid
+  initiativeId   String?        @db.Uuid // Nullable for unallocated capacity
+  allocationType AllocationType @default(PROJECT) @map("allocation_type")
+  startDate      DateTime       @db.Date
+  endDate        DateTime       @db.Date
+  percentage     Float          @default(100) // Allocation percentage (0-100)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -347,6 +356,7 @@ model Allocation {
   @@index([scenarioId])
   @@index([employeeId])
   @@index([initiativeId])
+  @@index([allocationType])
   @@index([startDate, endDate])
 }
 

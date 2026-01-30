@@ -13,7 +13,7 @@ import type {
   InitiativeCoverage,
   AutoAllocateOptions,
 } from '../types/index.js';
-import { PeriodType, ScenarioStatus } from '@prisma/client';
+import { PeriodType, ScenarioStatus, AllocationType } from '@prisma/client';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -25,6 +25,7 @@ interface AllocationWithDetails {
   initiativeId: string | null;
   initiativeTitle: string | null;
   initiativeStatus: string | null;
+  allocationType: string;
   startDate: Date;
   endDate: Date;
   percentage: number;
@@ -177,6 +178,7 @@ export class AllocationService {
       initiativeId: allocation.initiativeId,
       initiativeTitle: allocation.initiative?.title ?? null,
       initiativeStatus: allocation.initiative?.status ?? null,
+      allocationType: allocation.allocationType,
       startDate: allocation.startDate,
       endDate: allocation.endDate,
       percentage: allocation.percentage,
@@ -225,6 +227,7 @@ export class AllocationService {
       initiativeId: allocation.initiativeId,
       initiativeTitle: allocation.initiative?.title ?? null,
       initiativeStatus: allocation.initiative?.status ?? null,
+      allocationType: allocation.allocationType,
       startDate: allocation.startDate,
       endDate: allocation.endDate,
       percentage: allocation.percentage,
@@ -494,6 +497,7 @@ export class AllocationService {
         scenarioId,
         employeeId: data.employeeId,
         initiativeId: data.initiativeId || null,
+        allocationType: ((data as { allocationType?: string }).allocationType as AllocationType) || AllocationType.PROJECT,
         startDate: data.startDate,
         endDate: data.endDate,
         percentage: data.percentage,
@@ -531,6 +535,7 @@ export class AllocationService {
       initiativeId: allocation.initiativeId,
       initiativeTitle: allocation.initiative?.title ?? null,
       initiativeStatus: allocation.initiative?.status ?? null,
+      allocationType: allocation.allocationType,
       startDate: allocation.startDate,
       endDate: allocation.endDate,
       percentage: allocation.percentage,
@@ -626,6 +631,7 @@ export class AllocationService {
       initiativeId: updated.initiativeId,
       initiativeTitle: updated.initiative?.title ?? null,
       initiativeStatus: updated.initiative?.status ?? null,
+      allocationType: updated.allocationType,
       startDate: updated.startDate,
       endDate: updated.endDate,
       percentage: updated.percentage,
@@ -1198,7 +1204,7 @@ export class AllocationService {
    * Compute AllocationPeriod junction rows for a given allocation's date range.
    * Deletes existing rows and re-creates them.
    */
-  private async computeAllocationPeriods(
+  async computeAllocationPeriods(
     allocationId: string,
     startDate: Date,
     endDate: Date

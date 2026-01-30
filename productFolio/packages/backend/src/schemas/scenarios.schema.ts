@@ -44,10 +44,22 @@ export const updatePrioritiesSchema = z.object({
 
 export type UpdatePriorities = z.infer<typeof updatePrioritiesSchema>;
 
+// Clone Scenario Schema
+export const cloneScenarioSchema = z.object({
+  name: z.string().min(1).max(255),
+  targetPeriodId: uuidSchema,
+  includeProjectAllocations: z.boolean().default(false),
+  includeRunSupportAllocations: z.boolean().default(true),
+  includePriorityRankings: z.boolean().default(true),
+});
+
+export type CloneScenario = z.infer<typeof cloneScenarioSchema>;
+
 // Create Allocation Schema
 export const createAllocationSchema = z.object({
   employeeId: uuidSchema,
   initiativeId: uuidSchema.optional().nullable(),
+  allocationType: z.enum(['PROJECT', 'RUN', 'SUPPORT']).default('PROJECT'),
   startDate: z.string().or(z.date()).pipe(z.coerce.date()),
   endDate: z.string().or(z.date()).pipe(z.coerce.date()),
   percentage: z.number().min(0).max(100).default(100),

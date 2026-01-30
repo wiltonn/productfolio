@@ -6,6 +6,15 @@ export async function periodsRoutes(fastify: FastifyInstance): Promise<void> {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
 
+  // GET /api/periods/adjacent-quarters - Get last, current, next quarter
+  fastify.get(
+    '/api/periods/adjacent-quarters',
+    async (_request, reply) => {
+      const result = await periodService.getAdjacentQuarters();
+      return reply.code(200).send(result);
+    }
+  );
+
   // GET /api/periods - List periods with filters
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/periods',

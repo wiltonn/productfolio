@@ -12,13 +12,17 @@ export interface Scenario {
   periodStartDate: string;
   periodEndDate: string;
   status: ScenarioStatus;
+  isPrimary: boolean;
   planLockDate: string | null;
   assumptions?: Record<string, unknown>;
   priorityRankings?: Array<{ initiativeId: string; rank: number }>;
   version: number;
   createdAt: string;
   updatedAt: string;
+  allocationsCount?: number;
 }
+
+export type AllocationType = 'PROJECT' | 'RUN' | 'SUPPORT';
 
 export interface Allocation {
   id: string;
@@ -27,6 +31,7 @@ export interface Allocation {
   employeeName: string;
   initiativeId: string;
   initiativeStatus: string | null;
+  allocationType?: AllocationType;
   startDate: string;
   endDate: string;
   percentage: number;
@@ -92,10 +97,16 @@ export const scenarioKeys = {
   compare: (ids: string[]) => [...scenarioKeys.all, 'compare', ids] as const,
 };
 
-export function useScenarios() {
+export function useScenarios(options?: { periodIds?: string[] }) {
+  const params = new URLSearchParams();
+  params.set('limit', '100');
+  if (options?.periodIds && options.periodIds.length > 0) {
+    params.set('periodIds', options.periodIds.join(','));
+  }
+
   return useQuery({
-    queryKey: scenarioKeys.list(),
-    queryFn: () => api.get<PaginatedResponse<Scenario>>('/scenarios'),
+    queryKey: [...scenarioKeys.list(), options?.periodIds] as const,
+    queryFn: () => api.get<PaginatedResponse<Scenario>>(`/scenarios?${params}`),
   });
 }
 
@@ -234,14 +245,50 @@ export function useCloneScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api.post<Scenario>(`/scenarios/${id}/clone`, { name }),
+    mutationFn: ({
+      id,
+      name,
+      targetPeriodId,
+      includeProjectAllocations,
+      includeRunSupportAllocations,
+      includePriorityRankings,
+    }: {
+      id: string;
+      name: string;
+      targetPeriodId: string;
+      includeProjectAllocations?: boolean;
+      includeRunSupportAllocations?: boolean;
+      includePriorityRankings?: boolean;
+    }) =>
+      api.post<Scenario>(`/scenarios/${id}/clone`, {
+        name,
+        targetPeriodId,
+        includeProjectAllocations: includeProjectAllocations ?? false,
+        includeRunSupportAllocations: includeRunSupportAllocations ?? true,
+        includePriorityRankings: includePriorityRankings ?? true,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
       toast.success('Scenario cloned successfully');
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to clone scenario');
+    },
+  });
+}
+
+export function useSetPrimary() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => api.put<Scenario>(`/scenarios/${id}/primary`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all });
+      toast.success('Scenario set as primary');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to set primary');
     },
   });
 }

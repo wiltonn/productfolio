@@ -37,6 +37,20 @@ export function useQuarterPeriods() {
   });
 }
 
+export interface AdjacentQuarters {
+  lastQuarter: Period | null;
+  currentQuarter: Period | null;
+  nextQuarter: Period | null;
+}
+
+export function useAdjacentQuarters() {
+  return useQuery({
+    queryKey: [...periodKeys.all, 'adjacent-quarters'] as const,
+    queryFn: () => api.get<AdjacentQuarters>('/periods/adjacent-quarters'),
+    staleTime: 60 * 60 * 1000, // 1 hour
+  });
+}
+
 /**
  * Given an array of periods and a start/end quarter label (e.g. "2026-Q1", "2026-Q4"),
  * returns the period IDs for all quarters in that range (inclusive).

@@ -1,7 +1,7 @@
-import { InitiativeStatus, EmploymentType, UserRole, PeriodType } from '@prisma/client';
+import { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType } from '@prisma/client';
 
 // Re-export Prisma enums for convenience
-export { InitiativeStatus, EmploymentType, UserRole, PeriodType };
+export { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType };
 
 // Pagination
 export interface PaginationParams {

@@ -10,6 +10,7 @@ import {
   paginationSchema,
   autoAllocateOptionsSchema,
   transitionStatusSchema,
+  cloneScenarioSchema,
 } from '../schemas/scenarios.schema.js';
 import { calculatorQuerySchema } from '../schemas/calculator.schema.js';
 import { scenariosService } from '../services/scenarios.service.js';
@@ -24,7 +25,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
 
   const authorizeScenarioMutation = fastify.authorize(MUTATION_ROLES);
 
-  // GET /api/scenarios - List scenarios
+  // GET /api/scenarios - List scenarios (optionally filtered by periodIds)
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/scenarios',
     async (request, reply) => {
@@ -33,7 +34,18 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         limit: request.query.limit,
       });
 
-      const result = await scenariosService.list(pagination);
+      // Parse periodIds from query params (comma-separated or array)
+      let periodIds: string[] | undefined;
+      const rawPeriodIds = request.query.periodIds;
+      if (rawPeriodIds) {
+        if (Array.isArray(rawPeriodIds)) {
+          periodIds = rawPeriodIds as string[];
+        } else if (typeof rawPeriodIds === 'string') {
+          periodIds = rawPeriodIds.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+
+      const result = await scenariosService.list(pagination, periodIds);
       return reply.code(200).send(result);
     }
   );
@@ -91,6 +103,27 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         request.user.role
       );
       return reply.code(200).send(scenario);
+    }
+  );
+
+  // PUT /api/scenarios/:id/primary - Set scenario as primary for its quarter
+  fastify.put<{ Params: { id: string } }>(
+    '/api/scenarios/:id/primary',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      const scenario = await scenariosService.setPrimary(request.params.id);
+      return reply.code(200).send(scenario);
+    }
+  );
+
+  // POST /api/scenarios/:id/clone - Clone scenario to target quarter
+  fastify.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/scenarios/:id/clone',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      const data = cloneScenarioSchema.parse(request.body);
+      const scenario = await scenariosService.cloneScenario(request.params.id, data);
+      return reply.code(201).send(scenario);
     }
   );
 

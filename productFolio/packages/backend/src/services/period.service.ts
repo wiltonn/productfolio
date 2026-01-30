@@ -275,6 +275,74 @@ export class PeriodService {
   }
 
   /**
+   * Get the last, current, and next quarter periods relative to today.
+   */
+  async getAdjacentQuarters(): Promise<{
+    lastQuarter: { id: string; label: string; startDate: Date; endDate: Date; year: number; ordinal: number } | null;
+    currentQuarter: { id: string; label: string; startDate: Date; endDate: Date; year: number; ordinal: number } | null;
+    nextQuarter: { id: string; label: string; startDate: Date; endDate: Date; year: number; ordinal: number } | null;
+  }> {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const currentQ = Math.ceil((currentMonth + 1) / 3);
+
+    // Derive last and next quarter year/ordinal
+    let lastQ = currentQ - 1;
+    let lastYear = currentYear;
+    if (lastQ < 1) {
+      lastQ = 4;
+      lastYear = currentYear - 1;
+    }
+
+    let nextQ = currentQ + 1;
+    let nextYear = currentYear;
+    if (nextQ > 4) {
+      nextQ = 1;
+      nextYear = currentYear + 1;
+    }
+
+    const [lastQuarter, currentQuarter, nextQuarter] = await Promise.all([
+      prisma.period.findUnique({
+        where: { type_year_ordinal: { type: PeriodType.QUARTER, year: lastYear, ordinal: lastQ } },
+      }),
+      prisma.period.findUnique({
+        where: { type_year_ordinal: { type: PeriodType.QUARTER, year: currentYear, ordinal: currentQ } },
+      }),
+      prisma.period.findUnique({
+        where: { type_year_ordinal: { type: PeriodType.QUARTER, year: nextYear, ordinal: nextQ } },
+      }),
+    ]);
+
+    return {
+      lastQuarter: lastQuarter ? {
+        id: lastQuarter.id,
+        label: lastQuarter.label,
+        startDate: lastQuarter.startDate,
+        endDate: lastQuarter.endDate,
+        year: lastQuarter.year,
+        ordinal: lastQuarter.ordinal,
+      } : null,
+      currentQuarter: currentQuarter ? {
+        id: currentQuarter.id,
+        label: currentQuarter.label,
+        startDate: currentQuarter.startDate,
+        endDate: currentQuarter.endDate,
+        year: currentQuarter.year,
+        ordinal: currentQuarter.ordinal,
+      } : null,
+      nextQuarter: nextQuarter ? {
+        id: nextQuarter.id,
+        label: nextQuarter.label,
+        startDate: nextQuarter.startDate,
+        endDate: nextQuarter.endDate,
+        year: nextQuarter.year,
+        ordinal: nextQuarter.ordinal,
+      } : null,
+    };
+  }
+
+  /**
    * List periods with optional filters
    */
   async list(filters: {

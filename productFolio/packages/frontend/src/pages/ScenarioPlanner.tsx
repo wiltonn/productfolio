@@ -34,6 +34,7 @@ import {
   useAutoAllocateApply,
   useTransitionScenarioStatus,
   useScenarioPermissions,
+  useSetPrimary,
 } from '../hooks/useScenarios';
 import type { Allocation, AutoAllocateResult, Scenario } from '../hooks/useScenarios';
 import { useInitiatives } from '../hooks/useInitiatives';
@@ -86,6 +87,7 @@ interface AllocationRow {
   initiativeId: string;
   initiativeTitle: string;
   initiativeStatus: string | null;
+  allocationType: string;
   startDate: string;
   endDate: string;
   percentage: number;
@@ -742,6 +744,7 @@ function InitiativeAllocationPanel({
             <thead>
               <tr>
                 <th>Employee</th>
+                <th>Type</th>
                 <th>Start</th>
                 <th>End</th>
                 <th>% Allocation</th>
@@ -758,6 +761,15 @@ function InitiativeAllocationPanel({
                       </div>
                       <span>{alloc.employeeName}</span>
                     </div>
+                  </td>
+                  <td>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded-full ${
+                      (alloc as unknown as { allocationType?: string }).allocationType === 'RUN' ? 'bg-emerald-100 text-emerald-700'
+                        : (alloc as unknown as { allocationType?: string }).allocationType === 'SUPPORT' ? 'bg-purple-100 text-purple-700'
+                        : 'bg-surface-100 text-surface-600'
+                    }`}>
+                      {(alloc as unknown as { allocationType?: string }).allocationType || 'PROJECT'}
+                    </span>
                   </td>
                   <td>
                     {isLocked ? (
@@ -1101,6 +1113,7 @@ export function ScenarioPlanner() {
   const { data: initiativesData, isLoading: initiativesLoading } = useInitiatives({ limit: 100 });
   const { data: employeesData } = useEmployees({ limit: 100 });
   const transitionStatus = useTransitionScenarioStatus();
+  const setPrimary = useSetPrimary();
   const { canEdit, canTransition, canModifyAllocations, isReadOnly } = useScenarioPermissions(scenario as Scenario | undefined);
   const updatePriorities = useUpdatePriorities();
   const createAllocation = useCreateAllocation();
@@ -1148,6 +1161,7 @@ export function ScenarioPlanner() {
   const [newAllocation, setNewAllocation] = useState({
     employeeId: '',
     initiativeId: '',
+    allocationType: 'PROJECT' as string,
     startDate: '',
     endDate: '',
     percentage: 100,
@@ -1214,6 +1228,7 @@ export function ScenarioPlanner() {
         initiativeId: alloc.initiativeId,
         initiativeTitle: initiative?.title || 'Unknown Initiative',
         initiativeStatus: alloc.initiativeStatus ?? null,
+        allocationType: alloc.allocationType || 'PROJECT',
         startDate: alloc.startDate.split('T')[0],
         endDate: alloc.endDate.split('T')[0],
         percentage: alloc.percentage,
@@ -1415,16 +1430,18 @@ export function ScenarioPlanner() {
       data: {
         employeeId: newAllocation.employeeId,
         initiativeId: newAllocation.initiativeId || undefined,
+        allocationType: newAllocation.allocationType,
         startDate: newAllocation.startDate || defaultAllocationDates.startDate,
         endDate: newAllocation.endDate || defaultAllocationDates.endDate,
         percentage: newAllocation.percentage,
-      },
+      } as Record<string, unknown>,
     }, {
       onSuccess: () => {
         setIsAddAllocationModalOpen(false);
         setNewAllocation({
           employeeId: '',
           initiativeId: '',
+          allocationType: 'PROJECT',
           startDate: '',
           endDate: '',
           percentage: 100,
@@ -1437,6 +1454,7 @@ export function ScenarioPlanner() {
     setNewAllocation({
       employeeId: '',
       initiativeId: selectedInitiativeId || '',
+      allocationType: 'PROJECT',
       startDate: defaultAllocationDates.startDate,
       endDate: defaultAllocationDates.endDate,
       percentage: 100,
@@ -1536,6 +1554,14 @@ export function ScenarioPlanner() {
                 {scenario?.periodLabel ? `${scenario.periodLabel} — ` : ''}{scenario?.name || 'Untitled Scenario'}
               </span>
               {scenario?.status && <ScenarioStatusBadge status={scenario.status as ScenarioStatus} />}
+              {scenario?.isPrimary && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  Primary
+                </span>
+              )}
             </div>
             {scenario?.planLockDate && (
               <span className="text-xs text-surface-400">
@@ -1543,16 +1569,31 @@ export function ScenarioPlanner() {
               </span>
             )}
           </div>
-          {scenario && (
-            <ScenarioStatusActions
-              scenario={scenario as Scenario}
-              onTransition={(status) => {
-                if (id) transitionStatus.mutate({ id, status });
-              }}
-              isPending={transitionStatus.isPending}
-              canTransition={canTransition}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {scenario && !scenario.isPrimary && canTransition && (
+              <button
+                onClick={() => { if (id) setPrimary.mutate(id); }}
+                disabled={setPrimary.isPending}
+                className="btn-secondary text-xs"
+                title="Set as Primary scenario for this quarter"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+                </svg>
+                Set Primary
+              </button>
+            )}
+            {scenario && (
+              <ScenarioStatusActions
+                scenario={scenario as Scenario}
+                onTransition={(status) => {
+                  if (id) transitionStatus.mutate({ id, status });
+                }}
+                isPending={transitionStatus.isPending}
+                canTransition={canTransition}
+              />
+            )}
+          </div>
         </div>
 
         <div className="header-center">
@@ -1860,6 +1901,7 @@ export function ScenarioPlanner() {
                       <tr>
                         <th>Employee</th>
                         <th>Initiative</th>
+                        <th>Type</th>
                         <th>Start</th>
                         <th>End</th>
                         <th>% Allocation</th>
@@ -1896,6 +1938,15 @@ export function ScenarioPlanner() {
                                   </svg>
                                 )}
                               </div>
+                            </td>
+                            <td>
+                              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                                allocation.allocationType === 'RUN' ? 'bg-emerald-100 text-emerald-700'
+                                  : allocation.allocationType === 'SUPPORT' ? 'bg-purple-100 text-purple-700'
+                                  : 'bg-surface-100 text-surface-600'
+                              }`}>
+                                {allocation.allocationType}
+                              </span>
                             </td>
                             <td>
                               {allocLocked ? (
@@ -2174,6 +2225,21 @@ export function ScenarioPlanner() {
               onChange={(value) => setNewAllocation(prev => ({ ...prev, initiativeId: value }))}
               placeholder="Select an initiative (optional)..."
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-surface-500 mb-1.5 uppercase tracking-wider">
+              Allocation Type
+            </label>
+            <select
+              value={newAllocation.allocationType}
+              onChange={(e) => setNewAllocation(prev => ({ ...prev, allocationType: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500 bg-white"
+            >
+              <option value="PROJECT">Project</option>
+              <option value="RUN">Run</option>
+              <option value="SUPPORT">Support</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
