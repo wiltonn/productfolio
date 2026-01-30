@@ -98,7 +98,20 @@ interface ScenarioAssumptions {
   allocationCap: number;
   bufferPercentage: number;
   ktloPercentage: number;
+  meetingOverheadPercentage: number;
 }
+
+// Default holidays – must stay in sync with Capacity.tsx
+const DEFAULT_HOLIDAYS: Date[] = [
+  new Date(2026, 0, 1),   // New Year's Day
+  new Date(2026, 0, 19),  // MLK Day
+  new Date(2026, 1, 16),  // Presidents' Day
+  new Date(2026, 4, 25),  // Memorial Day
+  new Date(2026, 6, 3),   // Independence Day (Observed)
+  new Date(2026, 8, 7),   // Labor Day
+  new Date(2026, 10, 26), // Thanksgiving
+  new Date(2026, 11, 25), // Christmas
+];
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -1144,6 +1157,7 @@ export function ScenarioPlanner() {
     allocationCap: 100,
     bufferPercentage: 10,
     ktloPercentage: 15,
+    meetingOverheadPercentage: 10,
   });
 
   // Guided mode
@@ -1307,7 +1321,8 @@ export function ScenarioPlanner() {
       setAssumptions({
         allocationCap: a.allocationCapPercentage || 100,
         bufferPercentage: a.bufferPercentage || 10,
-        ktloPercentage: 15,
+        ktloPercentage: a.ktloPercentage ?? 15,
+        meetingOverheadPercentage: a.meetingOverheadPercentage ?? 10,
       });
     }
   }, [scenario]);
@@ -1337,10 +1352,52 @@ export function ScenarioPlanner() {
     });
   }, [initiatives, approvedOnly, searchQuery]);
 
+  // Net effective capacity – mirrors Capacity.tsx formula
+  const netEffectiveCapacity = useMemo(() => {
+    if (!employeesData?.data || !scenario?.periodStartDate || !scenario?.periodEndDate) return 0;
+
+    const periodStart = new Date(scenario.periodStartDate);
+    const periodEnd = new Date(scenario.periodEndDate);
+
+    // Count working days (Mon–Fri) in the scenario period
+    let workingDays = 0;
+    const d = new Date(periodStart);
+    while (d <= periodEnd) {
+      const day = d.getDay();
+      if (day !== 0 && day !== 6) workingDays++;
+      d.setDate(d.getDate() + 1);
+    }
+
+    const employees = employeesData.data;
+    const totalWeeklyHours = employees.reduce((sum, e) => sum + (e.defaultCapacityHours || 40), 0);
+
+    // Gross capacity: per-employee daily rate × working days
+    const grossHours = employees.reduce(
+      (sum, e) => sum + ((e.defaultCapacityHours || 40) / 5) * workingDays, 0
+    );
+
+    // Holidays that fall on weekdays within the scenario period
+    const quarterHolidays = DEFAULT_HOLIDAYS.filter(hd => {
+      const day = hd.getDay();
+      return hd >= periodStart && hd <= periodEnd && day !== 0 && day !== 6;
+    });
+    const dailyTeamHours = totalWeeklyHours / 5;
+    const holidayHours = quarterHolidays.length * dailyTeamHours;
+
+    // Net available after holidays (PTO defaults to 0, same as Capacity.tsx default)
+    const netAvailable = grossHours - holidayHours;
+
+    // Deduct KTLO and meeting overhead
+    const ktloHours = netAvailable * (assumptions.ktloPercentage / 100);
+    const meetingHours = netAvailable * (assumptions.meetingOverheadPercentage / 100);
+
+    return Math.round(netAvailable - ktloHours - meetingHours);
+  }, [employeesData, scenario?.periodStartDate, scenario?.periodEndDate, assumptions.ktloPercentage, assumptions.meetingOverheadPercentage]);
+
   // Summary stats
   const stats = useMemo(() => {
     const totalDemand = initiatives.reduce((sum, i) => sum + i.totalHours, 0);
-    const totalAvailableCapacity = capacityByWeek.reduce((sum, w) => sum + w.capacity, 0);
+    const totalAvailableCapacity = netEffectiveCapacity;
 
     // Calculate used capacity from actual allocations
     let totalUsedCapacity = 0;
@@ -1360,7 +1417,7 @@ export function ScenarioPlanner() {
     const skillGaps = capacityBySkill.filter(s => s.gap < 0).length;
     const utilizationPercent = totalAvailableCapacity > 0 ? Math.round((totalUsedCapacity / totalAvailableCapacity) * 100) : 0;
     return { totalDemand, totalAvailableCapacity, totalUsedCapacity, skillGaps, utilizationPercent };
-  }, [initiatives, capacityByWeek, capacityBySkill, allocationsData, employeesData]);
+  }, [initiatives, netEffectiveCapacity, capacityBySkill, allocationsData, employeesData]);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1667,6 +1724,19 @@ export function ScenarioPlanner() {
                       type="number"
                       value={assumptions.ktloPercentage}
                       onChange={(e) => setAssumptions(a => ({ ...a, ktloPercentage: Number(e.target.value) }))}
+                      min={0}
+                      max={50}
+                    />
+                    <span>%</span>
+                  </div>
+                </div>
+                <div className="assumption-row">
+                  <label>Meetings</label>
+                  <div className="assumption-input">
+                    <input
+                      type="number"
+                      value={assumptions.meetingOverheadPercentage}
+                      onChange={(e) => setAssumptions(a => ({ ...a, meetingOverheadPercentage: Number(e.target.value) }))}
                       min={0}
                       max={50}
                     />
