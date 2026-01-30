@@ -644,134 +644,207 @@ function EffectiveCapacityPreview({
   employees,
   settings,
   holidays,
+  quarterDates,
 }: {
   employees: CapacityEmployee[];
   settings: CapacitySettings;
   holidays: Holiday[];
+  quarterDates: {
+    currentQStart: string;
+    currentQEnd: string;
+    nextQStart: string;
+    nextQEnd: string;
+    currentLabel: string;
+    nextLabel: string;
+  };
 }) {
-  const calculations = useMemo(() => {
-    const activeEmployees = employees.filter(e => e.status !== 'ON_LEAVE');
-    const totalWeeklyHours = activeEmployees.reduce((sum, e) => sum + e.hoursPerWeek, 0);
-    const totalPtoHours = employees.reduce((sum, e) => sum + e.ptoHours, 0);
+  const [selectedQuarter, setSelectedQuarter] = useState<'current' | 'next'>('current');
 
-    // Assume 13 weeks in a quarter
-    const weeksInQuarter = 13;
-    const grossQuarterlyHours = totalWeeklyHours * weeksInQuarter;
+  const { currentCalc, nextCalc } = useMemo(() => {
+    function parseDate(dateStr: string): Date {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
 
-    // Holiday hours (8 hours per holiday per employee)
-    const holidayHours = holidays.length * 8 * activeEmployees.length;
+    function countWorkingDays(start: Date, end: Date): number {
+      let count = 0;
+      const d = new Date(start);
+      while (d <= end) {
+        const day = d.getDay();
+        if (day !== 0 && day !== 6) count++;
+        d.setDate(d.getDate() + 1);
+      }
+      return count;
+    }
 
-    // KTLO deduction
-    const ktloHours = grossQuarterlyHours * (settings.ktloPercentage / 100);
+    function calcForQuarter(qStartStr: string, qEndStr: string) {
+      const qStart = parseDate(qStartStr);
+      const qEnd = parseDate(qEndStr);
+      const workingDays = countWorkingDays(qStart, qEnd);
 
-    // Meeting overhead deduction
-    const meetingHours = grossQuarterlyHours * (settings.meetingOverheadPercentage / 100);
+      const activeEmployees = employees.filter(e => e.status !== 'ON_LEAVE');
+      const totalWeeklyHours = activeEmployees.reduce((sum, e) => sum + e.hoursPerWeek, 0);
+      const totalPtoHours = employees.reduce((sum, e) => sum + e.ptoHours, 0);
 
-    // Calculate effective
-    const effectiveHours = grossQuarterlyHours - totalPtoHours - holidayHours - ktloHours - meetingHours;
-    const utilizationPercent = grossQuarterlyHours > 0
-      ? Math.round((effectiveHours / grossQuarterlyHours) * 100)
-      : 0;
+      // Gross capacity: per-employee daily rate × working days
+      const grossHours = activeEmployees.reduce(
+        (sum, e) => sum + (e.hoursPerWeek / 5) * workingDays, 0
+      );
+
+      // Only count holidays that fall on weekdays within this quarter
+      const quarterHolidays = holidays.filter(h => {
+        const hd = new Date(h.date);
+        const day = hd.getDay();
+        return hd >= qStart && hd <= qEnd && day !== 0 && day !== 6;
+      });
+      const dailyTeamHours = totalWeeklyHours / 5;
+      const holidayHours = quarterHolidays.length * dailyTeamHours;
+
+      // Net available after PTO and holidays
+      const netAvailable = grossHours - totalPtoHours - holidayHours;
+
+      // KTLO and meetings are percentages of net available work time
+      const ktloHours = netAvailable * (settings.ktloPercentage / 100);
+      const meetingHours = netAvailable * (settings.meetingOverheadPercentage / 100);
+
+      const effectiveHours = netAvailable - ktloHours - meetingHours;
+      const utilizationPercent = grossHours > 0
+        ? Math.round((effectiveHours / grossHours) * 100)
+        : 0;
+
+      return {
+        activeEmployees: activeEmployees.length,
+        totalEmployees: employees.length,
+        totalWeeklyHours,
+        workingDays,
+        grossHours: Math.round(grossHours),
+        ptoHours: totalPtoHours,
+        holidayCount: quarterHolidays.length,
+        holidayHours: Math.round(holidayHours),
+        ktloHours: Math.round(ktloHours),
+        meetingHours: Math.round(meetingHours),
+        effectiveHours: Math.round(effectiveHours),
+        utilizationPercent,
+      };
+    }
 
     return {
-      activeEmployees: activeEmployees.length,
-      totalEmployees: employees.length,
-      totalWeeklyHours,
-      grossQuarterlyHours,
-      ptoHours: totalPtoHours,
-      holidayHours,
-      ktloHours: Math.round(ktloHours),
-      meetingHours: Math.round(meetingHours),
-      effectiveHours: Math.round(effectiveHours),
-      utilizationPercent,
+      currentCalc: calcForQuarter(quarterDates.currentQStart, quarterDates.currentQEnd),
+      nextCalc: calcForQuarter(quarterDates.nextQStart, quarterDates.nextQEnd),
     };
-  }, [employees, settings, holidays]);
+  }, [employees, settings, holidays, quarterDates]);
+
+  const calc = selectedQuarter === 'current' ? currentCalc : nextCalc;
+  const label = selectedQuarter === 'current' ? quarterDates.currentLabel : quarterDates.nextLabel;
 
   return (
     <div className="card overflow-hidden">
-      {/* Header with gauge */}
-      <div className="p-5 bg-gradient-to-br from-surface-50 to-surface-100 border-b border-surface-200">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">Effective Capacity</h3>
-            <p className="mt-1 text-3xl font-display font-bold text-surface-900 tabular-nums">
-              {calculations.effectiveHours.toLocaleString()}
-              <span className="text-lg font-normal text-surface-500 ml-1">hours</span>
-            </p>
-            <p className="text-sm text-surface-500">This quarter (Q1 2026)</p>
-          </div>
+      {/* Quarter selector tabs */}
+      <div className="flex border-b border-surface-200">
+        <button
+          onClick={() => setSelectedQuarter('current')}
+          className={`flex-1 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+            selectedQuarter === 'current'
+              ? 'text-accent-700 border-b-2 border-accent-500 bg-surface-50'
+              : 'text-surface-500 hover:text-surface-700'
+          }`}
+        >
+          {quarterDates.currentLabel}
+        </button>
+        <button
+          onClick={() => setSelectedQuarter('next')}
+          className={`flex-1 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider transition-colors ${
+            selectedQuarter === 'next'
+              ? 'text-accent-700 border-b-2 border-accent-500 bg-surface-50'
+              : 'text-surface-500 hover:text-surface-700'
+          }`}
+        >
+          {quarterDates.nextLabel}
+        </button>
+      </div>
 
+      {/* Both quarters at a glance */}
+      <div className="grid grid-cols-2 divide-x divide-surface-200 bg-gradient-to-br from-surface-50 to-surface-100">
+        <button
+          onClick={() => setSelectedQuarter('current')}
+          className={`p-4 text-center transition-colors ${selectedQuarter === 'current' ? 'bg-white/50' : 'hover:bg-white/30'}`}
+        >
+          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.currentLabel}</p>
+          <p className="mt-1 text-2xl font-display font-bold text-surface-900 tabular-nums">
+            {currentCalc.effectiveHours.toLocaleString()}
+            <span className="text-sm font-normal text-surface-500 ml-0.5">h</span>
+          </p>
+        </button>
+        <button
+          onClick={() => setSelectedQuarter('next')}
+          className={`p-4 text-center transition-colors ${selectedQuarter === 'next' ? 'bg-white/50' : 'hover:bg-white/30'}`}
+        >
+          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">{quarterDates.nextLabel}</p>
+          <p className="mt-1 text-2xl font-display font-bold text-surface-900 tabular-nums">
+            {nextCalc.effectiveHours.toLocaleString()}
+            <span className="text-sm font-normal text-surface-500 ml-0.5">h</span>
+          </p>
+        </button>
+      </div>
+
+      {/* Detailed breakdown for selected quarter */}
+      <div className="p-5 border-t border-surface-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">
+            {label} Breakdown
+          </h3>
           {/* Circular gauge */}
-          <div className="relative w-20 h-20">
-            <svg className="w-20 h-20 -rotate-90" viewBox="0 0 100 100">
-              <circle
-                cx="50"
-                cy="50"
-                r="42"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="8"
-                className="text-surface-200"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="42"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={`${calculations.utilizationPercent * 2.64} 264`}
-                className="text-accent-500 transition-all duration-500"
-              />
+          <div className="relative w-14 h-14">
+            <svg className="w-14 h-14 -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-surface-200" />
+              <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" strokeLinecap="round"
+                strokeDasharray={`${calc.utilizationPercent * 2.64} 264`}
+                className="text-accent-500 transition-all duration-500" />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
-                {calculations.utilizationPercent}%
-              </span>
+              <span className="text-xs font-display font-bold text-surface-900 tabular-nums">{calc.utilizationPercent}%</span>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Breakdown */}
-      <div className="p-5 space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-surface-600">Gross Capacity</span>
-          <span className="font-mono font-medium text-surface-900 tabular-nums">
-            {calculations.grossQuarterlyHours.toLocaleString()}h
-          </span>
-        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-surface-600">Gross Capacity ({calc.workingDays} days)</span>
+            <span className="font-mono font-medium text-surface-900 tabular-nums">
+              {calc.grossHours.toLocaleString()}h
+            </span>
+          </div>
 
-        <div className="h-px bg-surface-100" />
+          <div className="h-px bg-surface-100" />
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-surface-600">− PTO</span>
-          <span className="font-mono text-danger tabular-nums">−{calculations.ptoHours}h</span>
-        </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-surface-600">− PTO</span>
+            <span className="font-mono text-danger tabular-nums">−{calc.ptoHours}h</span>
+          </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-surface-600">− Holidays ({holidays.length} days)</span>
-          <span className="font-mono text-danger tabular-nums">−{calculations.holidayHours}h</span>
-        </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-surface-600">− Holidays ({calc.holidayCount} days)</span>
+            <span className="font-mono text-danger tabular-nums">−{calc.holidayHours.toLocaleString()}h</span>
+          </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-surface-600">− KTLO ({settings.ktloPercentage}%)</span>
-          <span className="font-mono text-danger tabular-nums">−{calculations.ktloHours}h</span>
-        </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-surface-600">− KTLO ({settings.ktloPercentage}%)</span>
+            <span className="font-mono text-danger tabular-nums">−{calc.ktloHours.toLocaleString()}h</span>
+          </div>
 
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-surface-600">− Meetings ({settings.meetingOverheadPercentage}%)</span>
-          <span className="font-mono text-danger tabular-nums">−{calculations.meetingHours}h</span>
-        </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-surface-600">− Meetings ({settings.meetingOverheadPercentage}%)</span>
+            <span className="font-mono text-danger tabular-nums">−{calc.meetingHours.toLocaleString()}h</span>
+          </div>
 
-        <div className="h-px bg-surface-200" />
+          <div className="h-px bg-surface-200" />
 
-        <div className="flex items-center justify-between">
-          <span className="font-medium text-surface-900">Available for Projects</span>
-          <span className="font-mono font-bold text-accent-700 tabular-nums">
-            {calculations.effectiveHours.toLocaleString()}h
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-surface-900">Available for Projects</span>
+            <span className="font-mono font-bold text-accent-700 tabular-nums">
+              {calc.effectiveHours.toLocaleString()}h
+            </span>
+          </div>
         </div>
       </div>
 
@@ -779,10 +852,10 @@ function EffectiveCapacityPreview({
       <div className="px-5 py-4 bg-surface-50 border-t border-surface-200">
         <div className="flex items-center justify-between text-sm">
           <span className="text-surface-600">
-            {calculations.activeEmployees} active / {calculations.totalEmployees} total
+            {calc.activeEmployees} active / {calc.totalEmployees} total
           </span>
           <span className="text-surface-600">
-            {calculations.totalWeeklyHours}h/week base
+            {calc.totalWeeklyHours}h/week base
           </span>
         </div>
       </div>
@@ -1119,6 +1192,7 @@ export function Capacity() {
             employees={employees}
             settings={settings}
             holidays={holidays}
+            quarterDates={quarterDates}
           />
 
           {/* Capacity Settings */}
