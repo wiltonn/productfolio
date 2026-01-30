@@ -56,11 +56,13 @@ interface InitiativeForPlanning {
   hasShortage: boolean;
 }
 
-interface CapacityByQuarter {
-  quarter: string;
-  capacity: number;
-  demand: number;
-  gap: number;
+interface CapacityByWeek {
+  weekLabel: string;    // "Week 1", "Week 2", ... "Week 13"
+  weekStart: Date;
+  weekEnd: Date;
+  capacity: number;     // total employee hours for this week
+  demand: number;       // allocated hours overlapping this week
+  gap: number;          // capacity - demand
 }
 
 interface CapacityBySkill {
@@ -137,44 +139,79 @@ function transformInitiativeForPlanning(
   };
 }
 
-// Calculate capacity by quarter from employees and allocations
-function calculateCapacityByQuarter(
-  employees: Array<{ hoursPerWeek: number }>,
-  quarterRange: string
-): CapacityByQuarter[] {
-  const [startQ, endQ] = quarterRange.split(':');
-  const quarters: string[] = [];
+// Calculate capacity by week from employees and allocations
+function calculateCapacityByWeek(
+  employees: Array<{ id: string; hoursPerWeek: number }>,
+  allocations: Array<{ employeeId: string; startDate: string; endDate: string; percentage: number }>,
+  periodStart: Date,
+  periodEnd: Date
+): CapacityByWeek[] {
+  const weeks: CapacityByWeek[] = [];
 
-  // Generate quarters in range
-  if (startQ && endQ) {
-    const [startYear, startQtr] = startQ.split('-Q').map(Number);
-    const [endYear, endQtr] = endQ.split('-Q').map(Number);
-
-    let year = startYear;
-    let qtr = startQtr;
-
-    while (year < endYear || (year === endYear && qtr <= endQtr)) {
-      quarters.push(`${year}-Q${qtr}`);
-      qtr++;
-      if (qtr > 4) {
-        qtr = 1;
-        year++;
-      }
-      if (quarters.length > 8) break; // Safety limit
-    }
+  // Align to Monday of the week containing periodStart
+  const firstMonday = new Date(periodStart);
+  const dayOfWeek = firstMonday.getDay(); // 0=Sun, 1=Mon
+  if (dayOfWeek !== 1) {
+    // Go back to the most recent Monday
+    firstMonday.setDate(firstMonday.getDate() - ((dayOfWeek + 6) % 7));
   }
 
-  // Estimate 13 weeks per quarter, calculate total capacity
-  const weeksPerQuarter = 13;
-  const totalWeeklyHours = employees.reduce((sum, e) => sum + (e.hoursPerWeek || 40), 0);
-  const quarterlyCapacity = totalWeeklyHours * weeksPerQuarter;
+  // Total weekly capacity across all employees
+  const totalWeeklyCapacity = employees.reduce((sum, e) => sum + (e.hoursPerWeek || 40), 0);
 
-  return quarters.map((quarter) => ({
-    quarter,
-    capacity: quarterlyCapacity,
-    demand: Math.round(quarterlyCapacity * (0.7 + Math.random() * 0.3)), // Placeholder
-    gap: Math.round(quarterlyCapacity * 0.1), // Placeholder
-  }));
+  // Build employee set for quick lookup
+  const employeeSet = new Set(employees.map(e => e.id));
+
+  let weekStart = new Date(firstMonday);
+  let weekNum = 1;
+
+  while (weekStart < periodEnd && weekNum <= 14) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6); // Sunday
+
+    // Calculate demand for this week from overlapping allocations
+    let weekDemand = 0;
+    const weekStartTime = weekStart.getTime();
+    const weekEndTime = weekEnd.getTime();
+
+    for (const alloc of allocations) {
+      if (!employeeSet.has(alloc.employeeId)) continue;
+
+      const allocStart = new Date(alloc.startDate).getTime();
+      const allocEnd = new Date(alloc.endDate).getTime();
+
+      // Check overlap
+      if (allocStart <= weekEndTime && allocEnd >= weekStartTime) {
+        // Calculate overlap fraction (for partial weeks at allocation boundaries)
+        const overlapStart = Math.max(allocStart, weekStartTime);
+        const overlapEnd = Math.min(allocEnd, weekEndTime);
+        const overlapDays = Math.max(0, (overlapEnd - overlapStart) / (24 * 60 * 60 * 1000) + 1);
+        const weekFraction = Math.min(1, overlapDays / 7);
+
+        // Find this employee's weekly hours
+        const emp = employees.find(e => e.id === alloc.employeeId);
+        const empWeeklyHours = emp?.hoursPerWeek || 40;
+
+        weekDemand += empWeeklyHours * weekFraction * (alloc.percentage / 100);
+      }
+    }
+
+    weekDemand = Math.round(weekDemand);
+
+    weeks.push({
+      weekLabel: `Week ${weekNum}`,
+      weekStart: new Date(weekStart),
+      weekEnd: new Date(weekEnd),
+      capacity: totalWeeklyCapacity,
+      demand: weekDemand,
+      gap: totalWeeklyCapacity - weekDemand,
+    });
+
+    weekStart.setDate(weekStart.getDate() + 7);
+    weekNum++;
+  }
+
+  return weeks;
 }
 
 // Calculate capacity by team (simplified - group by first skill)
@@ -348,9 +385,15 @@ function SortableInitiativeCard({
   );
 }
 
-// Capacity Bar Chart (for By Quarter view)
-function CapacityBarChart({ data }: { data: CapacityByQuarter[] }) {
-  const maxValue = Math.max(...data.flatMap(d => [d.capacity, d.demand]));
+// Capacity Bar Chart (weekly bars for the quarter)
+function CapacityBarChart({ data }: { data: CapacityByWeek[] }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const maxValue = Math.max(...data.flatMap(d => [d.capacity, d.demand]), 1);
+
+  const formatDate = (d: Date) => {
+    const month = d.toLocaleString('default', { month: 'short' });
+    return `${month} ${d.getDate()}`;
+  };
 
   return (
     <div className="capacity-chart">
@@ -364,7 +407,7 @@ function CapacityBarChart({ data }: { data: CapacityByQuarter[] }) {
           <span>Demand</span>
         </div>
       </div>
-      <div className="chart-bars">
+      <div className="chart-bars weekly">
         {data.map((item, i) => {
           const capacityHeight = (item.capacity / maxValue) * 100;
           const demandHeight = (item.demand / maxValue) * 100;
@@ -372,22 +415,39 @@ function CapacityBarChart({ data }: { data: CapacityByQuarter[] }) {
 
           return (
             <div
-              key={item.quarter}
-              className="bar-group"
-              style={{ animationDelay: `${i * 100}ms` }}
+              key={item.weekLabel}
+              className="bar-group weekly"
+              style={{ animationDelay: `${i * 30}ms` }}
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
             >
-              <div className="bar-container">
-                <div className="bar capacity" style={{ height: `${capacityHeight}%` }}>
-                  <div className="bar-glow" />
-                </div>
-                <div className={`bar demand ${status}`} style={{ height: `${demandHeight}%` }}>
-                  <div className="bar-glow" />
+              <div className="bar-container weekly">
+                <div className="bar capacity weekly-overlay" style={{ height: `${capacityHeight}%` }}>
+                  <div className={`bar demand weekly-overlay ${status}`} style={{ height: `${item.capacity > 0 ? (item.demand / item.capacity) * 100 : 0}%` }}>
+                    <div className="bar-glow" />
+                  </div>
                 </div>
               </div>
-              <div className="bar-label">{item.quarter}</div>
-              <div className={`bar-value ${status}`}>
-                {item.gap >= 0 ? '+' : ''}{item.gap}h
-              </div>
+              <div className="bar-label weekly">{item.weekLabel}</div>
+              {hoveredIndex === i && (
+                <div className="bar-tooltip">
+                  <div className="bar-tooltip-header">
+                    {item.weekLabel}: {formatDate(item.weekStart)} – {formatDate(item.weekEnd)}
+                  </div>
+                  <div className="bar-tooltip-row">
+                    <span>Capacity</span>
+                    <span className="font-semibold">{item.capacity}h</span>
+                  </div>
+                  <div className="bar-tooltip-row">
+                    <span>Demand</span>
+                    <span className="font-semibold">{item.demand}h</span>
+                  </div>
+                  <div className={`bar-tooltip-row ${status}`}>
+                    <span>Gap</span>
+                    <span className="font-semibold">{item.gap >= 0 ? '+' : ''}{item.gap}h</span>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1040,9 +1100,6 @@ export function ScenarioPlanner() {
   const { data: capacityAnalysis, isLoading: analysisLoading } = useScenarioAnalysis(id || '');
   const { data: initiativesData, isLoading: initiativesLoading } = useInitiatives({ limit: 100 });
   const { data: employeesData } = useEmployees({ limit: 100 });
-  const scenarioQuarterRange = scenario?.periodLabel
-    ? `${scenario.periodLabel}:${scenario.periodLabel}`
-    : '';
   const transitionStatus = useTransitionScenarioStatus();
   const { canEdit, canTransition, canModifyAllocations, isReadOnly } = useScenarioPermissions(scenario as Scenario | undefined);
   const updatePriorities = useUpdatePriorities();
@@ -1165,13 +1222,15 @@ export function ScenarioPlanner() {
     });
   }, [allocationsData, employeesData, initiativesData]);
 
-  const capacityByQuarter: CapacityByQuarter[] = useMemo(() => {
-    if (!employeesData?.data || !scenarioQuarterRange) return [];
-    return calculateCapacityByQuarter(
-      employeesData.data.map(e => ({ hoursPerWeek: e.defaultCapacityHours })),
-      scenarioQuarterRange
+  const capacityByWeek: CapacityByWeek[] = useMemo(() => {
+    if (!employeesData?.data || !scenario?.periodStartDate || !scenario?.periodEndDate) return [];
+    return calculateCapacityByWeek(
+      employeesData.data.map(e => ({ id: e.id, hoursPerWeek: e.defaultCapacityHours })),
+      allocationsData || [],
+      new Date(scenario.periodStartDate),
+      new Date(scenario.periodEndDate)
     );
-  }, [employeesData, scenario]);
+  }, [employeesData, scenario, allocationsData]);
 
   const capacityByTeam: CapacityByTeam[] = useMemo(() => {
     if (!employeesData?.data) return [];
@@ -1266,7 +1325,7 @@ export function ScenarioPlanner() {
   // Summary stats
   const stats = useMemo(() => {
     const totalDemand = initiatives.reduce((sum, i) => sum + i.totalHours, 0);
-    const totalAvailableCapacity = capacityByQuarter.reduce((sum, q) => sum + q.capacity, 0);
+    const totalAvailableCapacity = capacityByWeek.reduce((sum, w) => sum + w.capacity, 0);
 
     // Calculate used capacity from actual allocations
     let totalUsedCapacity = 0;
@@ -1286,7 +1345,7 @@ export function ScenarioPlanner() {
     const skillGaps = capacityBySkill.filter(s => s.gap < 0).length;
     const utilizationPercent = totalAvailableCapacity > 0 ? Math.round((totalUsedCapacity / totalAvailableCapacity) * 100) : 0;
     return { totalDemand, totalAvailableCapacity, totalUsedCapacity, skillGaps, utilizationPercent };
-  }, [initiatives, capacityByQuarter, capacityBySkill, allocationsData, employeesData]);
+  }, [initiatives, capacityByWeek, capacityBySkill, allocationsData, employeesData]);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1720,7 +1779,7 @@ export function ScenarioPlanner() {
             </div>
 
             <div className="panel-content">
-              {activeTab === 'quarter' && <CapacityBarChart data={capacityByQuarter} />}
+              {activeTab === 'quarter' && <CapacityBarChart data={capacityByWeek} />}
               {activeTab === 'skill' && <SkillCapacityChart data={capacityBySkill} />}
               {activeTab === 'team' && <TeamCapacityChart data={capacityByTeam} />}
             </div>

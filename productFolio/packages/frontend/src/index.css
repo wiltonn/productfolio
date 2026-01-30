@@ -744,6 +744,83 @@
   @apply text-red-600;
 }
 
+/* Weekly Bar Chart Variants */
+.chart-bars.weekly {
+  gap: 3px;
+  justify-content: stretch;
+  @apply pb-2 px-0;
+}
+
+.bar-group.weekly {
+  max-width: none;
+  @apply relative flex-1;
+  animation-duration: 0.25s;
+  min-width: 0;
+}
+
+.bar-container.weekly {
+  @apply h-56 mb-1;
+}
+
+.bar.weekly-overlay {
+  @apply w-full flex items-end;
+  border-radius: 3px 3px 0 0;
+}
+
+.bar.weekly-overlay.capacity {
+  @apply bg-surface-200;
+}
+
+.bar.weekly-overlay.demand {
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+.bar-label.weekly {
+  font-size: 10px;
+  @apply text-surface-500 mt-1 leading-tight;
+  white-space: nowrap;
+}
+
+/* Bar Tooltip */
+.bar-tooltip {
+  @apply absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+         bg-surface-800 text-white rounded-lg shadow-raised
+         px-3 py-2 z-50 whitespace-nowrap;
+  font-size: 12px;
+  min-width: 160px;
+  pointer-events: none;
+}
+
+.bar-tooltip::after {
+  content: '';
+  @apply absolute top-full left-1/2 -translate-x-1/2;
+  border: 5px solid transparent;
+  border-top-color: var(--color-surface-800);
+}
+
+.bar-tooltip-header {
+  @apply font-semibold mb-1.5 pb-1.5 border-b border-white/20;
+}
+
+.bar-tooltip-row {
+  @apply flex items-center justify-between gap-4 py-0.5;
+}
+
+.bar-tooltip-row.ok {
+  @apply text-emerald-300;
+}
+
+.bar-tooltip-row.tight {
+  @apply text-amber-300;
+}
+
+.bar-tooltip-row.shortage {
+  @apply text-red-300;
+}
+
 /* Skill Capacity Chart */
 .skill-chart {
   @apply space-y-4;
