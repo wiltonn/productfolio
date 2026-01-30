@@ -226,3 +226,14 @@ export const CsvExportSchema = z.object({
 });
 
 export type CsvExportInput = z.infer<typeof CsvExportSchema>;
+
+/**
+ * Schema for initiative allocation hours query
+ */
+export const InitiativeAllocationHoursQuerySchema = z.object({
+  initiativeIds: z.string().min(1, 'At least one initiative ID is required'),
+  currentQuarterStart: z.coerce.date(),
+  currentQuarterEnd: z.coerce.date(),
+  nextQuarterStart: z.coerce.date(),
+  nextQuarterEnd: z.coerce.date(),
+});

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useInitiative, useUpdateInitiative, useUpdateInitiativeStatus } from '../hooks';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useInitiative, useUpdateInitiative, useUpdateInitiativeStatus, useInitiativeAllocationsAll } from '../hooks';
 import { StatusBadge } from '../components/ui';
-import type { InitiativeStatus } from '../types';
+import type { InitiativeStatus, InitiativeAllocation } from '../types';
 
 // Types for scope items and approvals
 interface ScopeItem {
@@ -95,16 +95,24 @@ function getSkillColor(skill: string): string {
 }
 
 // Tab types
-type TabId = 'overview' | 'scope' | 'approvals' | 'activity';
+type TabId = 'overview' | 'scope' | 'assignments' | 'approvals' | 'activity';
+
+const validTabs: TabId[] = ['overview', 'scope', 'assignments', 'approvals', 'activity'];
 
 export function InitiativeDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: initiative, isLoading } = useInitiative(id || '');
   const updateInitiative = useUpdateInitiative();
   const updateStatus = useUpdateInitiativeStatus();
+  const { data: allocations, isLoading: allocationsLoading } = useInitiativeAllocationsAll(id || '');
+
+  // Read initial tab from URL query param
+  const tabParam = searchParams.get('tab') as TabId | null;
+  const initialTab = tabParam && validTabs.includes(tabParam) ? tabParam : 'overview';
 
   // Local state
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const [showEstimateP90, setShowEstimateP90] = useState(false);
@@ -116,6 +124,15 @@ export function InitiativeDetail() {
   const [editingScopeItem, setEditingScopeItem] = useState<ScopeItem | null>(null);
   const [scopeItems, setScopeItems] = useState<ScopeItem[]>(mockScopeItems);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'error' }>>([]);
+
+  const handleTabChange = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab }, { replace: true });
+    }
+  }, [setSearchParams]);
 
   // Refs
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -253,6 +270,7 @@ export function InitiativeDetail() {
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'scope', label: 'Scope', count: scopeItems.length },
+    { id: 'assignments', label: 'Assignments', count: allocations?.length },
     { id: 'approvals', label: 'Approvals', count: mockApprovals.length },
     { id: 'activity', label: 'Activity' },
   ];
@@ -388,7 +406,7 @@ export function InitiativeDetail() {
           {tabs.map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`
                 relative py-3 text-sm font-medium transition-colors
                 ${activeTab === tab.id
@@ -439,6 +457,9 @@ export function InitiativeDetail() {
             totalsBySkill={totalsBySkill}
             totalDays={totalDays}
           />
+        )}
+        {activeTab === 'assignments' && (
+          <AssignmentsTab allocations={allocations || []} isLoading={allocationsLoading} />
         )}
         {activeTab === 'approvals' && (
           <ApprovalsTab approvals={mockApprovals} />
@@ -852,6 +873,138 @@ function ScopeTab({
           </tfoot>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Assignments Tab Component
+function AssignmentsTab({
+  allocations,
+  isLoading,
+}: {
+  allocations: InitiativeAllocation[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <div className="flex items-center gap-3 text-surface-500">
+          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <span className="text-sm font-medium">Loading assignments...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (allocations.length === 0) {
+    return (
+      <div className="card p-12">
+        <div className="flex flex-col items-center justify-center text-surface-400">
+          <svg className="w-12 h-12 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+          </svg>
+          <p className="text-sm font-medium text-surface-600 mb-1">No assignments yet</p>
+          <p className="text-sm text-surface-400">
+            Assignments are created through scenario planning. Add this initiative to a scenario and allocate employees there.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Group allocations by scenario
+  const grouped = allocations.reduce<Record<string, { scenarioName: string; scenarioStatus: string; allocations: InitiativeAllocation[] }>>((acc, alloc) => {
+    if (!acc[alloc.scenarioId]) {
+      acc[alloc.scenarioId] = {
+        scenarioName: alloc.scenarioName,
+        scenarioStatus: alloc.scenarioStatus,
+        allocations: [],
+      };
+    }
+    acc[alloc.scenarioId].allocations.push(alloc);
+    return acc;
+  }, {});
+
+  const scenarioEntries = Object.entries(grouped);
+  const uniqueEmployees = new Set(allocations.map(a => a.employeeId)).size;
+
+  const scenarioStatusStyles: Record<string, string> = {
+    DRAFT: 'bg-surface-100 text-surface-600',
+    REVIEW: 'bg-amber-100 text-amber-700',
+    APPROVED: 'bg-emerald-100 text-emerald-700',
+    LOCKED: 'bg-violet-100 text-violet-700',
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary bar */}
+      <div className="card p-4">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-surface-500">Total assignments:</span>
+            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
+              {allocations.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-surface-500">Across scenarios:</span>
+            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
+              {scenarioEntries.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-surface-500">Unique employees:</span>
+            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
+              {uniqueEmployees}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Scenario groups */}
+      {scenarioEntries.map(([scenarioId, group]) => (
+        <div key={scenarioId} className="card overflow-hidden">
+          {/* Scenario header */}
+          <div className="px-6 py-4 bg-surface-50 border-b border-surface-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-surface-900">{group.scenarioName}</h3>
+              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${scenarioStatusStyles[group.scenarioStatus] || 'bg-surface-100 text-surface-600'}`}>
+                {group.scenarioStatus}
+              </span>
+            </div>
+            <span className="text-xs text-surface-500">
+              {group.allocations.length} assignment{group.allocations.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {/* Allocations table */}
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-surface-100">
+                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Start Date</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">End Date</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider">Allocation %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-100">
+              {group.allocations.map((alloc) => (
+                <tr key={alloc.id} className="hover:bg-surface-50 transition-colors">
+                  <td className="px-6 py-3 text-sm font-medium text-surface-900">{alloc.employeeName}</td>
+                  <td className="px-6 py-3 text-sm text-surface-600 capitalize">{alloc.employeeRole.toLowerCase().replace('_', ' ')}</td>
+                  <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.startDate).toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.endDate).toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-sm text-right font-mono font-medium text-surface-900">{alloc.percentage}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }

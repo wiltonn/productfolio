@@ -8,8 +8,10 @@ import {
   BulkDeleteSchema,
   CsvImportSchema,
   CsvExportSchema,
+  InitiativeAllocationHoursQuerySchema,
 } from '../schemas/initiatives.schema.js';
 import * as initiativesService from '../services/initiatives.service.js';
+import { allocationService } from '../services/allocation.service.js';
 import { enqueueCsvImport } from '../jobs/index.js';
 
 export async function initiativesRoutes(fastify: FastifyInstance) {
@@ -48,6 +50,25 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * GET /api/initiatives/allocation-hours
+   * Batch fetch allocated hours per initiative for current and next quarters
+   */
+  fastify.get<{
+    Querystring: Record<string, unknown>;
+  }>('/api/initiatives/allocation-hours', async (request, reply) => {
+    const query = InitiativeAllocationHoursQuerySchema.parse(request.query);
+    const initiativeIds = query.initiativeIds.split(',').map((id) => id.trim());
+    const hours = await allocationService.listInitiativeAllocationHours(
+      initiativeIds,
+      query.currentQuarterStart,
+      query.currentQuarterEnd,
+      query.nextQuarterStart,
+      query.nextQuarterEnd
+    );
+    return reply.send(hours);
+  });
+
+  /**
    * GET /api/initiatives/:id
    * Get a single initiative by ID
    */
@@ -56,6 +77,17 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   }>('/api/initiatives/:id', async (request, reply) => {
     const initiative = await initiativesService.getById(request.params.id);
     return reply.send(initiative);
+  });
+
+  /**
+   * GET /api/initiatives/:id/allocations
+   * List all allocations for an initiative across all scenarios
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>('/api/initiatives/:id/allocations', async (request, reply) => {
+    const allocations = await allocationService.listByInitiativeAcrossScenarios(request.params.id);
+    return reply.send(allocations);
   });
 
   /**

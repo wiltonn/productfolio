@@ -44,6 +44,19 @@ interface EmployeeAllocationDetail {
   percentage: number;
 }
 
+export interface InitiativeAllocationDetail {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  scenarioStatus: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  startDate: Date;
+  endDate: Date;
+  percentage: number;
+}
+
 interface AllocationSummaryItem {
   id: string;
   scenarioId: string;
@@ -60,6 +73,11 @@ export interface EmployeeAllocationSummary {
   currentQuarterPct: number;
   nextQuarterPct: number;
   allocations: AllocationSummaryItem[];
+}
+
+export interface InitiativeAllocationHours {
+  currentQuarterHours: number;
+  nextQuarterHours: number;
 }
 
 export class AllocationService {
@@ -258,6 +276,117 @@ export class AllocationService {
       endDate: allocation.endDate,
       percentage: allocation.percentage,
     }));
+  }
+
+  async listByInitiativeAcrossScenarios(initiativeId: string): Promise<InitiativeAllocationDetail[]> {
+    const initiative = await prisma.initiative.findUnique({
+      where: { id: initiativeId },
+    });
+
+    if (!initiative) {
+      throw new NotFoundError('Initiative', initiativeId);
+    }
+
+    const allocations = await prisma.allocation.findMany({
+      where: { initiativeId },
+      include: {
+        scenario: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: [
+        { scenario: { name: 'asc' } },
+        { startDate: 'asc' },
+      ],
+    });
+
+    return allocations.map((allocation) => ({
+      id: allocation.id,
+      scenarioId: allocation.scenario.id,
+      scenarioName: allocation.scenario.name,
+      scenarioStatus: allocation.scenario.status,
+      employeeId: allocation.employee.id,
+      employeeName: allocation.employee.name,
+      employeeRole: allocation.employee.role,
+      startDate: allocation.startDate,
+      endDate: allocation.endDate,
+      percentage: allocation.percentage,
+    }));
+  }
+
+  async listInitiativeAllocationHours(
+    initiativeIds: string[],
+    currentQStart: Date,
+    currentQEnd: Date,
+    nextQStart: Date,
+    nextQEnd: Date
+  ): Promise<Record<string, InitiativeAllocationHours>> {
+    if (initiativeIds.length === 0) return {};
+
+    // Fetch all allocation periods for allocations belonging to these initiatives,
+    // where the period overlaps current or next quarter
+    const allocationPeriods = await prisma.allocationPeriod.findMany({
+      where: {
+        allocation: {
+          initiativeId: { in: initiativeIds },
+        },
+        period: {
+          type: 'QUARTER',
+          OR: [
+            { startDate: { lte: currentQEnd }, endDate: { gte: currentQStart } },
+            { startDate: { lte: nextQEnd }, endDate: { gte: nextQStart } },
+          ],
+        },
+      },
+      include: {
+        allocation: {
+          select: { initiativeId: true },
+        },
+        period: {
+          select: { startDate: true, endDate: true },
+        },
+      },
+    });
+
+    // Initialize result for all requested initiatives
+    const result: Record<string, InitiativeAllocationHours> = {};
+    for (const id of initiativeIds) {
+      result[id] = { currentQuarterHours: 0, nextQuarterHours: 0 };
+    }
+
+    for (const ap of allocationPeriods) {
+      const initId = ap.allocation.initiativeId;
+      if (!initId || !result[initId]) continue;
+
+      // Check if period overlaps current quarter
+      if (ap.period.startDate <= currentQEnd && ap.period.endDate >= currentQStart) {
+        result[initId].currentQuarterHours += ap.hoursInPeriod;
+      }
+
+      // Check if period overlaps next quarter
+      if (ap.period.startDate <= nextQEnd && ap.period.endDate >= nextQStart) {
+        result[initId].nextQuarterHours += ap.hoursInPeriod;
+      }
+    }
+
+    // Round the values
+    for (const id of initiativeIds) {
+      result[id].currentQuarterHours = Math.round(result[id].currentQuarterHours);
+      result[id].nextQuarterHours = Math.round(result[id].nextQuarterHours);
+    }
+
+    return result;
   }
 
   async listAllocationSummaries(

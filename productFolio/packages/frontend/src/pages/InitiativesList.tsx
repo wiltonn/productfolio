@@ -14,12 +14,13 @@ import {
 import { CreateInitiativeModal } from '../components/CreateInitiativeModal';
 import {
   useInitiatives,
+  useInitiativeAllocationHours,
   useBulkUpdateStatus,
   useBulkAddTags,
   useBulkDeleteInitiatives,
   useExportInitiatives,
 } from '../hooks/useInitiatives';
-import type { Initiative, InitiativeStatus, InitiativeFilters } from '../types';
+import type { Initiative, InitiativeStatus, InitiativeFilters, InitiativeAllocationHours } from '../types';
 import { getQuarterOptions } from '../types';
 
 // Status filter options
@@ -76,8 +77,48 @@ export function InitiativesList() {
   const bulkDelete = useBulkDeleteInitiatives();
   const exportMutation = useExportInitiatives();
 
+  // Quarter dates for allocation hours
+  const quarterDates = useMemo(() => {
+    const now = new Date();
+    const currentQ = Math.floor(now.getMonth() / 3);
+    const currentYear = now.getFullYear();
+
+    const currentQStart = new Date(currentYear, currentQ * 3, 1);
+    const currentQEnd = new Date(currentYear, currentQ * 3 + 3, 0);
+
+    const nextQ = (currentQ + 1) % 4;
+    const nextYear = currentQ === 3 ? currentYear + 1 : currentYear;
+    const nextQStart = new Date(nextYear, nextQ * 3, 1);
+    const nextQEnd = new Date(nextYear, nextQ * 3 + 3, 0);
+
+    const qLabel = (q: number, y: number) => `Q${q + 1} ${y}`;
+
+    return {
+      currentQStart: currentQStart.toISOString().split('T')[0],
+      currentQEnd: currentQEnd.toISOString().split('T')[0],
+      nextQStart: nextQStart.toISOString().split('T')[0],
+      nextQEnd: nextQEnd.toISOString().split('T')[0],
+      currentLabel: qLabel(currentQ, currentYear),
+      nextLabel: qLabel(nextQ, nextYear),
+    };
+  }, []);
+
   // Use API data
   const initiatives = apiData?.data ?? [];
+
+  // Fetch allocation hours for loaded initiatives
+  const initiativeIds = useMemo(
+    () => initiatives.map((i) => i.id),
+    [initiatives]
+  );
+
+  const { data: allocationHoursMap } = useInitiativeAllocationHours(
+    initiativeIds,
+    quarterDates.currentQStart,
+    quarterDates.currentQEnd,
+    quarterDates.nextQStart,
+    quarterDates.nextQEnd
+  );
 
   // Get selected IDs
   const selectedIds = useMemo(
@@ -225,6 +266,51 @@ export function InitiativesList() {
         ),
       },
       {
+        id: 'currentQHours',
+        header: quarterDates.currentLabel,
+        size: 100,
+        cell: ({ row }) => {
+          const hours = allocationHoursMap?.[row.original.id]?.currentQuarterHours ?? 0;
+          return (
+            <Link
+              to={`/initiatives/${row.original.id}?tab=assignments`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
+              style={{
+                backgroundColor: hours === 0 ? undefined : undefined,
+              }}
+              title="View assignments"
+            >
+              <span className={hours === 0 ? 'text-surface-400' : 'text-surface-800'}>
+                {hours === 0 ? '-' : `${hours}h`}
+              </span>
+            </Link>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: 'nextQHours',
+        header: quarterDates.nextLabel,
+        size: 100,
+        cell: ({ row }) => {
+          const hours = allocationHoursMap?.[row.original.id]?.nextQuarterHours ?? 0;
+          return (
+            <Link
+              to={`/initiatives/${row.original.id}?tab=assignments`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
+              title="View assignments"
+            >
+              <span className={hours === 0 ? 'text-surface-400' : 'text-surface-800'}>
+                {hours === 0 ? '-' : `${hours}h`}
+              </span>
+            </Link>
+          );
+        },
+        enableSorting: false,
+      },
+      {
         id: 'tags',
         header: 'Tags',
         size: 200,
@@ -258,7 +344,7 @@ export function InitiativesList() {
         ),
       },
     ],
-    []
+    [quarterDates, allocationHoursMap]
   );
 
   const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter;

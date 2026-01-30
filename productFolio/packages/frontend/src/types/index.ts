@@ -57,6 +57,26 @@ export interface Initiative {
   scopeItems?: ScopeItem[];
 }
 
+// Initiative allocation hours per quarter
+export interface InitiativeAllocationHours {
+  currentQuarterHours: number;
+  nextQuarterHours: number;
+}
+
+// Initiative allocation (across scenarios)
+export interface InitiativeAllocation {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  scenarioStatus: string;
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  startDate: string;
+  endDate: string;
+  percentage: number;
+}
+
 // API Response types
 export interface PaginatedResponse<T> {
   data: T[];

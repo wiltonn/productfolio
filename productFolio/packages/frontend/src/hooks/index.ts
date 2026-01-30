@@ -12,6 +12,8 @@ export {
 export {
   useInitiatives,
   useInitiative,
+  useInitiativeAllocationsAll,
+  useInitiativeAllocationHours,
   useCreateInitiative,
   useUpdateInitiative,
   useUpdateInitiativeStatus,
@@ -110,6 +112,8 @@ export { useKeyboardShortcuts, formatShortcut, type KeyboardShortcut } from './u
 export type {
   Initiative,
   InitiativeStatus,
+  InitiativeAllocation,
+  InitiativeAllocationHours,
   InitiativeFilters,
   PaginatedResponse,
   BulkUpdateResult,
