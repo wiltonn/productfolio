@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { UserRole, ScenarioStatus } from '@prisma/client';
 import {
   createScenarioSchema,
   updateScenarioSchema,
@@ -8,15 +9,21 @@ import {
   compareQuerySchema,
   paginationSchema,
   autoAllocateOptionsSchema,
+  transitionStatusSchema,
 } from '../schemas/scenarios.schema.js';
 import { calculatorQuerySchema } from '../schemas/calculator.schema.js';
 import { scenariosService } from '../services/scenarios.service.js';
 import { allocationService } from '../services/allocation.service.js';
 import { scenarioCalculatorService } from '../services/scenario-calculator.service.js';
 
+const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
+
 export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
+
+  const authorizeScenarioMutation = fastify.authorize(MUTATION_ROLES);
+
   // GET /api/scenarios - List scenarios
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/scenarios',
@@ -43,6 +50,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios - Create scenario
   fastify.post<{ Body: unknown }>(
     '/api/scenarios',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const data = createScenarioSchema.parse(request.body);
       const scenario = await scenariosService.create(data);
@@ -53,6 +61,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id - Update scenario
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const data = updateScenarioSchema.parse(request.body);
       const scenario = await scenariosService.update(request.params.id, data);
@@ -63,15 +72,32 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/scenarios/:id - Delete scenario
   fastify.delete<{ Params: { id: string } }>(
     '/api/scenarios/:id',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       await scenariosService.delete(request.params.id);
       return reply.code(204).send();
     }
   );
 
+  // PUT /api/scenarios/:id/status - Transition scenario status
+  fastify.put<{ Params: { id: string }; Body: unknown }>(
+    '/api/scenarios/:id/status',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      const { status } = transitionStatusSchema.parse(request.body);
+      const scenario = await scenariosService.transitionStatus(
+        request.params.id,
+        status as ScenarioStatus,
+        request.user.role
+      );
+      return reply.code(200).send(scenario);
+    }
+  );
+
   // PUT /api/scenarios/:id/priorities - Update priority rankings
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/priorities',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const data = updatePrioritiesSchema.parse(request.body);
       const scenario = await scenariosService.updatePriorities(request.params.id, data);
@@ -103,6 +129,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/allocations - Create allocation
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/allocations',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const data = createAllocationSchema.parse(request.body);
       const allocation = await allocationService.create(request.params.id, data);
@@ -113,6 +140,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/allocations/:id - Update allocation
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/allocations/:id',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const data = updateAllocationSchema.parse(request.body);
       const allocation = await allocationService.update(request.params.id, data);
@@ -123,6 +151,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/allocations/:id - Delete allocation
   fastify.delete<{ Params: { id: string } }>(
     '/api/allocations/:id',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       await allocationService.delete(request.params.id);
       return reply.code(204).send();
@@ -170,6 +199,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/calculator/invalidate - Invalidate cache
   fastify.post<{ Params: { id: string } }>(
     '/api/scenarios/:id/calculator/invalidate',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       await scenarioCalculatorService.invalidateCache(request.params.id);
       return reply.code(204).send();
@@ -179,6 +209,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/auto-allocate - Preview auto-allocations (no side effects)
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/auto-allocate',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const options = autoAllocateOptionsSchema.parse(request.body || {});
       const result = await allocationService.autoAllocate(request.params.id, options);
@@ -189,6 +220,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/auto-allocate/apply - Apply auto-allocations
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/auto-allocate/apply',
+    { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
       const { proposedAllocations } = request.body as {
         proposedAllocations: Array<{

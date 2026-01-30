@@ -11,6 +11,9 @@ export type InitiativeStatus =
 // Delivery health enum
 export type DeliveryHealth = 'ON_TRACK' | 'AT_RISK' | 'DELAYED';
 
+// Scenario status enum
+export type ScenarioStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'LOCKED';
+
 // User types
 export interface User {
   id: string;

@@ -48,6 +48,13 @@ enum PeriodType {
   QUARTER
 }
 
+enum ScenarioStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+  LOCKED
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -112,7 +119,7 @@ model Period {
   // Relations to other models
   targetedInitiatives            Initiative[]
   capacityCalendars              CapacityCalendar[]
-  scenarioPeriods                ScenarioPeriod[]
+  scenarios                      Scenario[]
   allocationPeriods              AllocationPeriod[]
   scopeItemPeriodDistributions   ScopeItemPeriodDistribution[]
   activeStartEmployees           Employee[] @relation("ActiveStartPeriod")
@@ -280,31 +287,25 @@ model CapacityCalendar {
 // ============================================================================
 
 model Scenario {
-  id               String @id @default(uuid()) @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
   name             String
-  assumptions      Json?  @db.JsonB // Flexible assumptions storage
-  priorityRankings Json?  @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
-  version          Int    @default(1)
+  periodId         String         @db.Uuid @map("period_id")
+  status           ScenarioStatus @default(DRAFT)
+  planLockDate     DateTime?      @map("plan_lock_date")
+  assumptions      Json?          @db.JsonB // Flexible assumptions storage
+  priorityRankings Json?          @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
+  version          Int            @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  allocations     Allocation[]
-  scenarioPeriods ScenarioPeriod[]
+  period      Period       @relation(fields: [periodId], references: [id])
+  allocations Allocation[]
 
   @@index([name])
-}
-
-model ScenarioPeriod {
-  scenarioId String @db.Uuid @map("scenario_id")
-  periodId   String @db.Uuid @map("period_id")
-
-  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
-  period     Period   @relation(fields: [periodId], references: [id])
-
-  @@id([scenarioId, periodId])
-  @@map("scenario_periods")
+  @@index([periodId])
+  @@index([status])
 }
 
 model Allocation {

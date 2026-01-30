@@ -1,12 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { toast } from '../stores/toast';
+import type { ScenarioStatus } from '../types';
+import { useAuthStore, type UserRole } from '../stores/auth.store';
 
 export interface Scenario {
   id: string;
   name: string;
-  periodIds: string[];
-  quarterRange?: string; // Computed on the frontend from periodIds
+  periodId: string;
+  periodLabel: string;
+  periodStartDate: string;
+  periodEndDate: string;
+  status: ScenarioStatus;
+  planLockDate: string | null;
   assumptions?: Record<string, unknown>;
   priorityRankings?: Array<{ initiativeId: string; rank: number }>;
   version: number;
@@ -18,6 +24,7 @@ export interface Allocation {
   id: string;
   scenarioId: string;
   employeeId: string;
+  employeeName: string;
   initiativeId: string;
   initiativeStatus: string | null;
   startDate: string;
@@ -157,7 +164,7 @@ export function useCreateScenario() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { name: string; periodIds: string[]; assumptions?: Record<string, unknown> }) =>
+    mutationFn: (data: { name: string; periodId: string; assumptions?: Record<string, unknown> }) =>
       api.post<Scenario>('/scenarios', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
@@ -245,7 +252,7 @@ export function useCreateAllocation() {
   return useMutation({
     mutationFn: ({ scenarioId, data }: { scenarioId: string; data: Partial<Allocation> }) =>
       api.post<Allocation>(`/scenarios/${scenarioId}/allocations`, data),
-    onSuccess: (result, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(variables.scenarioId) });
       queryClient.invalidateQueries({ queryKey: scenarioKeys.analysis(variables.scenarioId) });
       queryClient.invalidateQueries({
@@ -419,4 +426,38 @@ export function useInvalidateCalculatorCache() {
       toast.error(error instanceof Error ? error.message : 'Failed to invalidate cache');
     },
   });
+}
+
+export function useTransitionScenarioStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: ScenarioStatus }) =>
+      api.put<Scenario>(`/scenarios/${id}/status`, { status }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.lists() });
+      toast.success(`Scenario status updated to ${variables.status}`);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to update scenario status');
+    },
+  });
+}
+
+const MUTATION_ROLES: UserRole[] = ['ADMIN', 'PRODUCT_OWNER', 'BUSINESS_OWNER'];
+
+export function useScenarioPermissions(scenario: Scenario | undefined) {
+  const user = useAuthStore((state) => state.user);
+  const userRole = user?.role;
+
+  const hasMutationRole = !!userRole && MUTATION_ROLES.includes(userRole);
+  const status = scenario?.status;
+
+  const canEdit = hasMutationRole && status !== 'LOCKED' && status !== 'APPROVED';
+  const canTransition = hasMutationRole;
+  const canModifyAllocations = hasMutationRole && status !== 'LOCKED' && status !== 'APPROVED';
+  const isReadOnly = status === 'LOCKED' || status === 'APPROVED' || !hasMutationRole;
+
+  return { canEdit, canTransition, canModifyAllocations, isReadOnly, hasMutationRole };
 }

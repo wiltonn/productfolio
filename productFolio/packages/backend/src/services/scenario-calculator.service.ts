@@ -51,11 +51,7 @@ export class ScenarioCalculatorService {
     const scenario = await prisma.scenario.findUnique({
       where: { id: scenarioId },
       include: {
-        scenarioPeriods: {
-          include: {
-            period: true,
-          },
-        },
+        period: true,
         allocations: {
           include: {
             employee: {
@@ -86,14 +82,14 @@ export class ScenarioCalculatorService {
     const assumptions = this.parseAssumptions(scenario.assumptions);
     const priorityRankings = (scenario.priorityRankings as unknown as PriorityRanking[]) || [];
 
-    // Build period info from scenario's periods
-    const periods: PeriodInfo[] = scenario.scenarioPeriods.map((sp) => ({
-      periodId: sp.period.id,
-      periodLabel: sp.period.label,
-      periodType: sp.period.type,
-      startDate: sp.period.startDate,
-      endDate: sp.period.endDate,
-    }));
+    // Build period info from scenario's single period
+    const periods: PeriodInfo[] = [{
+      periodId: scenario.period.id,
+      periodLabel: scenario.period.label,
+      periodType: scenario.period.type,
+      startDate: scenario.period.startDate,
+      endDate: scenario.period.endDate,
+    }];
 
     // Sort periods chronologically
     periods.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());

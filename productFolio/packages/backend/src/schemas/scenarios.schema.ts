@@ -14,22 +14,28 @@ export type PriorityRanking = z.infer<typeof priorityRankingSchema>;
 // Create Scenario Schema
 export const createScenarioSchema = z.object({
   name: z.string().min(1).max(255),
-  periodIds: z.array(uuidSchema).min(1, 'At least one period is required'),
-  assumptions: z.record(z.unknown()).optional(),
+  periodId: uuidSchema,
+  assumptions: z.record(z.string(), z.unknown()).optional(),
   priorityRankings: z.array(priorityRankingSchema).optional(),
 });
 
 export type CreateScenario = z.infer<typeof createScenarioSchema>;
 
-// Update Scenario Schema
+// Update Scenario Schema (quarter/periodId is immutable)
 export const updateScenarioSchema = z.object({
   name: z.string().min(1).max(255).optional(),
-  periodIds: z.array(uuidSchema).min(1).optional(),
-  assumptions: z.record(z.unknown()).optional(),
+  assumptions: z.record(z.string(), z.unknown()).optional(),
   priorityRankings: z.array(priorityRankingSchema).optional(),
 });
 
 export type UpdateScenario = z.infer<typeof updateScenarioSchema>;
+
+// Transition Status Schema
+export const transitionStatusSchema = z.object({
+  status: z.enum(['DRAFT', 'REVIEW', 'APPROVED', 'LOCKED']),
+});
+
+export type TransitionStatus = z.infer<typeof transitionStatusSchema>;
 
 // Update Priorities Schema
 export const updatePrioritiesSchema = z.object({

@@ -1,14 +1,43 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useScenarios, useCreateScenario } from '../hooks/useScenarios';
-import { useQuarterPeriods, getQuarterPeriodIds, deriveQuarterRange } from '../hooks/usePeriods';
+import type { Scenario } from '../hooks/useScenarios';
+import { useQuarterPeriods } from '../hooks/usePeriods';
+import type { Period } from '../hooks/usePeriods';
 import { Modal } from '../components/ui';
+import type { ScenarioStatus } from '../types';
 
 // Helper to get current quarter
 function getCurrentQuarter(): string {
   const now = new Date();
   const quarter = Math.ceil((now.getMonth() + 1) / 3);
   return `${now.getFullYear()}-Q${quarter}`;
+}
+
+// Status badge colors
+const STATUS_COLORS: Record<ScenarioStatus, { bg: string; text: string; label: string }> = {
+  DRAFT: { bg: 'bg-surface-100', text: 'text-surface-600', label: 'Draft' },
+  REVIEW: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Review' },
+  APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
+  LOCKED: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Locked' },
+};
+
+function ScenarioStatusBadge({ status }: { status: ScenarioStatus }) {
+  const config = STATUS_COLORS[status] || STATUS_COLORS.DRAFT;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${config.bg} ${config.text}`}>
+      {status === 'LOCKED' && (
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+        </svg>
+      )}
+      {config.label}
+    </span>
+  );
+}
+
+function findPeriodByLabel(periods: Period[], label: string): Period | undefined {
+  return periods.find((p) => p.label === label);
 }
 
 // Generate quarter options for next 8 quarters
@@ -31,7 +60,7 @@ function getQuarterOptions(): string[] {
 
 export function ScenariosList() {
   const { data: scenariosData, isLoading } = useScenarios();
-  const scenarios = scenariosData?.data ?? [];
+  const scenarios = (scenariosData?.data ?? []) as Scenario[];
   const createScenario = useCreateScenario();
   const { data: periodsData } = useQuarterPeriods();
   const quarterPeriods = periodsData?.data ?? [];
@@ -39,27 +68,25 @@ export function ScenariosList() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState('');
-  const [startQuarter, setStartQuarter] = useState(getCurrentQuarter());
-  const [endQuarter, setEndQuarter] = useState(getCurrentQuarter());
+  const [selectedQuarter, setSelectedQuarter] = useState(getCurrentQuarter());
 
   const handleCreateScenario = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newScenarioName.trim()) return;
 
-    const periodIds = getQuarterPeriodIds(quarterPeriods, startQuarter, endQuarter);
-    if (periodIds.length === 0) return;
+    const period = findPeriodByLabel(quarterPeriods, selectedQuarter);
+    if (!period) return;
 
     createScenario.mutate(
       {
         name: newScenarioName.trim(),
-        periodIds,
+        periodId: period.id,
       },
       {
         onSuccess: () => {
           setIsModalOpen(false);
           setNewScenarioName('');
-          setStartQuarter(getCurrentQuarter());
-          setEndQuarter(getCurrentQuarter());
+          setSelectedQuarter(getCurrentQuarter());
         },
       }
     );
@@ -69,8 +96,7 @@ export function ScenariosList() {
   const closeModal = () => {
     setIsModalOpen(false);
     setNewScenarioName('');
-    setStartQuarter(getCurrentQuarter());
-    setEndQuarter(getCurrentQuarter());
+    setSelectedQuarter(getCurrentQuarter());
   };
   return (
     <div className="animate-fade-in">
@@ -102,11 +128,19 @@ export function ScenariosList() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h3 className="font-display font-semibold text-surface-900 group-hover:text-accent-600 transition-colors">
-                  {scenario.name}
+                  {scenario.periodLabel} &mdash; {scenario.name}
                 </h3>
-                <p className="mt-1 text-sm text-surface-500 font-mono">
-                  {scenario.quarterRange || deriveQuarterRange(scenario.periodIds || [], quarterPeriods)}
-                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-sm text-surface-500 font-mono">
+                    {scenario.periodLabel}
+                  </span>
+                  <ScenarioStatusBadge status={scenario.status} />
+                </div>
+                {scenario.planLockDate && (
+                  <p className="mt-1 text-xs text-surface-400">
+                    Locked {new Date(scenario.planLockDate).toLocaleDateString()}
+                  </p>
+                )}
               </div>
               <svg
                 className="w-5 h-5 text-surface-300 group-hover:text-accent-500 transition-colors"
@@ -149,7 +183,8 @@ export function ScenariosList() {
               <thead>
                 <tr>
                   <th>Scenario</th>
-                  <th className="text-center">Quarter Range</th>
+                  <th className="text-center">Quarter</th>
+                  <th className="text-center">Status</th>
                   <th className="text-center">Created</th>
                   <th className="text-center">Last Updated</th>
                 </tr>
@@ -161,7 +196,10 @@ export function ScenariosList() {
                       <span className="font-medium text-surface-900">{scenario.name}</span>
                     </td>
                     <td className="text-center font-mono text-sm">
-                      {scenario.quarterRange || deriveQuarterRange(scenario.periodIds || [], quarterPeriods)}
+                      {scenario.periodLabel}
+                    </td>
+                    <td className="text-center">
+                      <ScenarioStatusBadge status={scenario.status} />
                     </td>
                     <td className="text-center font-mono text-sm">
                       {new Date(scenario.createdAt).toLocaleDateString()}
@@ -195,37 +233,20 @@ export function ScenariosList() {
               autoFocus
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="start-quarter" className="block text-sm font-medium text-surface-700 mb-1">
-                Start Quarter
-              </label>
-              <select
-                id="start-quarter"
-                value={startQuarter}
-                onChange={(e) => setStartQuarter(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
-              >
-                {quarterOptions.map((q) => (
-                  <option key={q} value={q}>{q}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="end-quarter" className="block text-sm font-medium text-surface-700 mb-1">
-                End Quarter
-              </label>
-              <select
-                id="end-quarter"
-                value={endQuarter}
-                onChange={(e) => setEndQuarter(e.target.value)}
-                className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
-              >
-                {quarterOptions.map((q) => (
-                  <option key={q} value={q}>{q}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label htmlFor="quarter" className="block text-sm font-medium text-surface-700 mb-1">
+              Quarter
+            </label>
+            <select
+              id="quarter"
+              value={selectedQuarter}
+              onChange={(e) => setSelectedQuarter(e.target.value)}
+              className="w-full px-3 py-2 border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+            >
+              {quarterOptions.map((q) => (
+                <option key={q} value={q}>{q}</option>
+              ))}
+            </select>
           </div>
           <div className="flex justify-end gap-3 pt-4">
             <button

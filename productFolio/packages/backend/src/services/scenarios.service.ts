@@ -1,6 +1,6 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, ScenarioStatus, UserRole, PeriodType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { NotFoundError, ValidationError, WorkflowError, ForbiddenError } from '../lib/errors.js';
 import { scenarioCalculatorService } from './scenario-calculator.service.js';
 import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateScenario, UpdateScenario, UpdatePriorities, Pagination, PriorityRanking } from '../schemas/scenarios.schema.js';
@@ -11,12 +11,27 @@ interface ScenarioWithMetadata {
   name: string;
   assumptions: Record<string, unknown> | null;
   priorityRankings: PriorityRanking[] | null;
-  periodIds: string[];
+  periodId: string;
+  periodLabel: string;
+  periodStartDate: Date;
+  periodEndDate: Date;
+  status: ScenarioStatus;
+  planLockDate: Date | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
   allocationsCount: number;
 }
+
+// Valid status transitions
+const VALID_TRANSITIONS: Record<ScenarioStatus, ScenarioStatus[]> = {
+  DRAFT: [ScenarioStatus.REVIEW],
+  REVIEW: [ScenarioStatus.DRAFT, ScenarioStatus.APPROVED],
+  APPROVED: [ScenarioStatus.REVIEW, ScenarioStatus.LOCKED],
+  LOCKED: [], // ADMIN can override to DRAFT
+};
+
+const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
 
 export class ScenariosService {
   async list(pagination: Pagination): Promise<PaginatedResponse<ScenarioWithMetadata>> {
@@ -34,11 +49,7 @@ export class ScenariosService {
               allocations: true,
             },
           },
-          scenarioPeriods: {
-            select: {
-              periodId: true,
-            },
-          },
+          period: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -51,7 +62,10 @@ export class ScenariosService {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
       assumptions: scenario.assumptions as Record<string, unknown> | null,
-      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
+      periodId: scenario.periodId,
+      periodLabel: scenario.period.label,
+      periodStartDate: scenario.period.startDate,
+      periodEndDate: scenario.period.endDate,
       allocationsCount: scenario._count.allocations,
     }));
 
@@ -75,11 +89,7 @@ export class ScenariosService {
             allocations: true,
           },
         },
-        scenarioPeriods: {
-          select: {
-            periodId: true,
-          },
-        },
+        period: true,
       },
     });
 
@@ -91,33 +101,35 @@ export class ScenariosService {
       ...scenario,
       priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
       assumptions: scenario.assumptions as Record<string, unknown> | null,
-      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
+      periodId: scenario.periodId,
+      periodLabel: scenario.period.label,
+      periodStartDate: scenario.period.startDate,
+      periodEndDate: scenario.period.endDate,
       allocationsCount: scenario._count.allocations,
     };
   }
 
   async create(data: CreateScenario): Promise<ScenarioWithMetadata> {
-    // Validate period IDs exist
-    const periods = await prisma.period.findMany({
-      where: { id: { in: data.periodIds } },
+    // Validate period exists and is a QUARTER
+    const period = await prisma.period.findUnique({
+      where: { id: data.periodId },
     });
 
-    if (periods.length !== data.periodIds.length) {
-      const foundIds = new Set(periods.map((p) => p.id));
-      const missingIds = data.periodIds.filter((id) => !foundIds.has(id));
-      throw new ValidationError(`Periods not found: ${missingIds.join(', ')}`);
+    if (!period) {
+      throw new ValidationError(`Period not found: ${data.periodId}`);
+    }
+
+    if (period.type !== PeriodType.QUARTER) {
+      throw new ValidationError(`Period must be of type QUARTER, got ${period.type}`);
     }
 
     const created = await prisma.scenario.create({
       data: {
         name: data.name,
+        periodId: data.periodId,
+        status: ScenarioStatus.DRAFT,
         assumptions: (data.assumptions ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         priorityRankings: (data.priorityRankings ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-        scenarioPeriods: {
-          create: data.periodIds.map((periodId) => ({
-            periodId,
-          })),
-        },
       },
       select: { id: true },
     });
@@ -126,39 +138,30 @@ export class ScenariosService {
   }
 
   async update(id: string, data: UpdateScenario): Promise<ScenarioWithMetadata> {
-    // Check if scenario exists
-    await this.getById(id);
+    const scenario = await this.getById(id);
+
+    // Block updates when LOCKED
+    if (scenario.status === ScenarioStatus.LOCKED) {
+      throw new WorkflowError(
+        'Cannot update a LOCKED scenario. It must be unlocked first.',
+        scenario.status
+      );
+    }
+
+    // Block demand/allocation-related edits when APPROVED (assumptions and priorityRankings)
+    if (scenario.status === ScenarioStatus.APPROVED) {
+      if (data.assumptions !== undefined || data.priorityRankings !== undefined) {
+        throw new WorkflowError(
+          'Cannot modify assumptions or priority rankings of an APPROVED scenario. Return to REVIEW first.',
+          scenario.status
+        );
+      }
+    }
 
     const updateData: Record<string, unknown> = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.assumptions !== undefined) updateData.assumptions = data.assumptions;
     if (data.priorityRankings !== undefined) updateData.priorityRankings = data.priorityRankings;
-
-    // Handle periodIds update
-    if (data.periodIds !== undefined) {
-      // Validate period IDs exist
-      const periods = await prisma.period.findMany({
-        where: { id: { in: data.periodIds } },
-      });
-
-      if (periods.length !== data.periodIds.length) {
-        const foundIds = new Set(periods.map((p) => p.id));
-        const missingIds = data.periodIds.filter((pid) => !foundIds.has(pid));
-        throw new ValidationError(`Periods not found: ${missingIds.join(', ')}`);
-      }
-
-      // Delete existing scenario periods and create new ones
-      await prisma.scenarioPeriod.deleteMany({
-        where: { scenarioId: id },
-      });
-
-      await prisma.scenarioPeriod.createMany({
-        data: data.periodIds.map((periodId) => ({
-          scenarioId: id,
-          periodId,
-        })),
-      });
-    }
 
     await prisma.scenario.update({
       where: { id },
@@ -170,39 +173,114 @@ export class ScenariosService {
     await enqueueScenarioRecompute(id, 'priority_change');
     await enqueueViewRefresh('all', 'allocation_change', [id]);
 
-    // Re-fetch with all includes
     return this.getById(id);
   }
 
   async delete(id: string): Promise<void> {
-    // Check if scenario exists
-    await this.getById(id);
+    const scenario = await this.getById(id);
+
+    // Block deletion of LOCKED scenarios
+    if (scenario.status === ScenarioStatus.LOCKED) {
+      throw new WorkflowError(
+        'Cannot delete a LOCKED scenario.',
+        scenario.status
+      );
+    }
 
     await prisma.scenario.delete({
       where: { id },
     });
   }
 
-  async updatePriorities(id: string, data: UpdatePriorities): Promise<ScenarioWithMetadata> {
-    // Check if scenario exists
-    await this.getById(id);
+  async transitionStatus(
+    id: string,
+    newStatus: ScenarioStatus,
+    userRole: UserRole
+  ): Promise<ScenarioWithMetadata> {
+    const scenario = await this.getById(id);
+    const currentStatus = scenario.status;
 
-    const scenario = await prisma.scenario.update({
+    this.validateTransition(currentStatus, newStatus, userRole);
+
+    const updateData: Record<string, unknown> = {
+      status: newStatus,
+    };
+
+    // Set planLockDate when transitioning to LOCKED
+    if (newStatus === ScenarioStatus.LOCKED) {
+      updateData.planLockDate = new Date();
+    }
+
+    // Clear planLockDate when leaving LOCKED
+    if (currentStatus === ScenarioStatus.LOCKED && newStatus !== ScenarioStatus.LOCKED) {
+      updateData.planLockDate = null;
+    }
+
+    await prisma.scenario.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Invalidate cache
+    await scenarioCalculatorService.invalidateCache(id);
+
+    return this.getById(id);
+  }
+
+  private validateTransition(
+    current: ScenarioStatus,
+    target: ScenarioStatus,
+    userRole: UserRole
+  ): void {
+    // ADMIN can always override LOCKED -> DRAFT
+    if (
+      current === ScenarioStatus.LOCKED &&
+      target === ScenarioStatus.DRAFT &&
+      userRole === UserRole.ADMIN
+    ) {
+      return;
+    }
+
+    const validTargets = VALID_TRANSITIONS[current];
+    if (!validTargets.includes(target)) {
+      throw new WorkflowError(
+        `Cannot transition from ${current} to ${target}`,
+        current,
+        target
+      );
+    }
+
+    // Ensure user has a mutation role
+    if (!MUTATION_ROLES.includes(userRole)) {
+      throw new ForbiddenError(
+        `Role ${userRole} cannot transition scenario status. Required: ${MUTATION_ROLES.join(', ')}`
+      );
+    }
+  }
+
+  async updatePriorities(id: string, data: UpdatePriorities): Promise<ScenarioWithMetadata> {
+    const scenario = await this.getById(id);
+
+    // Block when LOCKED
+    if (scenario.status === ScenarioStatus.LOCKED) {
+      throw new WorkflowError(
+        'Cannot update priorities of a LOCKED scenario.',
+        scenario.status
+      );
+    }
+
+    // Block when APPROVED
+    if (scenario.status === ScenarioStatus.APPROVED) {
+      throw new WorkflowError(
+        'Cannot update priorities of an APPROVED scenario. Return to REVIEW first.',
+        scenario.status
+      );
+    }
+
+    await prisma.scenario.update({
       where: { id },
       data: {
         priorityRankings: data.priorities,
-      },
-      include: {
-        _count: {
-          select: {
-            allocations: true,
-          },
-        },
-        scenarioPeriods: {
-          select: {
-            periodId: true,
-          },
-        },
       },
     });
 
@@ -211,13 +289,7 @@ export class ScenariosService {
     await enqueueScenarioRecompute(id, 'priority_change');
     await enqueueViewRefresh('all', 'allocation_change', [id]);
 
-    return {
-      ...scenario,
-      priorityRankings: scenario.priorityRankings as PriorityRanking[] | null,
-      assumptions: scenario.assumptions as Record<string, unknown> | null,
-      periodIds: scenario.scenarioPeriods.map((sp) => sp.periodId),
-      allocationsCount: scenario._count.allocations,
-    };
+    return this.getById(id);
   }
 }
 

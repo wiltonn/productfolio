@@ -60,11 +60,7 @@ export async function processViewRefresh(
     select: {
       id: true,
       name: true,
-      scenarioPeriods: {
-        include: {
-          period: true,
-        },
-      },
+      period: true,
     },
   });
 
@@ -74,7 +70,7 @@ export async function processViewRefresh(
   let currentStep = 0;
 
   for (const scenario of scenarios) {
-    const periods = scenario.scenarioPeriods.map((sp) => sp.period);
+    const periods = [scenario.period];
 
     if (viewType === 'demand_summary' || viewType === 'all') {
       await refreshDemandSummary(scenario.id, periods, job);

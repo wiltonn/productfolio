@@ -32,12 +32,13 @@ import {
   useInitiativeAllocations,
   useAutoAllocatePreview,
   useAutoAllocateApply,
+  useTransitionScenarioStatus,
+  useScenarioPermissions,
 } from '../hooks/useScenarios';
-import type { Allocation, AutoAllocateResult } from '../hooks/useScenarios';
+import type { Allocation, AutoAllocateResult, Scenario } from '../hooks/useScenarios';
 import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
-import { useQuarterPeriods, deriveQuarterRange } from '../hooks/usePeriods';
-import type { InitiativeStatus, Initiative } from '../types';
+import type { InitiativeStatus, Initiative, ScenarioStatus } from '../types';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -584,6 +585,7 @@ function InitiativeAllocationPanel({
   employees,
   onClose,
   defaultDates,
+  readOnly,
 }: {
   scenarioId: string;
   initiativeId: string;
@@ -591,6 +593,7 @@ function InitiativeAllocationPanel({
   employees: SelectOption[];
   onClose: () => void;
   defaultDates: { startDate: string; endDate: string };
+  readOnly?: boolean;
 }) {
   const { data: allocations, isLoading } = useInitiativeAllocations(scenarioId, initiativeId);
   const createAllocation = useCreateAllocation();
@@ -605,7 +608,8 @@ function InitiativeAllocationPanel({
   // Get initiative status from first allocation
   const firstAlloc = allocations?.[0] as Allocation | undefined;
   const initiativeStatus = firstAlloc?.initiativeStatus ?? null;
-  const isLocked = initiativeStatus !== null && LOCKED_STATUSES.includes(initiativeStatus);
+  const isInitiativeLocked = initiativeStatus !== null && LOCKED_STATUSES.includes(initiativeStatus);
+  const isLocked = isInitiativeLocked || readOnly;
 
   const handleAdd = useCallback(() => {
     if (!newEmployeeId) return;
@@ -931,6 +935,99 @@ function CompareModal({
 }
 
 // ============================================================================
+// STATUS COMPONENTS
+// ============================================================================
+
+const SCENARIO_STATUS_COLORS: Record<ScenarioStatus, { bg: string; text: string; label: string }> = {
+  DRAFT: { bg: 'bg-surface-100', text: 'text-surface-600', label: 'Draft' },
+  REVIEW: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Review' },
+  APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
+  LOCKED: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Locked' },
+};
+
+function ScenarioStatusBadge({ status }: { status: ScenarioStatus }) {
+  const config = SCENARIO_STATUS_COLORS[status] || SCENARIO_STATUS_COLORS.DRAFT;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full ${config.bg} ${config.text}`}>
+      {status === 'LOCKED' && (
+        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+        </svg>
+      )}
+      {config.label}
+    </span>
+  );
+}
+
+function ScenarioStatusActions({
+  scenario,
+  onTransition,
+  isPending,
+  canTransition,
+}: {
+  scenario: Scenario;
+  onTransition: (status: ScenarioStatus) => void;
+  isPending: boolean;
+  canTransition: boolean;
+}) {
+  if (!canTransition) return null;
+  const { status } = scenario;
+
+  return (
+    <div className="flex items-center gap-2">
+      {status === 'DRAFT' && (
+        <button
+          onClick={() => onTransition('REVIEW')}
+          disabled={isPending}
+          className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+        >
+          Submit for Review
+        </button>
+      )}
+      {status === 'REVIEW' && (
+        <>
+          <button
+            onClick={() => onTransition('DRAFT')}
+            disabled={isPending}
+            className="px-3 py-1.5 text-xs font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Return to Draft
+          </button>
+          <button
+            onClick={() => onTransition('APPROVED')}
+            disabled={isPending}
+            className="px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Approve
+          </button>
+        </>
+      )}
+      {status === 'APPROVED' && (
+        <>
+          <button
+            onClick={() => onTransition('REVIEW')}
+            disabled={isPending}
+            className="px-3 py-1.5 text-xs font-medium text-surface-600 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Return to Review
+          </button>
+          <button
+            onClick={() => onTransition('LOCKED')}
+            disabled={isPending}
+            className="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Lock Plan
+          </button>
+        </>
+      )}
+      {status === 'LOCKED' && (
+        <span className="text-xs text-surface-500 italic">Plan is locked</span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -943,12 +1040,11 @@ export function ScenarioPlanner() {
   const { data: capacityAnalysis, isLoading: analysisLoading } = useScenarioAnalysis(id || '');
   const { data: initiativesData, isLoading: initiativesLoading } = useInitiatives({ limit: 100 });
   const { data: employeesData } = useEmployees({ limit: 100 });
-  const { data: periodsData } = useQuarterPeriods();
-  const quarterPeriods = periodsData?.data ?? [];
-  const scenarioQuarterRange = useMemo(() => {
-    if (!scenario?.periodIds || quarterPeriods.length === 0) return '';
-    return deriveQuarterRange(scenario.periodIds, quarterPeriods);
-  }, [scenario?.periodIds, quarterPeriods]);
+  const scenarioQuarterRange = scenario?.periodLabel
+    ? `${scenario.periodLabel}:${scenario.periodLabel}`
+    : '';
+  const transitionStatus = useTransitionScenarioStatus();
+  const { canEdit, canTransition, canModifyAllocations, isReadOnly } = useScenarioPermissions(scenario as Scenario | undefined);
   const updatePriorities = useUpdatePriorities();
   const createAllocation = useCreateAllocation();
   const updateAllocation = useUpdateAllocation();
@@ -1104,30 +1200,22 @@ export function ScenarioPlanner() {
     }));
   }, [initiativesData]);
 
-  // Compute default dates based on scenario quarter range
+  // Compute default dates based on scenario's quarter period
   const defaultAllocationDates = useMemo(() => {
-    if (!scenarioQuarterRange) {
-      const today = new Date();
-      const threeMonthsLater = new Date(today);
-      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+    if (scenario?.periodStartDate && scenario?.periodEndDate) {
       return {
-        startDate: today.toISOString().split('T')[0],
-        endDate: threeMonthsLater.toISOString().split('T')[0],
+        startDate: new Date(scenario.periodStartDate).toISOString().split('T')[0],
+        endDate: new Date(scenario.periodEndDate).toISOString().split('T')[0],
       };
     }
-    const [startQ, endQ] = scenarioQuarterRange.split(':');
-    // Convert quarter to date (e.g., 2025-Q1 -> 2025-01-01)
-    const quarterToDate = (q: string, isEnd = false) => {
-      const [year, qNum] = q.split('-Q').map(Number);
-      const month = isEnd ? (qNum * 3) : ((qNum - 1) * 3 + 1);
-      const day = isEnd ? new Date(year, month, 0).getDate() : 1;
-      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    };
+    const today = new Date();
+    const threeMonthsLater = new Date(today);
+    threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
     return {
-      startDate: quarterToDate(startQ),
-      endDate: quarterToDate(endQ, true),
+      startDate: today.toISOString().split('T')[0],
+      endDate: threeMonthsLater.toISOString().split('T')[0],
     };
-  }, [scenarioQuarterRange]);
+  }, [scenario?.periodStartDate, scenario?.periodEndDate]);
 
   // Initialize initiative order from scenario priorities
   useEffect(() => {
@@ -1178,11 +1266,27 @@ export function ScenarioPlanner() {
   // Summary stats
   const stats = useMemo(() => {
     const totalDemand = initiatives.reduce((sum, i) => sum + i.totalHours, 0);
-    const totalCapacity = capacityByQuarter.reduce((sum, q) => sum + q.capacity, 0);
+    const totalAvailableCapacity = capacityByQuarter.reduce((sum, q) => sum + q.capacity, 0);
+
+    // Calculate used capacity from actual allocations
+    let totalUsedCapacity = 0;
+    if (allocationsData && employeesData?.data) {
+      const employeeMap = new Map(employeesData.data.map(e => [e.id, e]));
+      allocationsData.forEach(alloc => {
+        const employee = employeeMap.get(alloc.employeeId);
+        const hoursPerWeek = employee?.defaultCapacityHours || 40;
+        const start = new Date(alloc.startDate);
+        const end = new Date(alloc.endDate);
+        const weeks = Math.max(0, (end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+        totalUsedCapacity += hoursPerWeek * weeks * (alloc.percentage / 100);
+      });
+      totalUsedCapacity = Math.round(totalUsedCapacity);
+    }
+
     const skillGaps = capacityBySkill.filter(s => s.gap < 0).length;
-    const utilizationPercent = totalCapacity > 0 ? Math.round((totalDemand / totalCapacity) * 100) : 0;
-    return { totalDemand, totalCapacity, skillGaps, utilizationPercent };
-  }, [initiatives, capacityByQuarter, capacityBySkill]);
+    const utilizationPercent = totalAvailableCapacity > 0 ? Math.round((totalUsedCapacity / totalAvailableCapacity) * 100) : 0;
+    return { totalDemand, totalAvailableCapacity, totalUsedCapacity, skillGaps, utilizationPercent };
+  }, [initiatives, capacityByQuarter, capacityBySkill, allocationsData, employeesData]);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1192,6 +1296,8 @@ export function ScenarioPlanner() {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+
+    if (isReadOnly) return;
 
     if (over && active.id !== over.id) {
       const currentOrder = initiativeOrder.length > 0
@@ -1366,9 +1472,28 @@ export function ScenarioPlanner() {
             Scenarios
           </Link>
           <div className="scenario-title-group">
-            <span className="scenario-name-input">{scenario?.name || 'Untitled Scenario'}</span>
-            <span className="scenario-id">{scenarioQuarterRange || ''}</span>
+            <div className="flex items-center gap-2">
+              <span className="scenario-name-input">
+                {scenario?.periodLabel ? `${scenario.periodLabel} — ` : ''}{scenario?.name || 'Untitled Scenario'}
+              </span>
+              {scenario?.status && <ScenarioStatusBadge status={scenario.status as ScenarioStatus} />}
+            </div>
+            {scenario?.planLockDate && (
+              <span className="text-xs text-surface-400">
+                Locked {new Date(scenario.planLockDate).toLocaleDateString()}
+              </span>
+            )}
           </div>
+          {scenario && (
+            <ScenarioStatusActions
+              scenario={scenario as Scenario}
+              onTransition={(status) => {
+                if (id) transitionStatus.mutate({ id, status });
+              }}
+              isPending={transitionStatus.isPending}
+              canTransition={canTransition}
+            />
+          )}
         </div>
 
         <div className="header-center">
@@ -1378,8 +1503,12 @@ export function ScenarioPlanner() {
               <span className="pill-value">{stats.totalDemand.toLocaleString()}h</span>
             </div>
             <div className="stat-pill">
-              <span className="pill-label">Capacity</span>
-              <span className="pill-value">{stats.totalCapacity.toLocaleString()}h</span>
+              <span className="pill-label">Available</span>
+              <span className="pill-value">{stats.totalAvailableCapacity.toLocaleString()}h</span>
+            </div>
+            <div className="stat-pill">
+              <span className="pill-label">Allocated</span>
+              <span className="pill-value">{stats.totalUsedCapacity.toLocaleString()}h</span>
             </div>
             <div className={`stat-pill ${stats.utilizationPercent > 90 ? 'warning' : ''}`}>
               <span className="pill-label">Util.</span>
@@ -1476,6 +1605,21 @@ export function ScenarioPlanner() {
           </button>
         </div>
       </header>
+
+      {/* Read-only banner for LOCKED/APPROVED scenarios */}
+      {isReadOnly && scenario?.status && (
+        <div className={`px-4 py-2 text-center text-sm font-medium ${
+          scenario.status === 'LOCKED'
+            ? 'bg-amber-50 text-amber-800 border-b border-amber-200'
+            : scenario.status === 'APPROVED'
+            ? 'bg-green-50 text-green-800 border-b border-green-200'
+            : 'bg-surface-50 text-surface-600 border-b border-surface-200'
+        }`}>
+          {scenario.status === 'LOCKED' && 'This scenario is locked. All editing is disabled.'}
+          {scenario.status === 'APPROVED' && 'This scenario is approved. Return to Review to make changes.'}
+          {!canEdit && scenario.status !== 'LOCKED' && scenario.status !== 'APPROVED' && 'You do not have permission to edit this scenario.'}
+        </div>
+      )}
 
       {/* Main content */}
       <div className="planner-body">
@@ -1608,7 +1752,7 @@ export function ScenarioPlanner() {
               <h3>Allocation Editor</h3>
               <span className="panel-count">{allocations.length} allocations</span>
             </div>
-            {!isBottomPanelCollapsed && (
+            {!isBottomPanelCollapsed && canModifyAllocations && (
               <div className="flex items-center gap-2">
                 <button onClick={openAddAllocationModal} className="btn-secondary">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1648,6 +1792,7 @@ export function ScenarioPlanner() {
                   employees={employeeOptions}
                   onClose={() => setSelectedInitiativeId(null)}
                   defaultDates={defaultAllocationDates}
+                  readOnly={isReadOnly}
                 />
               ) : (
                 <div className="allocations-table-wrapper">
@@ -1665,9 +1810,9 @@ export function ScenarioPlanner() {
                     </thead>
                     <tbody>
                       {allocations.map((allocation) => {
-                        const allocLocked = allocation.initiativeStatus !== undefined
+                        const allocLocked = isReadOnly || (allocation.initiativeStatus !== undefined
                           && allocation.initiativeStatus !== null
-                          && LOCKED_STATUSES.includes(allocation.initiativeStatus);
+                          && LOCKED_STATUSES.includes(allocation.initiativeStatus));
                         return (
                           <tr
                             key={allocation.id}
@@ -1980,6 +2125,8 @@ export function ScenarioPlanner() {
               <input
                 type="date"
                 value={newAllocation.startDate}
+                min={defaultAllocationDates.startDate}
+                max={defaultAllocationDates.endDate}
                 onChange={(e) => setNewAllocation(prev => ({ ...prev, startDate: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
               />
@@ -1991,6 +2138,8 @@ export function ScenarioPlanner() {
               <input
                 type="date"
                 value={newAllocation.endDate}
+                min={defaultAllocationDates.startDate}
+                max={defaultAllocationDates.endDate}
                 onChange={(e) => setNewAllocation(prev => ({ ...prev, endDate: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-surface-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-500/20 focus:border-accent-500"
               />

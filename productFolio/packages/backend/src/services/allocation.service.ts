@@ -13,7 +13,7 @@ import type {
   InitiativeCoverage,
   AutoAllocateOptions,
 } from '../types/index.js';
-import { PeriodType } from '@prisma/client';
+import { PeriodType, ScenarioStatus } from '@prisma/client';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -73,6 +73,48 @@ export class AllocationService {
       throw new WorkflowError(
         `Cannot modify allocations for initiative "${initiative.title}" with status ${initiative.status}. Allocations are locked for approved, in-progress, and completed initiatives.`,
         initiative.status
+      );
+    }
+  }
+
+  private async assertScenarioEditable(scenarioId: string): Promise<void> {
+    const scenario = await prisma.scenario.findUnique({
+      where: { id: scenarioId },
+      select: { status: true, name: true },
+    });
+
+    if (!scenario) {
+      throw new NotFoundError('Scenario', scenarioId);
+    }
+
+    if (scenario.status === ScenarioStatus.LOCKED || scenario.status === ScenarioStatus.APPROVED) {
+      throw new WorkflowError(
+        `Cannot modify allocations for scenario "${scenario.name}" with status ${scenario.status}.`,
+        scenario.status
+      );
+    }
+  }
+
+  private async assertDatesWithinQuarter(
+    scenarioId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<void> {
+    const scenario = await prisma.scenario.findUnique({
+      where: { id: scenarioId },
+      include: { period: true },
+    });
+
+    if (!scenario) {
+      throw new NotFoundError('Scenario', scenarioId);
+    }
+
+    const qStart = scenario.period.startDate;
+    const qEnd = scenario.period.endDate;
+
+    if (startDate < qStart || endDate > qEnd) {
+      throw new ValidationError(
+        `Allocation dates (${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}) must fall within the scenario's quarter (${scenario.period.label}: ${qStart.toISOString().split('T')[0]} to ${qEnd.toISOString().split('T')[0]}).`
       );
     }
   }
@@ -289,6 +331,12 @@ export class AllocationService {
       throw new NotFoundError('Scenario', scenarioId);
     }
 
+    // Guard: scenario must be editable (not LOCKED or APPROVED)
+    await this.assertScenarioEditable(scenarioId);
+
+    // Guard: dates must fall within the scenario's quarter
+    await this.assertDatesWithinQuarter(scenarioId, data.startDate, data.endDate);
+
     // Check if employee exists
     const employee = await prisma.employee.findUnique({
       where: { id: data.employeeId },
@@ -370,6 +418,16 @@ export class AllocationService {
 
     if (!allocation) {
       throw new NotFoundError('Allocation', id);
+    }
+
+    // Guard: scenario must be editable
+    await this.assertScenarioEditable(allocation.scenarioId);
+
+    // Guard: re-validate dates if changed
+    if (data.startDate !== undefined || data.endDate !== undefined) {
+      const startDate = data.startDate ?? allocation.startDate;
+      const endDate = data.endDate ?? allocation.endDate;
+      await this.assertDatesWithinQuarter(allocation.scenarioId, startDate, endDate);
     }
 
     // Check if current initiative is locked
@@ -461,6 +519,9 @@ export class AllocationService {
       throw new NotFoundError('Allocation', id);
     }
 
+    // Guard: scenario must be editable
+    await this.assertScenarioEditable(allocation.scenarioId);
+
     // Check if initiative is locked
     if (allocation.initiativeId) {
       await this.assertInitiativeNotLocked(allocation.initiativeId);
@@ -482,9 +543,7 @@ export class AllocationService {
     const scenario = await prisma.scenario.findUnique({
       where: { id: scenarioId },
       include: {
-        scenarioPeriods: {
-          include: { period: true },
-        },
+        period: true,
         allocations: true,
       },
     });
@@ -494,10 +553,8 @@ export class AllocationService {
     }
 
     const priorityRankings = (scenario.priorityRankings as Array<{ initiativeId: string; rank: number }>) || [];
-    const periodIds = scenario.scenarioPeriods.map((sp) => sp.periodId);
-    const periodLabelMap = new Map(
-      scenario.scenarioPeriods.map((sp) => [sp.period.id, sp.period.label])
-    );
+    const periodIds = [scenario.periodId];
+    const periodLabelMap = new Map([[scenario.period.id, scenario.period.label]]);
 
     // Get initiatives in priority order with their scope items and distributions
     const initiatives = await prisma.initiative.findMany({
@@ -704,13 +761,11 @@ export class AllocationService {
   async autoAllocate(scenarioId: string, options: AutoAllocateOptions = {}): Promise<AutoAllocateResult> {
     const maxPct = options.maxAllocationPercentage ?? 100;
 
-    // 1. Fetch scenario with periods and priority rankings
+    // 1. Fetch scenario with period and priority rankings
     const scenario = await prisma.scenario.findUnique({
       where: { id: scenarioId },
       include: {
-        scenarioPeriods: {
-          include: { period: true },
-        },
+        period: true,
       },
     });
 
@@ -724,10 +779,8 @@ export class AllocationService {
     }
 
     const sortedRankings = [...priorityRankings].sort((a, b) => a.rank - b.rank);
-    const periodIds = scenario.scenarioPeriods.map((sp) => sp.periodId);
-    const periodsMap = new Map(
-      scenario.scenarioPeriods.map((sp) => [sp.period.id, sp.period])
-    );
+    const periodIds = [scenario.periodId];
+    const periodsMap = new Map([[scenario.period.id, scenario.period]]);
 
     // 2. Fetch ranked initiatives with scope items + period distributions
     const initiatives = await prisma.initiative.findMany({
@@ -954,6 +1007,9 @@ export class AllocationService {
     if (!scenario) {
       throw new NotFoundError('Scenario', scenarioId);
     }
+
+    // Guard: scenario must be editable
+    await this.assertScenarioEditable(scenarioId);
 
     if (proposedAllocations.length === 0) {
       throw new ValidationError('No proposed allocations to apply.');
