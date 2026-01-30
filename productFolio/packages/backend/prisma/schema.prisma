@@ -61,6 +61,25 @@ enum AllocationType {
   SUPPORT
 }
 
+enum ScenarioType {
+  BASELINE
+  REVISION
+  WHAT_IF
+}
+
+enum RevisionReason {
+  CRITICAL
+  COMPLIANCE
+  PRODUCTION_OUTAGE
+  EXEC_DIRECTIVE
+}
+
+enum DriftAlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -130,6 +149,8 @@ model Period {
   scopeItemPeriodDistributions   ScopeItemPeriodDistribution[]
   activeStartEmployees           Employee[] @relation("ActiveStartPeriod")
   activeEndEmployees             Employee[] @relation("ActiveEndPeriod")
+  freezePolicy                   FreezePolicy?
+  driftAlerts                    DriftAlert[]
 
   @@unique([type, year, ordinal])
   @@index([type])
@@ -311,27 +332,38 @@ model CapacityCalendar {
 // ============================================================================
 
 model Scenario {
-  id               String         @id @default(uuid()) @db.Uuid
-  name             String
-  periodId         String         @db.Uuid @map("period_id")
-  status           ScenarioStatus @default(DRAFT)
-  isPrimary        Boolean        @default(false) @map("is_primary")
-  planLockDate     DateTime?      @map("plan_lock_date")
-  assumptions      Json?          @db.JsonB // Flexible assumptions storage
-  priorityRankings Json?          @db.JsonB // e.g., [{ "initiativeId": "...", "rank": 1 }]
-  version          Int            @default(1)
+  id                    String          @id @default(uuid()) @db.Uuid
+  name                  String
+  periodId              String          @db.Uuid @map("period_id")
+  status                ScenarioStatus  @default(DRAFT)
+  isPrimary             Boolean         @default(false) @map("is_primary")
+  planLockDate          DateTime?       @map("plan_lock_date")
+  assumptions           Json?           @db.JsonB
+  priorityRankings      Json?           @db.JsonB
+  version               Int             @default(1)
+  scenarioType          ScenarioType    @default(WHAT_IF) @map("scenario_type")
+  revisionOfScenarioId  String?         @db.Uuid @map("revision_of_scenario_id")
+  revisionReason        RevisionReason? @map("revision_reason")
+  changeLog             String?         @db.Text @map("change_log")
+  needsReconciliation   Boolean         @default(false) @map("needs_reconciliation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  period      Period       @relation(fields: [periodId], references: [id])
-  allocations Allocation[]
+  period              Period            @relation(fields: [periodId], references: [id])
+  allocations         Allocation[]
+  revisionOfScenario  Scenario?         @relation("ScenarioRevisions", fields: [revisionOfScenarioId], references: [id])
+  revisions           Scenario[]        @relation("ScenarioRevisions")
+  baselineSnapshot    BaselineSnapshot?
+  driftAlerts         DriftAlert[]
 
   @@index([name])
   @@index([periodId])
   @@index([status])
   @@index([isPrimary])
+  @@index([scenarioType])
+  @@index([revisionOfScenarioId])
 }
 
 model Allocation {
@@ -372,4 +404,72 @@ model AllocationPeriod {
   @@id([allocationId, periodId])
   @@index([periodId])
   @@map("allocation_periods")
+}
+
+// ============================================================================
+// Baseline & Drift
+// ============================================================================
+
+model BaselineSnapshot {
+  id                 String   @id @default(uuid()) @db.Uuid
+  scenarioId         String   @unique @db.Uuid @map("scenario_id")
+  snapshotDate       DateTime @default(now()) @map("snapshot_date")
+  capacitySnapshot   Json     @db.JsonB @map("capacity_snapshot")
+  demandSnapshot     Json     @db.JsonB @map("demand_snapshot")
+  allocationSnapshot Json     @db.JsonB @map("allocation_snapshot")
+  summarySnapshot    Json     @db.JsonB @map("summary_snapshot")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  scenario Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+  @@map("baseline_snapshots")
+}
+
+model FreezePolicy {
+  id               String   @id @default(uuid()) @db.Uuid
+  periodId         String   @unique @db.Uuid @map("period_id")
+  changeFreezeDate DateTime @map("change_freeze_date")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  period Period @relation(fields: [periodId], references: [id])
+
+  @@map("freeze_policies")
+}
+
+model DriftAlert {
+  id               String           @id @default(uuid()) @db.Uuid
+  scenarioId       String           @db.Uuid @map("scenario_id")
+  periodId         String           @db.Uuid @map("period_id")
+  status           DriftAlertStatus @default(ACTIVE)
+  capacityDriftPct Float            @map("capacity_drift_pct")
+  demandDriftPct   Float            @map("demand_drift_pct")
+  netGapDrift      Float            @map("net_gap_drift")
+  driftDetails     Json             @db.JsonB @map("drift_details")
+  detectedAt       DateTime         @default(now()) @map("detected_at")
+  acknowledgedAt   DateTime?        @map("acknowledged_at")
+  resolvedAt       DateTime?        @map("resolved_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  scenario Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  period   Period   @relation(fields: [periodId], references: [id])
+
+  @@index([scenarioId])
+  @@index([periodId])
+  @@index([status])
+  @@map("drift_alerts")
+}
+
+model DriftThreshold {
+  id                   String   @id @default(uuid()) @db.Uuid
+  capacityThresholdPct Float    @default(5.0) @map("capacity_threshold_pct")
+  demandThresholdPct   Float    @default(10.0) @map("demand_threshold_pct")
+  isGlobal             Boolean  @default(true) @map("is_global")
+  periodId             String?  @db.Uuid @map("period_id")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("drift_thresholds")
 }

@@ -14,13 +14,13 @@ import {
 import { CreateInitiativeModal } from '../components/CreateInitiativeModal';
 import {
   useInitiatives,
-  useInitiativeAllocationHours,
+  useInitiativeAllocationHoursByType,
   useBulkUpdateStatus,
   useBulkAddTags,
   useBulkDeleteInitiatives,
   useExportInitiatives,
 } from '../hooks/useInitiatives';
-import type { Initiative, InitiativeStatus, InitiativeFilters, InitiativeAllocationHours } from '../types';
+import type { Initiative, InitiativeStatus, InitiativeFilters, InitiativeAllocationHoursByType } from '../types';
 import { getQuarterOptions } from '../types';
 
 // Status filter options
@@ -112,7 +112,7 @@ export function InitiativesList() {
     [initiatives]
   );
 
-  const { data: allocationHoursMap } = useInitiativeAllocationHours(
+  const { data: allocationHoursMap } = useInitiativeAllocationHoursByType(
     initiativeIds,
     quarterDates.currentQStart,
     quarterDates.currentQEnd,
@@ -266,22 +266,20 @@ export function InitiativesList() {
         ),
       },
       {
-        id: 'currentQHours',
-        header: quarterDates.currentLabel,
+        id: 'currentQActual',
+        header: `Actual (${quarterDates.currentLabel})`,
         size: 100,
         cell: ({ row }) => {
-          const hours = allocationHoursMap?.[row.original.id]?.currentQuarterHours ?? 0;
+          const data = allocationHoursMap?.[row.original.id];
+          const hours = data?.currentQuarter?.actualHours ?? 0;
           return (
             <Link
               to={`/initiatives/${row.original.id}?tab=assignments`}
               onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
-              style={{
-                backgroundColor: hours === 0 ? undefined : undefined,
-              }}
-              title="View assignments"
+              title="Actual hours (locked primary scenario)"
             >
-              <span className={hours === 0 ? 'text-surface-400' : 'text-surface-800'}>
+              <span className={hours === 0 ? 'text-surface-400' : 'text-emerald-700'}>
                 {hours === 0 ? '-' : `${hours}h`}
               </span>
             </Link>
@@ -290,20 +288,67 @@ export function InitiativesList() {
         enableSorting: false,
       },
       {
-        id: 'nextQHours',
-        header: quarterDates.nextLabel,
-        size: 100,
+        id: 'currentQProposed',
+        header: `Proposed (${quarterDates.currentLabel})`,
+        size: 130,
         cell: ({ row }) => {
-          const hours = allocationHoursMap?.[row.original.id]?.nextQuarterHours ?? 0;
+          const data = allocationHoursMap?.[row.original.id];
+          const hours = data?.currentQuarter?.proposedHours ?? 0;
+          const count = data?.currentQuarter?.proposedScenarioCount ?? 0;
           return (
             <Link
               to={`/initiatives/${row.original.id}?tab=assignments`}
               onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
-              title="View assignments"
+              title="Proposed hours across scenarios"
             >
-              <span className={hours === 0 ? 'text-surface-400' : 'text-surface-800'}>
+              <span className={hours === 0 ? 'text-surface-400' : 'text-amber-700'}>
+                {hours === 0 ? '-' : `${hours}h (${count})`}
+              </span>
+            </Link>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: 'nextQActual',
+        header: `Actual (${quarterDates.nextLabel})`,
+        size: 100,
+        cell: ({ row }) => {
+          const data = allocationHoursMap?.[row.original.id];
+          const hours = data?.nextQuarter?.actualHours ?? 0;
+          return (
+            <Link
+              to={`/initiatives/${row.original.id}?tab=assignments`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
+              title="Actual hours (locked primary scenario)"
+            >
+              <span className={hours === 0 ? 'text-surface-400' : 'text-emerald-700'}>
                 {hours === 0 ? '-' : `${hours}h`}
+              </span>
+            </Link>
+          );
+        },
+        enableSorting: false,
+      },
+      {
+        id: 'nextQProposed',
+        header: `Proposed (${quarterDates.nextLabel})`,
+        size: 130,
+        cell: ({ row }) => {
+          const data = allocationHoursMap?.[row.original.id];
+          const hours = data?.nextQuarter?.proposedHours ?? 0;
+          const count = data?.nextQuarter?.proposedScenarioCount ?? 0;
+          return (
+            <Link
+              to={`/initiatives/${row.original.id}?tab=assignments`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold tabular-nums hover:underline transition-colors"
+              title="Proposed hours across scenarios"
+            >
+              <span className={hours === 0 ? 'text-surface-400' : 'text-amber-700'}>
+                {hours === 0 ? '-' : `${hours}h (${count})`}
               </span>
             </Link>
           );

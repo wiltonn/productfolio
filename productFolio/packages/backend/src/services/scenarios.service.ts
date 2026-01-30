@@ -1,10 +1,13 @@
-import { Prisma, ScenarioStatus, UserRole, PeriodType, AllocationType } from '@prisma/client';
+import { Prisma, ScenarioStatus, ScenarioType, RevisionReason, UserRole, PeriodType, AllocationType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError, WorkflowError, ForbiddenError } from '../lib/errors.js';
 import { scenarioCalculatorService } from './scenario-calculator.service.js';
 import { allocationService } from './allocation.service.js';
+import { baselineService } from './baseline.service.js';
+import { freezePolicyService } from './freeze-policy.service.js';
 import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateScenario, UpdateScenario, UpdatePriorities, Pagination, PriorityRanking, CloneScenario } from '../schemas/scenarios.schema.js';
+import type { CreateRevision } from '../schemas/baseline.schema.js';
 import type { PaginatedResponse } from '../types/index.js';
 
 interface ScenarioWithMetadata {
@@ -20,6 +23,11 @@ interface ScenarioWithMetadata {
   isPrimary: boolean;
   planLockDate: Date | null;
   version: number;
+  scenarioType: ScenarioType;
+  revisionOfScenarioId: string | null;
+  revisionReason: RevisionReason | null;
+  changeLog: string | null;
+  needsReconciliation: boolean;
   createdAt: Date;
   updatedAt: Date;
   allocationsCount: number;
@@ -74,6 +82,11 @@ export class ScenariosService {
       periodLabel: scenario.period.label,
       periodStartDate: scenario.period.startDate,
       periodEndDate: scenario.period.endDate,
+      scenarioType: scenario.scenarioType,
+      revisionOfScenarioId: scenario.revisionOfScenarioId,
+      revisionReason: scenario.revisionReason,
+      changeLog: scenario.changeLog,
+      needsReconciliation: scenario.needsReconciliation,
       allocationsCount: scenario._count.allocations,
     }));
 
@@ -113,6 +126,11 @@ export class ScenariosService {
       periodLabel: scenario.period.label,
       periodStartDate: scenario.period.startDate,
       periodEndDate: scenario.period.endDate,
+      scenarioType: scenario.scenarioType,
+      revisionOfScenarioId: scenario.revisionOfScenarioId,
+      revisionReason: scenario.revisionReason,
+      changeLog: scenario.changeLog,
+      needsReconciliation: scenario.needsReconciliation,
       allocationsCount: scenario._count.allocations,
     };
   }
@@ -131,6 +149,8 @@ export class ScenariosService {
       throw new ValidationError(`Period must be of type QUARTER, got ${period.type}`);
     }
 
+    const scenarioType = (data.scenarioType as ScenarioType) ?? ScenarioType.WHAT_IF;
+
     const created = await prisma.scenario.create({
       data: {
         name: data.name,
@@ -138,6 +158,7 @@ export class ScenariosService {
         status: ScenarioStatus.DRAFT,
         assumptions: (data.assumptions ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         priorityRankings: (data.priorityRankings ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        scenarioType,
       },
       select: { id: true },
     });
@@ -243,6 +264,11 @@ export class ScenariosService {
           where: { id },
           data: { isPrimary: true },
         });
+      }
+
+      // Capture baseline snapshot when locking a BASELINE scenario
+      if (scenario.scenarioType === ScenarioType.BASELINE) {
+        await baselineService.captureSnapshot(id);
       }
     }
 
@@ -420,6 +446,117 @@ export class ScenariosService {
     await enqueueViewRefresh('all', 'allocation_change', [id]);
 
     return this.getById(id);
+  }
+
+  /**
+   * Create a revision scenario from a locked baseline.
+   * Clones allocations from the baseline into a new DRAFT REVISION scenario.
+   */
+  async createRevision(
+    baselineScenarioId: string,
+    data: CreateRevision,
+    userRole: UserRole
+  ): Promise<ScenarioWithMetadata> {
+    const baseline = await prisma.scenario.findUnique({
+      where: { id: baselineScenarioId },
+      include: {
+        period: true,
+        allocations: true,
+      },
+    });
+
+    if (!baseline) {
+      throw new NotFoundError('Scenario', baselineScenarioId);
+    }
+
+    // Validate source is LOCKED BASELINE
+    if (baseline.status !== ScenarioStatus.LOCKED) {
+      throw new WorkflowError(
+        'Can only create revisions from a LOCKED scenario.',
+        baseline.status
+      );
+    }
+
+    if (baseline.scenarioType !== ScenarioType.BASELINE) {
+      throw new WorkflowError(
+        'Can only create revisions from a BASELINE scenario.',
+        baseline.scenarioType
+      );
+    }
+
+    // Validate freeze policy
+    const freezeResult = await freezePolicyService.validateRevisionAllowed(
+      baseline.periodId,
+      data.reason
+    );
+    if (!freezeResult.allowed) {
+      throw new WorkflowError(
+        freezeResult.message ?? 'Period is frozen and revision reason is required.'
+      );
+    }
+
+    // Create the revision scenario
+    const revisionName = data.name ?? `Revision of ${baseline.name}`;
+
+    const newScenario = await prisma.scenario.create({
+      data: {
+        name: revisionName,
+        periodId: baseline.periodId,
+        status: ScenarioStatus.DRAFT,
+        scenarioType: ScenarioType.REVISION,
+        revisionOfScenarioId: baselineScenarioId,
+        revisionReason: data.reason as RevisionReason,
+        changeLog: data.changeLog ?? null,
+        needsReconciliation: true,
+        assumptions: (baseline.assumptions ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        priorityRankings: (baseline.priorityRankings ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+      },
+      select: { id: true },
+    });
+
+    // Clone allocations from baseline (same quarter, no date offset)
+    for (const alloc of baseline.allocations) {
+      const created = await prisma.allocation.create({
+        data: {
+          scenarioId: newScenario.id,
+          employeeId: alloc.employeeId,
+          initiativeId: alloc.initiativeId,
+          allocationType: alloc.allocationType,
+          startDate: alloc.startDate,
+          endDate: alloc.endDate,
+          percentage: alloc.percentage,
+        },
+      });
+
+      // Compute AllocationPeriod rows
+      await allocationService.computeAllocationPeriods(created.id, alloc.startDate, alloc.endDate);
+    }
+
+    // Enqueue recompute for new scenario
+    await enqueueScenarioRecompute(newScenario.id, 'allocation_change');
+
+    return this.getById(newScenario.id);
+  }
+
+  /**
+   * Mark a revision scenario as reconciled.
+   */
+  async markReconciled(scenarioId: string): Promise<ScenarioWithMetadata> {
+    const scenario = await this.getById(scenarioId);
+
+    if (scenario.scenarioType !== ScenarioType.REVISION) {
+      throw new WorkflowError(
+        'Only REVISION scenarios can be reconciled.',
+        scenario.scenarioType
+      );
+    }
+
+    await prisma.scenario.update({
+      where: { id: scenarioId },
+      data: { needsReconciliation: false },
+    });
+
+    return this.getById(scenarioId);
   }
 }
 

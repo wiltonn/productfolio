@@ -17,6 +17,7 @@ export const createScenarioSchema = z.object({
   periodId: uuidSchema,
   assumptions: z.record(z.string(), z.unknown()).optional(),
   priorityRankings: z.array(priorityRankingSchema).optional(),
+  scenarioType: z.enum(['BASELINE', 'REVISION', 'WHAT_IF']).default('WHAT_IF').optional(),
 });
 
 export type CreateScenario = z.infer<typeof createScenarioSchema>;

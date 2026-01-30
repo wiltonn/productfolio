@@ -69,6 +69,25 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * GET /api/initiatives/allocation-hours-by-type
+   * Batch fetch actual vs proposed allocation hours per initiative for current and next quarters
+   */
+  fastify.get<{
+    Querystring: Record<string, unknown>;
+  }>('/api/initiatives/allocation-hours-by-type', async (request, reply) => {
+    const query = InitiativeAllocationHoursQuerySchema.parse(request.query);
+    const initiativeIds = query.initiativeIds.split(',').map((id) => id.trim());
+    const hours = await allocationService.listInitiativeAllocationHoursByType(
+      initiativeIds,
+      query.currentQuarterStart,
+      query.currentQuarterEnd,
+      query.nextQuarterStart,
+      query.nextQuarterEnd
+    );
+    return reply.send(hours);
+  });
+
+  /**
    * GET /api/initiatives/:id
    * Get a single initiative by ID
    */
@@ -82,11 +101,16 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/initiatives/:id/allocations
    * List all allocations for an initiative across all scenarios
+   * Optional query param: periodId to filter to a specific quarter
    */
   fastify.get<{
     Params: { id: string };
+    Querystring: { periodId?: string };
   }>('/api/initiatives/:id/allocations', async (request, reply) => {
-    const allocations = await allocationService.listByInitiativeAcrossScenarios(request.params.id);
+    const allocations = await allocationService.listByInitiativeAcrossScenarios(
+      request.params.id,
+      request.query.periodId
+    );
     return reply.send(allocations);
   });
 

@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { periodService } from './period.service.js';
+import { enqueueDriftCheck } from '../jobs/index.js';
 import type { CapacityEntry } from '../schemas/resources.schema.js';
 import { PeriodType } from '@prisma/client';
 
@@ -111,7 +112,7 @@ export async function updateCapacity(
     )
   );
 
-  return updated.map((entry) => ({
+  const result = updated.map((entry) => ({
     employeeId: entry.employeeId,
     periodId: entry.periodId,
     periodLabel: entry.period.label,
@@ -119,6 +120,13 @@ export async function updateCapacity(
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   }));
+
+  // Trigger drift check after capacity changes
+  await enqueueDriftCheck('capacity_change').catch(() => {
+    // Non-critical: don't fail the capacity update if drift check enqueueing fails
+  });
+
+  return result;
 }
 
 export async function calculateAvailability(

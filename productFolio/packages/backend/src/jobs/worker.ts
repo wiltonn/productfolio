@@ -1,13 +1,15 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnection, QUEUE_NAMES } from './queue.js';
-import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData } from './queue.js';
+import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData, DriftCheckJobData } from './queue.js';
 import { processScenarioRecompute } from './processors/scenario-recompute.processor.js';
 import { processCsvImport } from './processors/csv-import.processor.js';
 import { processViewRefresh } from './processors/view-refresh.processor.js';
+import { processDriftCheck } from './processors/drift-check.processor.js';
 
 let scenarioRecomputeWorker: Worker | null = null;
 let csvImportWorker: Worker | null = null;
 let viewRefreshWorker: Worker | null = null;
+let driftCheckWorker: Worker | null = null;
 
 /**
  * Start all background job workers
@@ -89,6 +91,30 @@ export async function startWorkers(): Promise<void> {
     console.error('[view-refresh] Worker error:', err.message);
   });
 
+  // Drift check worker
+  driftCheckWorker = new Worker(QUEUE_NAMES.DRIFT_CHECK, processDriftCheck, {
+    connection: redisConnection,
+    concurrency: 2,
+    limiter: {
+      max: 5,
+      duration: 10000, // Max 5 drift checks per 10 seconds
+    },
+  });
+
+  driftCheckWorker.on('completed', (job: Job<DriftCheckJobData>, result: { alertsCreated: number; scenariosChecked: number }) => {
+    console.log(
+      `[drift-check] Job ${job.id} completed: ${result.scenariosChecked} checked, ${result.alertsCreated} alerts`
+    );
+  });
+
+  driftCheckWorker.on('failed', (job: Job<DriftCheckJobData> | undefined, err: Error) => {
+    console.error(`[drift-check] Job ${job?.id} failed:`, err.message);
+  });
+
+  driftCheckWorker.on('error', (err: Error) => {
+    console.error('[drift-check] Worker error:', err.message);
+  });
+
   console.log('All workers started successfully');
 }
 
@@ -115,6 +141,11 @@ export async function stopWorkers(): Promise<void> {
     viewRefreshWorker = null;
   }
 
+  if (driftCheckWorker) {
+    closePromises.push(driftCheckWorker.close());
+    driftCheckWorker = null;
+  }
+
   await Promise.all(closePromises);
   console.log('All workers stopped');
 }
@@ -126,10 +157,12 @@ export function getWorkerStatus(): {
   scenarioRecompute: boolean;
   csvImport: boolean;
   viewRefresh: boolean;
+  driftCheck: boolean;
 } {
   return {
     scenarioRecompute: scenarioRecomputeWorker !== null && !scenarioRecomputeWorker.closing,
     csvImport: csvImportWorker !== null && !csvImportWorker.closing,
     viewRefresh: viewRefreshWorker !== null && !viewRefreshWorker.closing,
+    driftCheck: driftCheckWorker !== null && !driftCheckWorker.closing,
   };
 }

@@ -69,12 +69,25 @@ export interface InitiativeAllocation {
   scenarioId: string;
   scenarioName: string;
   scenarioStatus: string;
+  scenarioIsPrimary: boolean;
   employeeId: string;
   employeeName: string;
   employeeRole: string;
   startDate: string;
   endDate: string;
   percentage: number;
+}
+
+// Actual vs Proposed allocation hours split per quarter
+export interface QuarterAllocationSplit {
+  actualHours: number;
+  proposedHours: number;
+  proposedScenarioCount: number;
+}
+
+export interface InitiativeAllocationHoursByType {
+  currentQuarter: QuarterAllocationSplit;
+  nextQuarter: QuarterAllocationSplit;
 }
 
 // API Response types

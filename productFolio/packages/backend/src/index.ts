@@ -14,6 +14,8 @@ import { periodsRoutes } from './routes/periods.js';
 import { jobsRoutes } from './routes/jobs.js';
 import { orgTreeRoutes } from './routes/org-tree.js';
 import { approvalRoutes } from './routes/approvals.js';
+import { freezePolicyRoutes } from './routes/freeze-policy.js';
+import { driftRoutes } from './routes/drift.js';
 import { getWorkerStatus } from './jobs/index.js';
 
 const fastify = Fastify({
@@ -52,6 +54,8 @@ await fastify.register(periodsRoutes);
 await fastify.register(jobsRoutes);
 await fastify.register(orgTreeRoutes);
 await fastify.register(approvalRoutes);
+await fastify.register(freezePolicyRoutes);
+await fastify.register(driftRoutes);
 
 const start = async () => {
   try {

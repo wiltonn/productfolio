@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError, WorkflowError } from '../lib/errors.js';
+import { enqueueDriftCheck } from '../jobs/index.js';
 import { PaginationParams, PaginatedResponse, ApprovalHistoryEntry, SkillDemand } from '../types/index.js';
 import type { ScopeItem, Approval, Initiative } from '@prisma/client';
 import { CreateScopeItemInput, UpdateScopeItemInput } from '../schemas/scoping.schema.js';
@@ -98,6 +99,9 @@ export class ScopingService {
       },
     });
 
+    // Trigger drift check after demand changes
+    await enqueueDriftCheck('demand_change').catch(() => {});
+
     return scopeItem;
   }
 
@@ -148,6 +152,9 @@ export class ScopingService {
       },
     });
 
+    // Trigger drift check after demand changes
+    await enqueueDriftCheck('demand_change').catch(() => {});
+
     return updated;
   }
 
@@ -167,6 +174,9 @@ export class ScopingService {
     await prisma.scopeItem.delete({
       where: { id },
     });
+
+    // Trigger drift check after demand changes
+    await enqueueDriftCheck('demand_change').catch(() => {});
   }
 
   /**

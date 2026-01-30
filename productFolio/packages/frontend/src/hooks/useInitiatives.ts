@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { toast } from '../stores/toast';
-import type { Initiative, InitiativeFilters, PaginatedResponse, InitiativeStatus, BulkUpdateResult, InitiativeAllocation, InitiativeAllocationHours } from '../types';
+import type { Initiative, InitiativeFilters, PaginatedResponse, InitiativeStatus, BulkUpdateResult, InitiativeAllocation, InitiativeAllocationHours, InitiativeAllocationHoursByType } from '../types';
 
 // Query keys
 export const initiativeKeys = {
@@ -10,8 +10,9 @@ export const initiativeKeys = {
   list: (filters: InitiativeFilters) => [...initiativeKeys.lists(), filters] as const,
   details: () => [...initiativeKeys.all, 'detail'] as const,
   detail: (id: string) => [...initiativeKeys.details(), id] as const,
-  allocations: (id: string) => [...initiativeKeys.all, 'allocations', id] as const,
+  allocations: (id: string, periodId?: string) => [...initiativeKeys.all, 'allocations', id, periodId] as const,
   allocationHours: (ids: string[], datesKey: string) => [...initiativeKeys.all, 'allocationHours', ids, datesKey] as const,
+  allocationHoursByType: (ids: string[], datesKey: string) => [...initiativeKeys.all, 'allocationHoursByType', ids, datesKey] as const,
 };
 
 // Hooks
@@ -48,10 +49,11 @@ export function useInitiative(id: string) {
   });
 }
 
-export function useInitiativeAllocationsAll(initiativeId: string) {
+export function useInitiativeAllocationsAll(initiativeId: string, periodId?: string) {
+  const params = periodId ? `?periodId=${periodId}` : '';
   return useQuery({
-    queryKey: initiativeKeys.allocations(initiativeId),
-    queryFn: () => api.get<InitiativeAllocation[]>(`/initiatives/${initiativeId}/allocations`),
+    queryKey: initiativeKeys.allocations(initiativeId, periodId),
+    queryFn: () => api.get<InitiativeAllocation[]>(`/initiatives/${initiativeId}/allocations${params}`),
     enabled: !!initiativeId,
   });
 }
@@ -77,6 +79,32 @@ export function useInitiativeAllocationHours(
     queryKey: initiativeKeys.allocationHours(initiativeIds, datesKey),
     queryFn: () =>
       api.get<Record<string, InitiativeAllocationHours>>(`/initiatives/allocation-hours?${params}`),
+    enabled: initiativeIds.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export function useInitiativeAllocationHoursByType(
+  initiativeIds: string[],
+  currentQuarterStart: string,
+  currentQuarterEnd: string,
+  nextQuarterStart: string,
+  nextQuarterEnd: string
+) {
+  const params = new URLSearchParams({
+    initiativeIds: initiativeIds.join(','),
+    currentQuarterStart,
+    currentQuarterEnd,
+    nextQuarterStart,
+    nextQuarterEnd,
+  });
+
+  const datesKey = `${currentQuarterStart}-${currentQuarterEnd}-${nextQuarterStart}-${nextQuarterEnd}`;
+
+  return useQuery({
+    queryKey: initiativeKeys.allocationHoursByType(initiativeIds, datesKey),
+    queryFn: () =>
+      api.get<Record<string, InitiativeAllocationHoursByType>>(`/initiatives/allocation-hours-by-type?${params}`),
     enabled: initiativeIds.length > 0,
     staleTime: 30_000,
   });

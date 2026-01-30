@@ -1,7 +1,7 @@
-import { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType } from '@prisma/client';
+import { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType, ScenarioType, RevisionReason, DriftAlertStatus } from '@prisma/client';
 
 // Re-export Prisma enums for convenience
-export { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType };
+export { InitiativeStatus, EmploymentType, UserRole, PeriodType, AllocationType, ScenarioType, RevisionReason, DriftAlertStatus };
 
 // Pagination
 export interface PaginationParams {
@@ -297,4 +297,139 @@ export interface AutoAllocateResult {
 
 export interface AutoAllocateOptions {
   maxAllocationPercentage?: number;
+}
+
+// ============================================================================
+// Baseline Snapshot Types
+// ============================================================================
+
+export interface CapacitySnapshotEntry {
+  employeeId: string;
+  employeeName: string;
+  periodId: string;
+  periodLabel: string;
+  hoursAvailable: number;
+  hoursPerWeek: number;
+  skills: string[];
+}
+
+export interface DemandSnapshotEntry {
+  initiativeId: string;
+  initiativeTitle: string;
+  periodId: string;
+  periodLabel: string;
+  skill: string;
+  demandHours: number;
+}
+
+export interface AllocationSnapshotEntry {
+  allocationId: string;
+  employeeId: string;
+  employeeName: string;
+  initiativeId: string | null;
+  initiativeTitle: string | null;
+  allocationType: string;
+  startDate: string;
+  endDate: string;
+  percentage: number;
+  hoursInPeriod: number;
+}
+
+export interface SnapshotSummary {
+  totalCapacityHours: number;
+  totalDemandHours: number;
+  overallGap: number;
+  totalAllocations: number;
+  employeeCount: number;
+  initiativeCount: number;
+}
+
+// ============================================================================
+// Delta Engine Types
+// ============================================================================
+
+export interface CapacityDelta {
+  employeeId: string;
+  employeeName: string;
+  periodId: string;
+  periodLabel: string;
+  skill: string;
+  snapshotHours: number;
+  liveHours: number;
+  deltaHours: number;
+  deltaPct: number;
+}
+
+export interface DemandDelta {
+  initiativeId: string;
+  initiativeTitle: string;
+  periodId: string;
+  periodLabel: string;
+  skill: string;
+  snapshotHours: number;
+  liveHours: number;
+  deltaHours: number;
+  deltaPct: number;
+}
+
+export interface AllocationDelta {
+  type: 'added' | 'removed' | 'modified';
+  employeeId: string;
+  employeeName: string;
+  initiativeId: string | null;
+  initiativeTitle: string | null;
+  snapshotPercentage: number | null;
+  livePercentage: number | null;
+  snapshotHours: number | null;
+  liveHours: number | null;
+  deltaHours: number;
+}
+
+export interface DeltaResult {
+  scenarioId: string;
+  baselineSnapshotId: string;
+  periodId: string;
+  periodLabel: string;
+  computedAt: Date;
+  capacityDeltas: CapacityDelta[];
+  demandDeltas: DemandDelta[];
+  allocationDeltas: AllocationDelta[];
+  summary: {
+    totalCapacityDriftHours: number;
+    totalCapacityDriftPct: number;
+    totalDemandDriftHours: number;
+    totalDemandDriftPct: number;
+    netGapDrift: number;
+    allocationsAdded: number;
+    allocationsRemoved: number;
+    allocationsModified: number;
+  };
+}
+
+// ============================================================================
+// Drift Alert Types
+// ============================================================================
+
+export interface DriftAlertSummary {
+  id: string;
+  scenarioId: string;
+  scenarioName: string;
+  periodId: string;
+  periodLabel: string;
+  status: string;
+  capacityDriftPct: number;
+  demandDriftPct: number;
+  netGapDrift: number;
+  detectedAt: Date;
+  acknowledgedAt: Date | null;
+  resolvedAt: Date | null;
+}
+
+export interface DriftCheckResult {
+  driftsDetected: boolean;
+  alerts: DriftAlertSummary[];
+  thresholds: {
+    capacityThresholdPct: number;
+    demandThresholdPct: number;
+  };
 }

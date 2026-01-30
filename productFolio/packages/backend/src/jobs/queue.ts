@@ -14,6 +14,7 @@ export const QUEUE_NAMES = {
   SCENARIO_RECOMPUTE: 'scenario-recompute',
   CSV_IMPORT: 'csv-import',
   VIEW_REFRESH: 'view-refresh',
+  DRIFT_CHECK: 'drift-check',
 } as const;
 
 // Job data types
@@ -36,10 +37,17 @@ export interface ViewRefreshJobData {
   triggeredBy: 'allocation_change' | 'scheduled' | 'manual';
 }
 
+export interface DriftCheckJobData {
+  scenarioId?: string;
+  triggeredBy: 'scheduled' | 'manual' | 'capacity_change' | 'demand_change';
+  timestamp: string;
+}
+
 // Queue instances (lazy initialization)
 let scenarioRecomputeQueue: Queue<ScenarioRecomputeJobData> | null = null;
 let csvImportQueue: Queue<CsvImportJobData> | null = null;
 let viewRefreshQueue: Queue<ViewRefreshJobData> | null = null;
+let driftCheckQueue: Queue<DriftCheckJobData> | null = null;
 
 /**
  * Get or create the scenario recompute queue
@@ -119,6 +127,32 @@ export function getViewRefreshQueue(): Queue<ViewRefreshJobData> {
 }
 
 /**
+ * Get or create the drift check queue
+ */
+export function getDriftCheckQueue(): Queue<DriftCheckJobData> {
+  if (!driftCheckQueue) {
+    driftCheckQueue = new Queue<DriftCheckJobData>(QUEUE_NAMES.DRIFT_CHECK, {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: {
+          age: 12 * 3600, // Keep for 12 hours
+          count: 500,
+        },
+        removeOnFail: {
+          age: 24 * 3600,
+        },
+      },
+    });
+  }
+  return driftCheckQueue;
+}
+
+/**
  * Close all queue connections
  */
 export async function closeQueues(): Promise<void> {
@@ -137,6 +171,11 @@ export async function closeQueues(): Promise<void> {
   if (viewRefreshQueue) {
     closePromises.push(viewRefreshQueue.close());
     viewRefreshQueue = null;
+  }
+
+  if (driftCheckQueue) {
+    closePromises.push(driftCheckQueue.close());
+    driftCheckQueue = null;
   }
 
   await Promise.all(closePromises);
@@ -216,6 +255,33 @@ export async function enqueueViewRefresh(
     {
       jobId,
       delay: 1000, // Debounce view refreshes
+    }
+  );
+
+  return job.id ?? null;
+}
+
+/**
+ * Helper to add a drift check job with deduplication
+ */
+export async function enqueueDriftCheck(
+  triggeredBy: DriftCheckJobData['triggeredBy'],
+  scenarioId?: string
+): Promise<string | null> {
+  const queue = getDriftCheckQueue();
+
+  const jobId = `drift-check-${scenarioId || 'all'}`;
+
+  const job = await queue.add(
+    'drift-check',
+    {
+      scenarioId,
+      triggeredBy,
+      timestamp: new Date().toISOString(),
+    },
+    {
+      jobId,
+      delay: 2000, // Debounce drift checks
     }
   );
 

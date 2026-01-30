@@ -50,6 +50,7 @@ export interface InitiativeAllocationDetail {
   scenarioId: string;
   scenarioName: string;
   scenarioStatus: string;
+  scenarioIsPrimary: boolean;
   employeeId: string;
   employeeName: string;
   employeeRole: string;
@@ -281,7 +282,7 @@ export class AllocationService {
     }));
   }
 
-  async listByInitiativeAcrossScenarios(initiativeId: string): Promise<InitiativeAllocationDetail[]> {
+  async listByInitiativeAcrossScenarios(initiativeId: string, periodId?: string): Promise<InitiativeAllocationDetail[]> {
     const initiative = await prisma.initiative.findUnique({
       where: { id: initiativeId },
     });
@@ -290,14 +291,20 @@ export class AllocationService {
       throw new NotFoundError('Initiative', initiativeId);
     }
 
+    const whereClause: Record<string, unknown> = { initiativeId };
+    if (periodId) {
+      whereClause.scenario = { periodId };
+    }
+
     const allocations = await prisma.allocation.findMany({
-      where: { initiativeId },
+      where: whereClause,
       include: {
         scenario: {
           select: {
             id: true,
             name: true,
             status: true,
+            isPrimary: true,
           },
         },
         employee: {
@@ -319,6 +326,7 @@ export class AllocationService {
       scenarioId: allocation.scenario.id,
       scenarioName: allocation.scenario.name,
       scenarioStatus: allocation.scenario.status,
+      scenarioIsPrimary: allocation.scenario.isPrimary,
       employeeId: allocation.employee.id,
       employeeName: allocation.employee.name,
       employeeRole: allocation.employee.role,
@@ -387,6 +395,108 @@ export class AllocationService {
     for (const id of initiativeIds) {
       result[id].currentQuarterHours = Math.round(result[id].currentQuarterHours);
       result[id].nextQuarterHours = Math.round(result[id].nextQuarterHours);
+    }
+
+    return result;
+  }
+
+  async listInitiativeAllocationHoursByType(
+    initiativeIds: string[],
+    currentQStart: Date,
+    currentQEnd: Date,
+    nextQStart: Date,
+    nextQEnd: Date
+  ): Promise<Record<string, {
+    currentQuarter: { actualHours: number; proposedHours: number; proposedScenarioCount: number };
+    nextQuarter: { actualHours: number; proposedHours: number; proposedScenarioCount: number };
+  }>> {
+    if (initiativeIds.length === 0) return {};
+
+    const allocationPeriods = await prisma.allocationPeriod.findMany({
+      where: {
+        allocation: {
+          initiativeId: { in: initiativeIds },
+        },
+        period: {
+          type: 'QUARTER',
+          OR: [
+            { startDate: { lte: currentQEnd }, endDate: { gte: currentQStart } },
+            { startDate: { lte: nextQEnd }, endDate: { gte: nextQStart } },
+          ],
+        },
+      },
+      include: {
+        allocation: {
+          select: {
+            initiativeId: true,
+            scenario: {
+              select: {
+                id: true,
+                status: true,
+                isPrimary: true,
+              },
+            },
+          },
+        },
+        period: {
+          select: { startDate: true, endDate: true },
+        },
+      },
+    });
+
+    // Initialize result
+    const result: Record<string, {
+      currentQuarter: { actualHours: number; proposedHours: number; proposedScenarioCount: number };
+      nextQuarter: { actualHours: number; proposedHours: number; proposedScenarioCount: number };
+    }> = {};
+
+    // Track proposed scenario IDs per initiative per quarter for counting
+    const proposedScenarios: Record<string, { current: Set<string>; next: Set<string> }> = {};
+
+    for (const id of initiativeIds) {
+      result[id] = {
+        currentQuarter: { actualHours: 0, proposedHours: 0, proposedScenarioCount: 0 },
+        nextQuarter: { actualHours: 0, proposedHours: 0, proposedScenarioCount: 0 },
+      };
+      proposedScenarios[id] = { current: new Set(), next: new Set() };
+    }
+
+    for (const ap of allocationPeriods) {
+      const initId = ap.allocation.initiativeId;
+      if (!initId || !result[initId]) continue;
+
+      const isActual = ap.allocation.scenario.status === 'LOCKED' && ap.allocation.scenario.isPrimary;
+      const scenarioId = ap.allocation.scenario.id;
+
+      // Current quarter
+      if (ap.period.startDate <= currentQEnd && ap.period.endDate >= currentQStart) {
+        if (isActual) {
+          result[initId].currentQuarter.actualHours += ap.hoursInPeriod;
+        } else {
+          result[initId].currentQuarter.proposedHours += ap.hoursInPeriod;
+          proposedScenarios[initId].current.add(scenarioId);
+        }
+      }
+
+      // Next quarter
+      if (ap.period.startDate <= nextQEnd && ap.period.endDate >= nextQStart) {
+        if (isActual) {
+          result[initId].nextQuarter.actualHours += ap.hoursInPeriod;
+        } else {
+          result[initId].nextQuarter.proposedHours += ap.hoursInPeriod;
+          proposedScenarios[initId].next.add(scenarioId);
+        }
+      }
+    }
+
+    // Round and set scenario counts
+    for (const id of initiativeIds) {
+      result[id].currentQuarter.actualHours = Math.round(result[id].currentQuarter.actualHours);
+      result[id].currentQuarter.proposedHours = Math.round(result[id].currentQuarter.proposedHours);
+      result[id].currentQuarter.proposedScenarioCount = proposedScenarios[id].current.size;
+      result[id].nextQuarter.actualHours = Math.round(result[id].nextQuarter.actualHours);
+      result[id].nextQuarter.proposedHours = Math.round(result[id].nextQuarter.proposedHours);
+      result[id].nextQuarter.proposedScenarioCount = proposedScenarios[id].next.size;
     }
 
     return result;

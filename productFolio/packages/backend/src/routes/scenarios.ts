@@ -12,10 +12,13 @@ import {
   transitionStatusSchema,
   cloneScenarioSchema,
 } from '../schemas/scenarios.schema.js';
+import { createRevisionSchema } from '../schemas/baseline.schema.js';
 import { calculatorQuerySchema } from '../schemas/calculator.schema.js';
 import { scenariosService } from '../services/scenarios.service.js';
 import { allocationService } from '../services/allocation.service.js';
 import { scenarioCalculatorService } from '../services/scenario-calculator.service.js';
+import { baselineService } from '../services/baseline.service.js';
+import { deltaEngineService } from '../services/delta-engine.service.js';
 
 const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
 
@@ -277,6 +280,58 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         }))
       );
       return reply.code(200).send(result);
+    }
+  );
+
+  // GET /api/scenarios/:id/snapshot - Get baseline snapshot
+  fastify.get<{ Params: { id: string } }>(
+    '/api/scenarios/:id/snapshot',
+    async (request, reply) => {
+      const snapshot = await baselineService.getSnapshot(request.params.id);
+      return reply.code(200).send(snapshot);
+    }
+  );
+
+  // GET /api/scenarios/:id/delta - Baseline vs live delta
+  fastify.get<{ Params: { id: string } }>(
+    '/api/scenarios/:id/delta',
+    async (request, reply) => {
+      const delta = await deltaEngineService.computeDelta(request.params.id);
+      return reply.code(200).send(delta);
+    }
+  );
+
+  // GET /api/scenarios/:id/revision-delta - Revision vs baseline delta
+  fastify.get<{ Params: { id: string } }>(
+    '/api/scenarios/:id/revision-delta',
+    async (request, reply) => {
+      const delta = await deltaEngineService.computeRevisionDelta(request.params.id);
+      return reply.code(200).send(delta);
+    }
+  );
+
+  // POST /api/scenarios/:id/revision - Create a revision from a locked baseline
+  fastify.post<{ Params: { id: string }; Body: unknown }>(
+    '/api/scenarios/:id/revision',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      const data = createRevisionSchema.parse(request.body);
+      const scenario = await scenariosService.createRevision(
+        request.params.id,
+        data,
+        request.user.role
+      );
+      return reply.code(201).send(scenario);
+    }
+  );
+
+  // PUT /api/scenarios/:id/reconcile - Mark revision as reconciled
+  fastify.put<{ Params: { id: string } }>(
+    '/api/scenarios/:id/reconcile',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      const scenario = await scenariosService.markReconciled(request.params.id);
+      return reply.code(200).send(scenario);
     }
   );
 }

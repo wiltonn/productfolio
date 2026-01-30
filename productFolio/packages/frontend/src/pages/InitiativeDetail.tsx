@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useInitiative, useUpdateInitiative, useUpdateInitiativeStatus, useInitiativeAllocationsAll } from '../hooks';
-import { StatusBadge } from '../components/ui';
+import { useQuarterPeriods } from '../hooks/usePeriods';
+import { StatusBadge, Select } from '../components/ui';
 import type { InitiativeStatus, InitiativeAllocation } from '../types';
 
 // Types for scope items and approvals
@@ -105,7 +106,7 @@ export function InitiativeDetail() {
   const { data: initiative, isLoading } = useInitiative(id || '');
   const updateInitiative = useUpdateInitiative();
   const updateStatus = useUpdateInitiativeStatus();
-  const { data: allocations, isLoading: allocationsLoading } = useInitiativeAllocationsAll(id || '');
+  // Allocations are fetched inside AssignmentsTab with quarter filtering
 
   // Read initial tab from URL query param
   const tabParam = searchParams.get('tab') as TabId | null;
@@ -270,7 +271,7 @@ export function InitiativeDetail() {
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'scope', label: 'Scope', count: scopeItems.length },
-    { id: 'assignments', label: 'Assignments', count: allocations?.length },
+    { id: 'assignments', label: 'Assignments' },
     { id: 'approvals', label: 'Approvals', count: mockApprovals.length },
     { id: 'activity', label: 'Activity' },
   ];
@@ -459,7 +460,7 @@ export function InitiativeDetail() {
           />
         )}
         {activeTab === 'assignments' && (
-          <AssignmentsTab allocations={allocations || []} isLoading={allocationsLoading} />
+          <AssignmentsTab initiativeId={id || ''} />
         )}
         {activeTab === 'approvals' && (
           <ApprovalsTab approvals={mockApprovals} />
@@ -878,13 +879,72 @@ function ScopeTab({
 }
 
 // Assignments Tab Component
-function AssignmentsTab({
-  allocations,
-  isLoading,
-}: {
-  allocations: InitiativeAllocation[];
-  isLoading: boolean;
-}) {
+function AssignmentsTab({ initiativeId }: { initiativeId: string }) {
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+  const { data: periodsData } = useQuarterPeriods();
+
+  // Build quarter options for the picker
+  const quarterOptions = useMemo(() => {
+    if (!periodsData?.data) return [];
+    return periodsData.data
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((p) => ({ value: p.id, label: p.label }));
+  }, [periodsData]);
+
+  // Default to current quarter when periods load
+  useEffect(() => {
+    if (!selectedPeriodId && periodsData?.data) {
+      const now = new Date();
+      const currentQ = Math.floor(now.getMonth() / 3) + 1;
+      const currentLabel = `${now.getFullYear()}-Q${currentQ}`;
+      const match = periodsData.data.find((p) => p.label === currentLabel);
+      if (match) setSelectedPeriodId(match.id);
+      else if (periodsData.data.length > 0) setSelectedPeriodId(periodsData.data[0].id);
+    }
+  }, [periodsData, selectedPeriodId]);
+
+  // Fetch allocations filtered by selected quarter
+  const { data: allocations, isLoading } = useInitiativeAllocationsAll(
+    initiativeId,
+    selectedPeriodId || undefined
+  );
+
+  // Split into actual vs proposed
+  const { actualAllocations, proposedGroups, actualCount, proposedCount, uniqueEmployees } = useMemo(() => {
+    const allocs = allocations || [];
+    const actual = allocs.filter((a) => a.scenarioStatus === 'LOCKED' && a.scenarioIsPrimary);
+    const proposed = allocs.filter((a) => !(a.scenarioStatus === 'LOCKED' && a.scenarioIsPrimary));
+
+    // Group proposed by scenario
+    const grouped = proposed.reduce<Record<string, { scenarioId: string; scenarioName: string; scenarioStatus: string; allocations: InitiativeAllocation[] }>>((acc, alloc) => {
+      if (!acc[alloc.scenarioId]) {
+        acc[alloc.scenarioId] = {
+          scenarioId: alloc.scenarioId,
+          scenarioName: alloc.scenarioName,
+          scenarioStatus: alloc.scenarioStatus,
+          allocations: [],
+        };
+      }
+      acc[alloc.scenarioId].allocations.push(alloc);
+      return acc;
+    }, {});
+
+    return {
+      actualAllocations: actual,
+      proposedGroups: Object.values(grouped),
+      actualCount: actual.length,
+      proposedCount: proposed.length,
+      uniqueEmployees: new Set(allocs.map((a) => a.employeeId)).size,
+    };
+  }, [allocations]);
+
+  const scenarioStatusStyles: Record<string, string> = {
+    DRAFT: 'bg-surface-100 text-surface-600',
+    REVIEW: 'bg-amber-100 text-amber-700',
+    APPROVED: 'bg-emerald-100 text-emerald-700',
+    LOCKED: 'bg-violet-100 text-violet-700',
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-48">
@@ -899,112 +959,166 @@ function AssignmentsTab({
     );
   }
 
-  if (allocations.length === 0) {
-    return (
-      <div className="card p-12">
-        <div className="flex flex-col items-center justify-center text-surface-400">
-          <svg className="w-12 h-12 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
-          </svg>
-          <p className="text-sm font-medium text-surface-600 mb-1">No assignments yet</p>
-          <p className="text-sm text-surface-400">
-            Assignments are created through scenario planning. Add this initiative to a scenario and allocate employees there.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Group allocations by scenario
-  const grouped = allocations.reduce<Record<string, { scenarioName: string; scenarioStatus: string; allocations: InitiativeAllocation[] }>>((acc, alloc) => {
-    if (!acc[alloc.scenarioId]) {
-      acc[alloc.scenarioId] = {
-        scenarioName: alloc.scenarioName,
-        scenarioStatus: alloc.scenarioStatus,
-        allocations: [],
-      };
-    }
-    acc[alloc.scenarioId].allocations.push(alloc);
-    return acc;
-  }, {});
-
-  const scenarioEntries = Object.entries(grouped);
-  const uniqueEmployees = new Set(allocations.map(a => a.employeeId)).size;
-
-  const scenarioStatusStyles: Record<string, string> = {
-    DRAFT: 'bg-surface-100 text-surface-600',
-    REVIEW: 'bg-amber-100 text-amber-700',
-    APPROVED: 'bg-emerald-100 text-emerald-700',
-    LOCKED: 'bg-violet-100 text-violet-700',
-  };
+  const allAllocations = allocations || [];
 
   return (
     <div className="space-y-6">
-      {/* Summary bar */}
+      {/* Quarter picker + summary bar */}
       <div className="card p-4">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-surface-500">Total assignments:</span>
-            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
-              {allocations.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-surface-500">Across scenarios:</span>
-            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
-              {scenarioEntries.length}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-surface-500">Unique employees:</span>
-            <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
-              {uniqueEmployees}
-            </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-surface-500">Quarter:</span>
+              <Select
+                options={quarterOptions}
+                value={selectedPeriodId}
+                onChange={setSelectedPeriodId}
+                placeholder="Select quarter"
+                className="w-36"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-surface-500">Actual:</span>
+              <span className="text-lg font-display font-bold text-emerald-700 tabular-nums">
+                {actualCount}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-surface-500">Proposed:</span>
+              <span className="text-lg font-display font-bold text-amber-700 tabular-nums">
+                {proposedCount}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-surface-500">Unique employees:</span>
+              <span className="text-lg font-display font-bold text-surface-900 tabular-nums">
+                {uniqueEmployees}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Scenario groups */}
-      {scenarioEntries.map(([scenarioId, group]) => (
-        <div key={scenarioId} className="card overflow-hidden">
-          {/* Scenario header */}
-          <div className="px-6 py-4 bg-surface-50 border-b border-surface-200 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="text-sm font-semibold text-surface-900">{group.scenarioName}</h3>
-              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${scenarioStatusStyles[group.scenarioStatus] || 'bg-surface-100 text-surface-600'}`}>
-                {group.scenarioStatus}
-              </span>
-            </div>
-            <span className="text-xs text-surface-500">
-              {group.allocations.length} assignment{group.allocations.length !== 1 ? 's' : ''}
-            </span>
+      {allAllocations.length === 0 && (
+        <div className="card p-12">
+          <div className="flex flex-col items-center justify-center text-surface-400">
+            <svg className="w-12 h-12 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+            </svg>
+            <p className="text-sm font-medium text-surface-600 mb-1">No assignments for this quarter</p>
+            <p className="text-sm text-surface-400">
+              Assignments are created through scenario planning. Add this initiative to a scenario and allocate employees there.
+            </p>
           </div>
-
-          {/* Allocations table */}
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-surface-100">
-                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Employee</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Start Date</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">End Date</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider">Allocation %</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-100">
-              {group.allocations.map((alloc) => (
-                <tr key={alloc.id} className="hover:bg-surface-50 transition-colors">
-                  <td className="px-6 py-3 text-sm font-medium text-surface-900">{alloc.employeeName}</td>
-                  <td className="px-6 py-3 text-sm text-surface-600 capitalize">{alloc.employeeRole.toLowerCase().replace('_', ' ')}</td>
-                  <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.startDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.endDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-3 text-sm text-right font-mono font-medium text-surface-900">{alloc.percentage}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
-      ))}
+      )}
+
+      {/* Section 1: Actual Allocations */}
+      {allAllocations.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-surface-700 uppercase tracking-wider mb-3">Actual Allocations</h3>
+          {actualAllocations.length === 0 ? (
+            <div className="card p-6 text-center">
+              <p className="text-sm text-surface-400">
+                No locked primary scenario exists for this quarter. Actual allocations appear when a primary scenario is locked.
+              </p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="px-6 py-3 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h4 className="text-sm font-semibold text-emerald-800">Primary Scenario (Locked)</h4>
+                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                    ACTUAL
+                  </span>
+                </div>
+                <span className="text-xs text-emerald-600">
+                  {actualAllocations.length} assignment{actualAllocations.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-surface-100">
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Employee</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Start Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">End Date</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider">Allocation %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-100">
+                  {actualAllocations.map((alloc) => (
+                    <tr key={alloc.id} className="hover:bg-surface-50 transition-colors">
+                      <td className="px-6 py-3 text-sm font-medium text-surface-900">{alloc.employeeName}</td>
+                      <td className="px-6 py-3 text-sm text-surface-600 capitalize">{alloc.employeeRole.toLowerCase().replace('_', ' ')}</td>
+                      <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.startDate).toLocaleDateString()}</td>
+                      <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.endDate).toLocaleDateString()}</td>
+                      <td className="px-6 py-3 text-sm text-right font-mono font-medium text-surface-900">{alloc.percentage}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Section 2: Proposed Allocations */}
+      {allAllocations.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-surface-700 uppercase tracking-wider mb-3">Proposed Allocations</h3>
+          {proposedGroups.length === 0 ? (
+            <div className="card p-6 text-center">
+              <p className="text-sm text-surface-400">No proposed allocations for this quarter.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {proposedGroups.map((group) => (
+                <div key={group.scenarioId} className="card overflow-hidden">
+                  <div className="px-6 py-4 bg-surface-50 border-b border-surface-200 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Link
+                        to={`/scenarios/${group.scenarioId}`}
+                        className="text-sm font-semibold text-surface-900 hover:text-accent-600 transition-colors"
+                      >
+                        {group.scenarioName}
+                      </Link>
+                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${scenarioStatusStyles[group.scenarioStatus] || 'bg-surface-100 text-surface-600'}`}>
+                        {group.scenarioStatus}
+                      </span>
+                    </div>
+                    <span className="text-xs text-surface-500">
+                      {group.allocations.length} assignment{group.allocations.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-surface-100">
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Employee</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">Start Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-surface-500 uppercase tracking-wider">End Date</th>
+                        <th className="px-6 py-3 text-right text-xs font-semibold text-surface-500 uppercase tracking-wider">Allocation %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-100">
+                      {group.allocations.map((alloc) => (
+                        <tr key={alloc.id} className="hover:bg-surface-50 transition-colors">
+                          <td className="px-6 py-3 text-sm font-medium text-surface-900">{alloc.employeeName}</td>
+                          <td className="px-6 py-3 text-sm text-surface-600 capitalize">{alloc.employeeRole.toLowerCase().replace('_', ' ')}</td>
+                          <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.startDate).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 text-sm text-surface-600 font-mono">{new Date(alloc.endDate).toLocaleDateString()}</td>
+                          <td className="px-6 py-3 text-sm text-right font-mono font-medium text-surface-900">{alloc.percentage}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
