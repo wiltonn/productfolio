@@ -47,6 +47,10 @@ const Approvals = lazy(() =>
   import('./pages/Approvals').then((m) => ({ default: m.Approvals }))
 );
 
+const PortfolioAreas = lazy(() =>
+  import('./pages/PortfolioAreas').then((m) => ({ default: m.PortfolioAreas }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -193,6 +197,16 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <OrgTreeAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/portfolio-areas',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <PortfolioAreas />
             </LazyPage>
           </ErrorBoundary>
         ),

@@ -19,13 +19,21 @@ export {
   useUpdateInitiative,
   useUpdateInitiativeStatus,
   useBulkUpdateStatus,
-  useBulkAddTags,
   useDeleteInitiative,
   useBulkDeleteInitiatives,
   useExportInitiatives,
   useImportInitiatives,
   initiativeKeys,
 } from './useInitiatives';
+
+// Portfolio Area hooks
+export {
+  usePortfolioAreas,
+  useCreatePortfolioArea,
+  useUpdatePortfolioArea,
+  useDeletePortfolioArea,
+  portfolioAreaKeys,
+} from './usePortfolioAreas';
 
 // Employee hooks
 export {
@@ -42,6 +50,7 @@ export {
   useUpdateCapacity,
   useEmployeeAvailability,
   useEmployeeAllocationSummaries,
+  useEmployeePtoHours,
   employeeKeys,
   type Employee,
   type EmployeeFilters,
@@ -119,4 +128,5 @@ export type {
   InitiativeFilters,
   PaginatedResponse,
   BulkUpdateResult,
+  PortfolioArea,
 } from '../types';
