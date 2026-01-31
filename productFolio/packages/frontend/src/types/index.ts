@@ -38,6 +38,14 @@ export interface ScopeItem {
   updatedAt: string;
 }
 
+// Portfolio Area type
+export interface PortfolioArea {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Initiative types
 export interface Initiative {
   id: string;
@@ -45,6 +53,8 @@ export interface Initiative {
   description: string | null;
   businessOwnerId: string;
   productOwnerId: string;
+  portfolioAreaId: string | null;
+  productLeaderId: string | null;
   status: InitiativeStatus;
   targetQuarter: string | null;
   deliveryHealth: DeliveryHealth | null;
@@ -54,6 +64,8 @@ export interface Initiative {
   // Relations (optional, depends on includes)
   businessOwner?: User;
   productOwner?: User;
+  portfolioArea?: PortfolioArea;
+  productLeader?: User;
   scopeItems?: ScopeItem[];
 }
 
@@ -110,6 +122,7 @@ export interface InitiativeFilters {
   targetQuarter?: string;
   businessOwnerId?: string;
   productOwnerId?: string;
+  portfolioAreaId?: string;
 }
 
 // Bulk operation types

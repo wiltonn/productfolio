@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Select } from './ui';
 import { useCreateInitiative } from '../hooks/useInitiatives';
 import { useUsers } from '../hooks/useUsers';
+import { usePortfolioAreas } from '../hooks/usePortfolioAreas';
 import { getQuarterOptions } from '../types';
 
 interface CreateInitiativeModalProps {
@@ -14,15 +15,23 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
   const [description, setDescription] = useState('');
   const [businessOwnerId, setBusinessOwnerId] = useState('');
   const [productOwnerId, setProductOwnerId] = useState('');
+  const [portfolioAreaId, setPortfolioAreaId] = useState('');
+  const [productLeaderId, setProductLeaderId] = useState('');
   const [targetQuarter, setTargetQuarter] = useState('');
 
   const createInitiative = useCreateInitiative();
   const { data: usersData } = useUsers();
+  const { data: portfolioAreasData } = usePortfolioAreas();
 
   const users = usersData?.data ?? [];
   const userOptions = users.map((user) => ({
     value: user.id,
     label: user.name,
+  }));
+
+  const portfolioAreaOptions = (portfolioAreasData?.data ?? []).map((area) => ({
+    value: area.id,
+    label: area.name,
   }));
 
   const quarterOptions = getQuarterOptions();
@@ -32,6 +41,8 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
     setDescription('');
     setBusinessOwnerId('');
     setProductOwnerId('');
+    setPortfolioAreaId('');
+    setProductLeaderId('');
     setTargetQuarter('');
   };
 
@@ -53,6 +64,8 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
         description: description.trim() || null,
         businessOwnerId,
         productOwnerId,
+        portfolioAreaId: portfolioAreaId || null,
+        productLeaderId: productLeaderId || null,
         targetQuarter: targetQuarter || null,
       },
       {
@@ -127,6 +140,32 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
               onChange={setProductOwnerId}
               placeholder="Select product owner"
               allowClear={false}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">
+              Portfolio Area
+            </label>
+            <Select
+              options={portfolioAreaOptions}
+              value={portfolioAreaId}
+              onChange={setPortfolioAreaId}
+              placeholder="Select portfolio area (optional)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">
+              Product Leader
+            </label>
+            <Select
+              options={userOptions}
+              value={productLeaderId}
+              onChange={setProductLeaderId}
+              placeholder="Select product leader (optional)"
             />
           </div>
         </div>

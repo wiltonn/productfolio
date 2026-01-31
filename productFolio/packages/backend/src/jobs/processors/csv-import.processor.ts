@@ -80,17 +80,21 @@ async function processBatch(
     errors: [] as Array<{ row: number; message: string }>,
   };
 
-  // Collect all unique owner IDs to validate in one query
+  // Collect all unique IDs to validate in one query
   const businessOwnerIds = new Set<string>();
   const productOwnerIds = new Set<string>();
+  const portfolioAreaIds = new Set<string>();
+  const productLeaderIds = new Set<string>();
 
   for (const row of rows) {
     if (row.businessOwnerId) businessOwnerIds.add(row.businessOwnerId);
     if (row.productOwnerId) productOwnerIds.add(row.productOwnerId);
+    if (row.portfolioAreaId) portfolioAreaIds.add(row.portfolioAreaId);
+    if (row.productLeaderId) productLeaderIds.add(row.productLeaderId);
   }
 
-  // Batch validate owners
-  const [existingBusinessOwners, existingProductOwners] = await Promise.all([
+  // Batch validate references
+  const [existingBusinessOwners, existingProductOwners, existingPortfolioAreas, existingProductLeaders] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: Array.from(businessOwnerIds) } },
       select: { id: true },
@@ -99,10 +103,20 @@ async function processBatch(
       where: { id: { in: Array.from(productOwnerIds) } },
       select: { id: true },
     }),
+    prisma.portfolioArea.findMany({
+      where: { id: { in: Array.from(portfolioAreaIds) } },
+      select: { id: true },
+    }),
+    prisma.user.findMany({
+      where: { id: { in: Array.from(productLeaderIds) } },
+      select: { id: true },
+    }),
   ]);
 
   const validBusinessOwnerIds = new Set(existingBusinessOwners.map((u) => u.id));
   const validProductOwnerIds = new Set(existingProductOwners.map((u) => u.id));
+  const validPortfolioAreaIds = new Set(existingPortfolioAreas.map((a) => a.id));
+  const validProductLeaderIds = new Set(existingProductLeaders.map((u) => u.id));
 
   // Process each row
   const initiativesToCreate: Prisma.InitiativeCreateManyInput[] = [];
@@ -135,12 +149,34 @@ async function processBatch(
         continue;
       }
 
+      // Check portfolio area exists (if provided)
+      if (validatedRow.portfolioAreaId && !validPortfolioAreaIds.has(validatedRow.portfolioAreaId)) {
+        results.failed++;
+        results.errors.push({
+          row: rowNumber,
+          message: `Portfolio area with ID '${validatedRow.portfolioAreaId}' not found`,
+        });
+        continue;
+      }
+
+      // Check product leader exists (if provided)
+      if (validatedRow.productLeaderId && !validProductLeaderIds.has(validatedRow.productLeaderId)) {
+        results.failed++;
+        results.errors.push({
+          row: rowNumber,
+          message: `Product leader with ID '${validatedRow.productLeaderId}' not found`,
+        });
+        continue;
+      }
+
       // Prepare for batch insert
       initiativesToCreate.push({
         title: validatedRow.title,
         description: validatedRow.description || null,
         businessOwnerId: validatedRow.businessOwnerId,
         productOwnerId: validatedRow.productOwnerId,
+        portfolioAreaId: validatedRow.portfolioAreaId || null,
+        productLeaderId: validatedRow.productLeaderId || null,
         status: validatedRow.status || InitiativeStatus.PROPOSED,
         targetQuarter: validatedRow.targetQuarter || null,
         customFields: Prisma.JsonNull,

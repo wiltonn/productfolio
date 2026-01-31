@@ -148,6 +148,8 @@ export function InitiativeDetail() {
     targetQuarter: '2024-Q2',
     businessOwnerId: 'bo-1',
     productOwnerId: 'po-1',
+    portfolioAreaId: null,
+    productLeaderId: null,
     customFields: {
       priority: 'High',
       department: 'Product',
@@ -158,6 +160,8 @@ export function InitiativeDetail() {
     updatedAt: '2024-01-22T10:30:00Z',
     businessOwner: { id: 'bo-1', name: 'James Wilson', email: 'james@company.com', role: 'BUSINESS_OWNER' as const, createdAt: '', updatedAt: '' },
     productOwner: { id: 'po-1', name: 'Sarah Chen', email: 'sarah@company.com', role: 'PRODUCT_OWNER' as const, createdAt: '', updatedAt: '' },
+    portfolioArea: undefined,
+    productLeader: undefined,
   };
 
   // Toast helper
@@ -376,8 +380,8 @@ export function InitiativeDetail() {
               </div>
             </div>
 
-            {/* Owners */}
-            <div className="flex items-center gap-4 text-sm text-surface-500">
+            {/* Owners & Meta */}
+            <div className="flex items-center gap-4 text-sm text-surface-500 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-surface-400">Product:</span>
                 <span className="font-medium text-surface-700">{currentInitiative.productOwner?.name || 'Unassigned'}</span>
@@ -387,6 +391,24 @@ export function InitiativeDetail() {
                 <span className="text-surface-400">Business:</span>
                 <span className="font-medium text-surface-700">{currentInitiative.businessOwner?.name || 'Unassigned'}</span>
               </div>
+              {currentInitiative.productLeader && (
+                <>
+                  <span className="text-surface-300">|</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-surface-400">Product Leader:</span>
+                    <span className="font-medium text-surface-700">{currentInitiative.productLeader.name}</span>
+                  </div>
+                </>
+              )}
+              {currentInitiative.portfolioArea && (
+                <>
+                  <span className="text-surface-300">|</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-surface-400">Portfolio Area:</span>
+                    <span className="font-medium text-surface-700">{currentInitiative.portfolioArea.name}</span>
+                  </div>
+                </>
+              )}
               {currentInitiative.targetQuarter && (
                 <>
                   <span className="text-surface-300">|</span>

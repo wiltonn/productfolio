@@ -156,6 +156,22 @@ async function main() {
   }
 
   // ============================================================================
+  // PORTFOLIO AREAS
+  // ============================================================================
+
+  const portfolioAreaNames = ['Customer Experience', 'Platform Engineering', 'Data & Analytics', 'Security & Compliance'];
+  const portfolioAreas: Record<string, Awaited<ReturnType<typeof prisma.portfolioArea.create>>> = {};
+
+  for (const name of portfolioAreaNames) {
+    let area = await prisma.portfolioArea.findUnique({ where: { name } });
+    if (!area) {
+      area = await prisma.portfolioArea.create({ data: { name } });
+      console.log(`Created portfolio area: ${area.name}`);
+    }
+    portfolioAreas[name] = area;
+  }
+
+  // ============================================================================
   // INITIATIVES
   // ============================================================================
 
@@ -173,6 +189,8 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        portfolioAreaId: portfolioAreas['Customer Experience'].id,
+        productLeaderId: productOwner.id,
         scopeItems: [
           { name: 'Frontend Development', skillDemand: { Frontend: 280, TypeScript: 200 }, estimateP50: 280, estimateP90: 350 },
           { name: 'Backend API Updates', skillDemand: { Backend: 160, Go: 120 }, estimateP50: 160, estimateP90: 200 },
@@ -186,6 +204,8 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'AT_RISK' as const,
+        portfolioAreaId: portfolioAreas['Platform Engineering'].id,
+        productLeaderId: admin.id,
         scopeItems: [
           { name: 'Gateway Setup', skillDemand: { Backend: 200, DevOps: 80 }, estimateP50: 280, estimateP90: 350 },
           { name: 'Migration Scripts', skillDemand: { Backend: 120 }, estimateP50: 120, estimateP90: 160 },
@@ -198,6 +218,8 @@ async function main() {
         targetQuarter: '2026-Q2',
         targetPeriodId: q2Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        portfolioAreaId: portfolioAreas['Customer Experience'].id,
+        productLeaderId: productOwner.id,
         scopeItems: [
           { name: 'Mobile Frontend', skillDemand: { Frontend: 360, React: 300 }, estimateP50: 360, estimateP90: 450 },
           { name: 'API Integration', skillDemand: { Backend: 200 }, estimateP50: 200, estimateP90: 250 },
@@ -211,6 +233,8 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'DELAYED' as const,
+        portfolioAreaId: portfolioAreas['Data & Analytics'].id,
+        productLeaderId: businessOwner.id,
         scopeItems: [
           { name: 'Pipeline Redesign', skillDemand: { Data: 120, Python: 100 }, estimateP50: 200, estimateP90: 250 },
           { name: 'Performance Tuning', skillDemand: { Backend: 120, PostgreSQL: 80 }, estimateP50: 120, estimateP90: 160 },
@@ -223,6 +247,8 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        portfolioAreaId: portfolioAreas['Security & Compliance'].id,
+        productLeaderId: admin.id,
         scopeItems: [
           { name: 'Security Fixes', skillDemand: { Security: 40, Backend: 80 }, estimateP50: 120, estimateP90: 160 },
           { name: 'Infrastructure Hardening', skillDemand: { DevOps: 80, Security: 40 }, estimateP50: 120, estimateP90: 150 },
@@ -235,6 +261,8 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        portfolioAreaId: portfolioAreas['Platform Engineering'].id,
+        productLeaderId: productOwner.id,
         scopeItems: [
           { name: 'Backend Service', skillDemand: { Backend: 160, Go: 120 }, estimateP50: 160, estimateP90: 200 },
           { name: 'Frontend Integration', skillDemand: { Frontend: 120, React: 100 }, estimateP50: 120, estimateP90: 150 },
@@ -253,6 +281,8 @@ async function main() {
           deliveryHealth: initData.deliveryHealth,
           businessOwnerId: businessOwner.id,
           productOwnerId: productOwner.id,
+          portfolioAreaId: initData.portfolioAreaId,
+          productLeaderId: initData.productLeaderId,
         },
       });
 

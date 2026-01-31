@@ -69,6 +69,8 @@ export const CreateInitiativeSchema = z.object({
     .nullable(),
   businessOwnerId: uuidSchema,
   productOwnerId: uuidSchema,
+  portfolioAreaId: uuidSchema.optional().nullable(),
+  productLeaderId: uuidSchema.optional().nullable(),
   status: z
     .nativeEnum(InitiativeStatus)
     .default(InitiativeStatus.PROPOSED)
@@ -96,6 +98,8 @@ export const UpdateInitiativeSchema = z.object({
     .nullable(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
+  portfolioAreaId: uuidSchema.optional().nullable(),
+  productLeaderId: uuidSchema.optional().nullable(),
   targetQuarter: targetQuarterSchema,
   deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
@@ -110,6 +114,7 @@ export const InitiativeFiltersSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
+  portfolioAreaId: uuidSchema.optional(),
   targetQuarter: z.string().optional(),
   deliveryHealth: z.nativeEnum(DeliveryHealth).optional(),
   search: z
@@ -192,6 +197,8 @@ export const CsvRowSchema = z.object({
   description: z.string().optional().default(''),
   businessOwnerId: uuidSchema,
   productOwnerId: uuidSchema,
+  portfolioAreaId: uuidSchema.optional(),
+  productLeaderId: uuidSchema.optional(),
   status: z
     .nativeEnum(InitiativeStatus)
     .default(InitiativeStatus.PROPOSED)
@@ -220,6 +227,7 @@ export const CsvExportSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
+  portfolioAreaId: uuidSchema.optional(),
   targetQuarter: z.string().optional(),
   deliveryHealth: z.nativeEnum(DeliveryHealth).optional(),
   search: z.string().optional(),

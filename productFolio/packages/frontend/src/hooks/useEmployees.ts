@@ -130,6 +130,8 @@ export const employeeKeys = {
     [...employeeKeys.detail(id), 'availability', startDate, endDate] as const,
   allocationSummaries: (ids: string[], dates: string) =>
     [...employeeKeys.all, 'allocation-summaries', ids.join(','), dates] as const,
+  ptoHours: (ids: string[], dates: string) =>
+    [...employeeKeys.all, 'pto-hours', ids.join(','), dates] as const,
 };
 
 export function useEmployees(filters: EmployeeFilters = {}) {
@@ -419,6 +421,34 @@ export function useEmployeeAllocationSummaries(
     queryKey: employeeKeys.allocationSummaries(employeeIds, datesKey),
     queryFn: () =>
       api.get<AllocationSummariesResponse>(`/employees/allocation-summaries?${params}`),
+    enabled: employeeIds.length > 0,
+    staleTime: 30_000,
+  });
+}
+
+export type PtoHoursResponse = Record<string, { currentQuarterPtoHours: number; nextQuarterPtoHours: number }>;
+
+export function useEmployeePtoHours(
+  employeeIds: string[],
+  currentQuarterStart: string,
+  currentQuarterEnd: string,
+  nextQuarterStart: string,
+  nextQuarterEnd: string
+) {
+  const params = new URLSearchParams({
+    employeeIds: employeeIds.join(','),
+    currentQuarterStart,
+    currentQuarterEnd,
+    nextQuarterStart,
+    nextQuarterEnd,
+  });
+
+  const datesKey = `${currentQuarterStart}-${currentQuarterEnd}-${nextQuarterStart}-${nextQuarterEnd}`;
+
+  return useQuery({
+    queryKey: employeeKeys.ptoHours(employeeIds, datesKey),
+    queryFn: () =>
+      api.get<PtoHoursResponse>(`/employees/pto-hours?${params}`),
     enabled: employeeIds.length > 0,
     staleTime: 30_000,
   });

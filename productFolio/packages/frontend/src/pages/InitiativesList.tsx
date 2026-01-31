@@ -7,7 +7,6 @@ import {
   Select,
   SearchInput,
   StatusBadge,
-  Tag,
   Checkbox,
   BulkActionsBar,
 } from '../components/ui';
@@ -16,11 +15,10 @@ import {
   useInitiatives,
   useInitiativeAllocationHoursByType,
   useBulkUpdateStatus,
-  useBulkAddTags,
   useBulkDeleteInitiatives,
   useExportInitiatives,
 } from '../hooks/useInitiatives';
-import type { Initiative, InitiativeStatus, InitiativeFilters, InitiativeAllocationHoursByType } from '../types';
+import type { Initiative, InitiativeStatus, InitiativeFilters } from '../types';
 import { getQuarterOptions } from '../types';
 
 // Status filter options
@@ -37,13 +35,6 @@ const statusOptions = [
 // Quarter options
 const quarterOptions = getQuarterOptions();
 
-// Extract tags from initiative customFields
-const extractTags = (initiative: Initiative): string[] => {
-  const customFields = initiative.customFields as Record<string, unknown> | null;
-  if (!customFields?.tags) return [];
-  return Array.isArray(customFields.tags) ? customFields.tags : [];
-};
-
 export function InitiativesList() {
   const navigate = useNavigate();
 
@@ -59,6 +50,9 @@ export function InitiativesList() {
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Group collapse state (all collapsed by default)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
   // Build filters object
   const filters: InitiativeFilters = useMemo(
     () => ({
@@ -73,7 +67,6 @@ export function InitiativesList() {
   // API hooks
   const { data: apiData, isLoading } = useInitiatives(filters);
   const bulkUpdateStatus = useBulkUpdateStatus();
-  const bulkAddTags = useBulkAddTags();
   const bulkDelete = useBulkDeleteInitiatives();
   const exportMutation = useExportInitiatives();
 
@@ -158,14 +151,6 @@ export function InitiativesList() {
     [selectedIds, bulkUpdateStatus]
   );
 
-  const handleAddTags = useCallback(
-    (tags: string[]) => {
-      bulkAddTags.mutate({ ids: selectedIds, tags });
-      setRowSelection({});
-    },
-    [selectedIds, bulkAddTags]
-  );
-
   const handleDelete = useCallback(() => {
     if (window.confirm(`Delete ${selectedIds.length} initiative(s)?`)) {
       bulkDelete.mutate(selectedIds);
@@ -183,6 +168,46 @@ export function InitiativesList() {
     },
     [navigate]
   );
+
+  const toggleGroup = useCallback((groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }, []);
+
+  // Group initiatives by portfolio area
+  const groupedInitiatives = useMemo(() => {
+    const groups = new Map<string, { id: string; name: string; initiatives: Initiative[] }>();
+
+    for (const init of initiatives) {
+      const areaId = init.portfolioArea?.id ?? 'unassigned';
+      const areaName = init.portfolioArea?.name ?? 'Unassigned';
+      if (!groups.has(areaId)) {
+        groups.set(areaId, { id: areaId, name: areaName, initiatives: [] });
+      }
+      groups.get(areaId)!.initiatives.push(init);
+    }
+
+    const sorted = Array.from(groups.values()).sort((a, b) => {
+      if (a.id === 'unassigned') return 1;
+      if (b.id === 'unassigned') return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return sorted;
+  }, [initiatives]);
+
+  const toggleAllGroups = useCallback(() => {
+    setExpandedGroups(prev => {
+      if (prev.size === groupedInitiatives.length) {
+        return new Set();
+      }
+      return new Set(groupedInitiatives.map(g => g.id));
+    });
+  }, [groupedInitiatives]);
 
   // Column definitions
   const columns = useMemo<ColumnDef<Initiative, unknown>[]>(
@@ -235,22 +260,21 @@ export function InitiativesList() {
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
-        id: 'owner',
-        header: 'Owner',
+        id: 'productLeader',
+        header: 'Product Leader',
         size: 160,
-        accessorFn: (row) => (row.customFields as Record<string, unknown>)?.owner ?? '',
         cell: ({ row }) => {
-          const owner = (row.original.customFields as Record<string, unknown>)?.owner;
-          if (!owner) return <span className="text-surface-400">-</span>;
+          const leader = row.original.productLeader;
+          if (!leader) return <span className="text-surface-400">-</span>;
           return (
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center text-[10px] font-bold text-white">
-                {String(owner)
+                {leader.name
                   .split(' ')
                   .map((n) => n[0])
                   .join('')}
               </div>
-              <span className="text-surface-700 truncate">{String(owner)}</span>
+              <span className="text-surface-700 truncate">{leader.name}</span>
             </div>
           );
         },
@@ -351,26 +375,6 @@ export function InitiativesList() {
                 {hours === 0 ? '-' : `${hours}h (${count})`}
               </span>
             </Link>
-          );
-        },
-        enableSorting: false,
-      },
-      {
-        id: 'tags',
-        header: 'Tags',
-        size: 200,
-        cell: ({ row }) => {
-          const tags = extractTags(row.original);
-          if (tags.length === 0) return <span className="text-surface-400">-</span>;
-          return (
-            <div className="flex flex-wrap gap-1">
-              {tags.slice(0, 3).map((tag) => (
-                <Tag key={tag} label={tag} size="sm" />
-              ))}
-              {tags.length > 3 && (
-                <span className="text-xs text-surface-500 px-1">+{tags.length - 3}</span>
-              )}
-            </div>
           );
         },
         enableSorting: false,
@@ -522,29 +526,87 @@ export function InitiativesList() {
               <span className="tabular-nums font-medium">
                 {initiatives.length.toLocaleString()} initiative{initiatives.length !== 1 ? 's' : ''}
               </span>
+              {groupedInitiatives.length > 0 && (
+                <button
+                  onClick={toggleAllGroups}
+                  className="text-xs text-accent-600 hover:text-accent-700 font-medium transition-colors"
+                >
+                  {expandedGroups.size === groupedInitiatives.length ? 'Collapse All' : 'Expand All'}
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Table */}
-        <VirtualTable
-          data={initiatives}
-          columns={columns}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          enableRowSelection
-          rowSelection={rowSelection}
-          onRowSelectionChange={setRowSelection}
-          globalFilter={search}
-          onRowClick={handleRowClick}
-          getRowId={(row) => row.id}
-          isLoading={isLoading}
-          emptyMessage={
-            hasActiveFilters
-              ? 'No initiatives match your filters'
-              : 'No initiatives yet. Create your first one!'
-          }
-        />
+        {/* Grouped Tables */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16 text-surface-400">
+            <svg className="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Loading initiatives...
+          </div>
+        ) : groupedInitiatives.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-surface-400">
+            <p className="text-sm">
+              {hasActiveFilters
+                ? 'No initiatives match your filters'
+                : 'No initiatives yet. Create your first one!'}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {groupedInitiatives.map((group) => {
+              const isExpanded = expandedGroups.has(group.id);
+              return (
+                <div key={group.id}>
+                  {/* Group header */}
+                  <div
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex items-center justify-between px-4 py-3 bg-surface-50 border-b border-surface-200 cursor-pointer hover:bg-surface-100 transition-colors select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg
+                        className={`w-4 h-4 text-surface-500 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <span className="font-semibold text-sm text-surface-800">
+                        {group.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-surface-500 bg-surface-200 px-2 py-0.5 rounded-full">
+                      {group.initiatives.length}
+                    </span>
+                  </div>
+
+                  {/* Group initiatives table */}
+                  {isExpanded && (
+                    <VirtualTable
+                      data={group.initiatives}
+                      columns={columns}
+                      sorting={sorting}
+                      onSortingChange={setSorting}
+                      enableRowSelection
+                      rowSelection={rowSelection}
+                      onRowSelectionChange={setRowSelection}
+                      globalFilter={search}
+                      onRowClick={handleRowClick}
+                      getRowId={(row) => row.id}
+                      isLoading={false}
+                      emptyMessage="No initiatives in this group"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="px-4 py-3 border-t border-surface-200 bg-surface-50/30 flex items-center justify-between text-sm">
@@ -578,7 +640,7 @@ export function InitiativesList() {
           selectedCount={selectedIds.length}
           onClearSelection={() => setRowSelection({})}
           onStatusChange={handleStatusChange}
-          onAddTags={handleAddTags}
+          onAddTags={() => {}}
           onDelete={handleDelete}
         />
       )}

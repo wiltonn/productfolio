@@ -54,6 +54,23 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // GET /api/employees/pto-hours - Batch PTO hours per employee per quarter
+  fastify.get<{ Querystring: Record<string, unknown> }>(
+    '/api/employees/pto-hours',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const query = AllocationSummariesQuerySchema.parse(request.query);
+      const employeeIds = query.employeeIds.split(',').map((id) => id.trim());
+      const ptoHours = await capacityService.batchGetPtoHours(
+        employeeIds,
+        query.currentQuarterStart,
+        query.currentQuarterEnd,
+        query.nextQuarterStart,
+        query.nextQuarterEnd
+      );
+      return reply.status(200).send(ptoHours);
+    }
+  );
+
   // GET /api/employees/:id - Get single employee
   fastify.get<{ Params: { id: string } }>(
     '/api/employees/:id',

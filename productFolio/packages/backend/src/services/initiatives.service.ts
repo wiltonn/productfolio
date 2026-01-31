@@ -45,6 +45,10 @@ export async function list(
     where.productOwnerId = filters.productOwnerId;
   }
 
+  if (filters.portfolioAreaId) {
+    where.portfolioAreaId = filters.portfolioAreaId;
+  }
+
   if (filters.targetQuarter) {
     where.targetQuarter = filters.targetQuarter;
   }
@@ -81,6 +85,8 @@ export async function list(
       include: {
         businessOwner: true,
         productOwner: true,
+        portfolioArea: true,
+        productLeader: true,
         scopeItems: true,
       },
     }),
@@ -109,6 +115,8 @@ export async function getById(id: string) {
     include: {
       businessOwner: true,
       productOwner: true,
+      portfolioArea: true,
+      productLeader: true,
       scopeItems: true,
       approvals: {
         include: { approver: true },
@@ -129,10 +137,24 @@ export async function getById(id: string) {
  */
 export async function create(data: CreateInitiativeInput) {
   // Validate that owners exist
-  const [businessOwner, productOwner] = await Promise.all([
+  const validations: Promise<any>[] = [
     prisma.user.findUnique({ where: { id: data.businessOwnerId } }),
     prisma.user.findUnique({ where: { id: data.productOwnerId } }),
-  ]);
+  ];
+
+  if (data.portfolioAreaId) {
+    validations.push(prisma.portfolioArea.findUnique({ where: { id: data.portfolioAreaId } }));
+  } else {
+    validations.push(Promise.resolve(null));
+  }
+
+  if (data.productLeaderId) {
+    validations.push(prisma.user.findUnique({ where: { id: data.productLeaderId } }));
+  } else {
+    validations.push(Promise.resolve(null));
+  }
+
+  const [businessOwner, productOwner, portfolioArea, productLeader] = await Promise.all(validations);
 
   if (!businessOwner) {
     throw new NotFoundError('User', data.businessOwnerId);
@@ -142,12 +164,22 @@ export async function create(data: CreateInitiativeInput) {
     throw new NotFoundError('User', data.productOwnerId);
   }
 
+  if (data.portfolioAreaId && !portfolioArea) {
+    throw new NotFoundError('PortfolioArea', data.portfolioAreaId);
+  }
+
+  if (data.productLeaderId && !productLeader) {
+    throw new NotFoundError('User', data.productLeaderId);
+  }
+
   const initiative = await prisma.initiative.create({
     data: {
       title: data.title,
       description: data.description || null,
       businessOwnerId: data.businessOwnerId,
       productOwnerId: data.productOwnerId,
+      portfolioAreaId: data.portfolioAreaId || null,
+      productLeaderId: data.productLeaderId || null,
       status: data.status || InitiativeStatus.PROPOSED,
       targetQuarter: data.targetQuarter || null,
       deliveryHealth: data.deliveryHealth || null,
@@ -156,6 +188,8 @@ export async function create(data: CreateInitiativeInput) {
     include: {
       businessOwner: true,
       productOwner: true,
+      portfolioArea: true,
+      productLeader: true,
     },
   });
 
@@ -174,38 +208,40 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     throw new NotFoundError('Initiative', id);
   }
 
-  // Validate owners if provided
-  if (data.businessOwnerId || data.productOwnerId) {
-    const promises = [];
+  // Validate references if provided
+  const promises: Promise<any>[] = [];
+  const promiseKeys: string[] = [];
 
-    if (data.businessOwnerId) {
-      promises.push(
-        prisma.user.findUnique({
-          where: { id: data.businessOwnerId },
-        })
-      );
-    } else {
-      promises.push(Promise.resolve(null));
-    }
+  if (data.businessOwnerId) {
+    promises.push(prisma.user.findUnique({ where: { id: data.businessOwnerId } }));
+    promiseKeys.push('businessOwner');
+  }
 
-    if (data.productOwnerId) {
-      promises.push(
-        prisma.user.findUnique({
-          where: { id: data.productOwnerId },
-        })
-      );
-    } else {
-      promises.push(Promise.resolve(null));
-    }
+  if (data.productOwnerId) {
+    promises.push(prisma.user.findUnique({ where: { id: data.productOwnerId } }));
+    promiseKeys.push('productOwner');
+  }
 
-    const [businessOwner, productOwner] = await Promise.all(promises);
+  if (data.portfolioAreaId) {
+    promises.push(prisma.portfolioArea.findUnique({ where: { id: data.portfolioAreaId } }));
+    promiseKeys.push('portfolioArea');
+  }
 
-    if (data.businessOwnerId && !businessOwner) {
-      throw new NotFoundError('User', data.businessOwnerId);
-    }
+  if (data.productLeaderId) {
+    promises.push(prisma.user.findUnique({ where: { id: data.productLeaderId } }));
+    promiseKeys.push('productLeader');
+  }
 
-    if (data.productOwnerId && !productOwner) {
-      throw new NotFoundError('User', data.productOwnerId);
+  if (promises.length > 0) {
+    const results = await Promise.all(promises);
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i]) {
+        const key = promiseKeys[i];
+        if (key === 'businessOwner') throw new NotFoundError('User', data.businessOwnerId!);
+        if (key === 'productOwner') throw new NotFoundError('User', data.productOwnerId!);
+        if (key === 'portfolioArea') throw new NotFoundError('PortfolioArea', data.portfolioAreaId!);
+        if (key === 'productLeader') throw new NotFoundError('User', data.productLeaderId!);
+      }
     }
   }
 
@@ -227,6 +263,14 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     updateData.productOwnerId = data.productOwnerId;
   }
 
+  if (data.portfolioAreaId !== undefined) {
+    updateData.portfolioAreaId = data.portfolioAreaId;
+  }
+
+  if (data.productLeaderId !== undefined) {
+    updateData.productLeaderId = data.productLeaderId;
+  }
+
   if (data.targetQuarter !== undefined) {
     updateData.targetQuarter = data.targetQuarter;
   }
@@ -245,6 +289,8 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     include: {
       businessOwner: true,
       productOwner: true,
+      portfolioArea: true,
+      productLeader: true,
     },
   });
 
@@ -298,6 +344,8 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus) 
     include: {
       businessOwner: true,
       productOwner: true,
+      portfolioArea: true,
+      productLeader: true,
     },
   });
 
@@ -449,6 +497,8 @@ export async function importFromCsv(
           description: validatedRow.description || null,
           businessOwnerId: validatedRow.businessOwnerId,
           productOwnerId: validatedRow.productOwnerId,
+          portfolioAreaId: validatedRow.portfolioAreaId || null,
+          productLeaderId: validatedRow.productLeaderId || null,
           status: validatedRow.status || InitiativeStatus.PROPOSED,
           targetQuarter: validatedRow.targetQuarter || null,
           deliveryHealth: validatedRow.deliveryHealth || null,
@@ -487,6 +537,10 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     where.productOwnerId = filters.productOwnerId;
   }
 
+  if (filters.portfolioAreaId) {
+    where.portfolioAreaId = filters.portfolioAreaId;
+  }
+
   if (filters.targetQuarter) {
     where.targetQuarter = filters.targetQuarter;
   }
@@ -517,6 +571,8 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     include: {
       businessOwner: true,
       productOwner: true,
+      portfolioArea: true,
+      productLeader: true,
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -533,6 +589,10 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     businessOwnerName: initiative.businessOwner.name,
     productOwnerId: initiative.productOwnerId,
     productOwnerName: initiative.productOwner.name,
+    portfolioAreaId: initiative.portfolioAreaId || '',
+    portfolioAreaName: initiative.portfolioArea?.name || '',
+    productLeaderId: initiative.productLeaderId || '',
+    productLeaderName: initiative.productLeader?.name || '',
     createdAt: initiative.createdAt.toISOString(),
     updatedAt: initiative.updatedAt.toISOString(),
   }));
@@ -549,6 +609,10 @@ export async function exportToCsv(filters: Partial<InitiativeFiltersInput> = {})
     'businessOwnerName',
     'productOwnerId',
     'productOwnerName',
+    'portfolioAreaId',
+    'portfolioAreaName',
+    'productLeaderId',
+    'productLeaderName',
     'createdAt',
     'updatedAt',
   ];

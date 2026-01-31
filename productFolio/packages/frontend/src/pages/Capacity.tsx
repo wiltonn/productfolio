@@ -1,8 +1,10 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { SearchInput, Checkbox, StatusBadge } from '../components/ui';
-import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocations, useEmployeeAllocationSummaries, Employee } from '../hooks/useEmployees';
-import type { EmployeeAllocation, QuarterAllocationSummary } from '../hooks/useEmployees';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocations, useEmployeeAllocationSummaries, useEmployeePtoHours, Employee } from '../hooks/useEmployees';
+import type { EmployeeAllocation, QuarterAllocationSummary, PtoHoursResponse } from '../hooks/useEmployees';
+import { useQuarterPeriods } from '../hooks/usePeriods';
+import type { Period } from '../hooks/usePeriods';
 import { api } from '../api/client';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
@@ -86,7 +88,7 @@ const AVATAR_COLORS = [
 ];
 
 // Map API Employee to CapacityEmployee format
-function mapEmployeeToCapacity(employee: Employee, index: number): CapacityEmployee {
+function mapEmployeeToCapacity(employee: Employee, index: number, ptoHours?: number): CapacityEmployee {
   return {
     id: employee.id,
     name: employee.name,
@@ -98,7 +100,7 @@ function mapEmployeeToCapacity(employee: Employee, index: number): CapacityEmplo
     hoursPerWeek: employee.defaultCapacityHours,
     status: 'ACTIVE',
     avatarColor: AVATAR_COLORS[index % AVATAR_COLORS.length],
-    ptoHours: 0,
+    ptoHours: ptoHours ?? 0,
   };
 }
 
@@ -1001,22 +1003,16 @@ export function Capacity() {
   const updateEmployee = useUpdateEmployee();
   const queryClient = useQueryClient();
 
-  // State
-  const [employees, setEmployees] = useState<CapacityEmployee[]>([]);
-  const [settings, setSettings] = useState<CapacitySettings>({
-    defaultHoursPerWeek: 40,
-    ktloPercentage: 15,
-    meetingOverheadPercentage: 10,
-    holidays: DEFAULT_HOLIDAYS.map(h => h.date),
-  });
-  const [holidays, setHolidays] = useState<Holiday[]>(DEFAULT_HOLIDAYS);
-
-  // Update employees when API data changes
-  useEffect(() => {
-    if (employeesData?.data) {
-      setEmployees(employeesData.data.map((e, i) => mapEmployeeToCapacity(e, i)));
-    }
-  }, [employeesData]);
+  // Fetch quarter periods to resolve current quarter period ID (for PTO save)
+  const { data: quarterPeriodsData } = useQuarterPeriods();
+  const currentQuarterPeriodId = useMemo(() => {
+    if (!quarterPeriodsData?.data) return null;
+    const now = new Date();
+    const currentQ = Math.floor(now.getMonth() / 3) + 1;
+    const currentLabel = `${now.getFullYear()}-Q${currentQ}`;
+    const match = quarterPeriodsData.data.find((p: Period) => p.label === currentLabel);
+    return match?.id ?? null;
+  }, [quarterPeriodsData]);
 
   // Quarter date calculations
   const quarterDates = useMemo(() => {
@@ -1044,12 +1040,51 @@ export function Capacity() {
     };
   }, []);
 
-  // Fetch allocation summaries for all loaded employees
+  // Derive employee IDs from API data (before state mapping) so we can batch-fetch PTO
+  const apiEmployeeIds = useMemo(
+    () => (employeesData?.data || []).map((e) => e.id),
+    [employeesData]
+  );
+
+  // Fetch PTO hours for all employees
+  const { data: ptoHoursMap } = useEmployeePtoHours(
+    apiEmployeeIds,
+    quarterDates.currentQStart,
+    quarterDates.currentQEnd,
+    quarterDates.nextQStart,
+    quarterDates.nextQEnd
+  );
+
+  // State
+  const [employees, setEmployees] = useState<CapacityEmployee[]>([]);
+  const [settings, setSettings] = useState<CapacitySettings>({
+    defaultHoursPerWeek: 40,
+    ktloPercentage: 15,
+    meetingOverheadPercentage: 10,
+    holidays: DEFAULT_HOLIDAYS.map(h => h.date),
+  });
+  const [holidays, setHolidays] = useState<Holiday[]>(DEFAULT_HOLIDAYS);
+
+  // Update employees when API data or PTO data changes
+  useEffect(() => {
+    if (employeesData?.data) {
+      setEmployees(employeesData.data.map((e, i) =>
+        mapEmployeeToCapacity(
+          e,
+          i,
+          ptoHoursMap?.[e.id]?.currentQuarterPtoHours
+        )
+      ));
+    }
+  }, [employeesData, ptoHoursMap]);
+
+  // Employee IDs from state (for allocation summaries)
   const employeeIds = useMemo(
     () => employees.map((e) => e.id),
     [employees]
   );
 
+  // Fetch allocation summaries for all loaded employees
   const { data: allocationSummaries } = useEmployeeAllocationSummaries(
     employeeIds,
     quarterDates.currentQStart,
@@ -1161,12 +1196,22 @@ export function Capacity() {
 
         queryClient.invalidateQueries({ queryKey: ['employees'] });
       }
+
+      // Persist PTO hours to capacity calendar
+      if (employeeId && currentQuarterPeriodId && data.ptoHours !== undefined) {
+        await api.put(`/employees/${employeeId}/capacity`, {
+          entries: [
+            { periodId: currentQuarterPeriodId, hoursAvailable: data.ptoHours },
+          ],
+        });
+        queryClient.invalidateQueries({ queryKey: ['employees'] });
+      }
     } catch {
       // Errors already handled by mutation hooks' onError callbacks
     }
 
     setSlideOverEmployee(null);
-  }, [slideOverEmployee, createEmployee, updateEmployee, queryClient]);
+  }, [slideOverEmployee, createEmployee, updateEmployee, queryClient, currentQuarterPeriodId]);
 
   const handleAddHoliday = useCallback(() => {
     if (!newHolidayDate) return;

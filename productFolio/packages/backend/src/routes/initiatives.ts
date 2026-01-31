@@ -26,6 +26,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status?: string;
       businessOwnerId?: string;
       productOwnerId?: string;
+      portfolioAreaId?: string;
       targetQuarter?: string;
       deliveryHealth?: string;
       search?: string;
@@ -37,6 +38,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status: request.query.status,
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
+      portfolioAreaId: request.query.portfolioAreaId,
       targetQuarter: request.query.targetQuarter,
       deliveryHealth: request.query.deliveryHealth,
       search: request.query.search,
@@ -261,6 +263,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status?: string;
       businessOwnerId?: string;
       productOwnerId?: string;
+      portfolioAreaId?: string;
       targetQuarter?: string;
       deliveryHealth?: string;
       search?: string;
@@ -270,6 +273,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       status: request.query.status,
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
+      portfolioAreaId: request.query.portfolioAreaId,
       targetQuarter: request.query.targetQuarter,
       deliveryHealth: request.query.deliveryHealth,
       search: request.query.search,

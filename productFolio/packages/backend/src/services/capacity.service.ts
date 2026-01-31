@@ -211,3 +211,71 @@ export async function calculateAvailability(
 
   return periods;
 }
+
+/**
+ * Batch fetch PTO hours for a list of employees for current and next quarters.
+ * Returns a map of employeeId -> { currentQuarterPtoHours, nextQuarterPtoHours }.
+ */
+export async function batchGetPtoHours(
+  employeeIds: string[],
+  currentQStart: Date,
+  currentQEnd: Date,
+  nextQStart: Date,
+  nextQEnd: Date
+): Promise<Record<string, { currentQuarterPtoHours: number; nextQuarterPtoHours: number }>> {
+  if (employeeIds.length === 0) return {};
+
+  // Find quarter periods that overlap the given ranges
+  const periods = await prisma.period.findMany({
+    where: {
+      type: PeriodType.QUARTER,
+      OR: [
+        { startDate: { lte: currentQEnd }, endDate: { gte: currentQStart } },
+        { startDate: { lte: nextQEnd }, endDate: { gte: nextQStart } },
+      ],
+    },
+  });
+
+  const periodIds = periods.map((p) => p.id);
+  if (periodIds.length === 0) {
+    const result: Record<string, { currentQuarterPtoHours: number; nextQuarterPtoHours: number }> = {};
+    for (const id of employeeIds) {
+      result[id] = { currentQuarterPtoHours: 0, nextQuarterPtoHours: 0 };
+    }
+    return result;
+  }
+
+  // Fetch all capacity calendar entries for these employees and periods
+  const entries = await prisma.capacityCalendar.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      periodId: { in: periodIds },
+    },
+    include: {
+      period: { select: { startDate: true, endDate: true } },
+    },
+  });
+
+  // Initialize result
+  const result: Record<string, { currentQuarterPtoHours: number; nextQuarterPtoHours: number }> = {};
+  for (const id of employeeIds) {
+    result[id] = { currentQuarterPtoHours: 0, nextQuarterPtoHours: 0 };
+  }
+
+  for (const entry of entries) {
+    const empResult = result[entry.employeeId];
+    if (!empResult) continue;
+
+    // Check if period overlaps current quarter
+    if (entry.period.startDate <= currentQEnd && entry.period.endDate >= currentQStart) {
+      empResult.currentQuarterPtoHours += entry.hoursAvailable;
+    }
+
+    // Check if period overlaps next quarter
+    if (entry.period.startDate <= nextQEnd && entry.period.endDate >= nextQStart) {
+      empResult.nextQuarterPtoHours += entry.hoursAvailable;
+    }
+  }
+
+  return result;
+}

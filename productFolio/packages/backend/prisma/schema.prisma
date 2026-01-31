@@ -99,6 +99,7 @@ model User {
   // Relations
   ownedInitiatives   Initiative[]   @relation("BusinessOwner")
   managedInitiatives Initiative[]   @relation("ProductOwner")
+  ledInitiatives     Initiative[]   @relation("ProductLeader")
   approvals          Approval[]
   refreshTokens      RefreshToken[]
 
@@ -161,6 +162,24 @@ model Period {
 }
 
 // ============================================================================
+// Portfolio Area
+// ============================================================================
+
+model PortfolioArea {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  initiatives Initiative[]
+
+  @@index([name])
+  @@map("portfolio_areas")
+}
+
+// ============================================================================
 // Initiative & Related
 // ============================================================================
 
@@ -170,6 +189,8 @@ model Initiative {
   description     String?          @db.Text
   businessOwnerId String           @db.Uuid
   productOwnerId  String           @db.Uuid
+  portfolioAreaId String?          @db.Uuid @map("portfolio_area_id")
+  productLeaderId String?          @db.Uuid @map("product_leader_id")
   status          InitiativeStatus @default(PROPOSED)
   targetQuarter   String?
   deliveryHealth  DeliveryHealth?
@@ -180,15 +201,19 @@ model Initiative {
   updatedAt DateTime @updatedAt
 
   // Relations
-  businessOwner User        @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
-  productOwner  User        @relation("ProductOwner", fields: [productOwnerId], references: [id])
-  targetPeriod  Period?     @relation(fields: [targetPeriodId], references: [id])
+  businessOwner User           @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
+  productOwner  User           @relation("ProductOwner", fields: [productOwnerId], references: [id])
+  portfolioArea PortfolioArea? @relation(fields: [portfolioAreaId], references: [id])
+  productLeader User?          @relation("ProductLeader", fields: [productLeaderId], references: [id])
+  targetPeriod  Period?        @relation(fields: [targetPeriodId], references: [id])
   scopeItems    ScopeItem[]
   approvals     Approval[]
   allocations   Allocation[]
 
   @@index([businessOwnerId])
   @@index([productOwnerId])
+  @@index([portfolioAreaId])
+  @@index([productLeaderId])
   @@index([status])
   @@index([targetQuarter])
   @@index([targetPeriodId])
