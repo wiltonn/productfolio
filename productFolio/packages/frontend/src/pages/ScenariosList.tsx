@@ -15,17 +15,20 @@ function getCurrentQuarter(): string {
 }
 
 // Status badge colors
-const STATUS_COLORS: Record<ScenarioStatus, { bg: string; text: string; label: string }> = {
-  DRAFT: { bg: 'bg-surface-100', text: 'text-surface-600', label: 'Draft' },
-  REVIEW: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Review' },
-  APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved' },
-  LOCKED: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Locked' },
+const STATUS_COLORS: Record<ScenarioStatus, { bg: string; text: string; label: string; tooltip: string }> = {
+  DRAFT: { bg: 'bg-surface-100', text: 'text-surface-600', label: 'Draft', tooltip: 'Fully editable. Add allocations, set priorities, and configure assumptions.' },
+  REVIEW: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Review', tooltip: 'Under stakeholder review. Allocations and priorities can still be adjusted.' },
+  APPROVED: { bg: 'bg-green-100', text: 'text-green-700', label: 'Approved', tooltip: 'Allocations and priorities are frozen. Return to Review to make changes.' },
+  LOCKED: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Locked', tooltip: 'Fully immutable. No changes allowed. Baseline scenarios capture a snapshot at this point.' },
 };
 
 function ScenarioStatusBadge({ status }: { status: ScenarioStatus }) {
   const config = STATUS_COLORS[status] || STATUS_COLORS.DRAFT;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${config.bg} ${config.text}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${config.bg} ${config.text}`}
+      title={config.tooltip}
+    >
       {status === 'LOCKED' && (
         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />

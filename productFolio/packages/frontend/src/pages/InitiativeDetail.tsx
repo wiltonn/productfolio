@@ -56,6 +56,16 @@ const statusLabels: Record<InitiativeStatus, string> = {
   CANCELLED: 'Cancel',
 };
 
+const statusTransitionHints: Record<InitiativeStatus, string> = {
+  PROPOSED: 'Return to idea stage with no scope or resource plan.',
+  SCOPING: 'Start defining scope items with skill demands and estimates.',
+  RESOURCING: 'Finalize scope. Initiative will appear in scenario demand calculations and allocations will be locked.',
+  IN_EXECUTION: 'Begin work. Allocations stay locked, still counted in demand.',
+  COMPLETE: 'Mark as done. This is permanent and cannot be undone.',
+  ON_HOLD: 'Pause this initiative. You can resume to any prior stage later.',
+  CANCELLED: 'Cancel this initiative. This is permanent and cannot be undone.',
+};
+
 // Mock data for demo
 const mockScopeItems: ScopeItem[] = [
   { id: '1', name: 'Design System Migration', description: 'Migrate to new component library with accessibility improvements', skillDemand: { frontend: 12, design: 4 }, estimateP50: 15, estimateP90: 22, quarterDistribution: { '2024-Q1': 0.6, '2024-Q2': 0.4 } },
@@ -378,6 +388,7 @@ export function InitiativeDetail() {
                         key={status}
                         onClick={() => handleStatusChange(status)}
                         className="w-full px-3 py-2 text-left text-sm hover:bg-surface-50 transition-colors flex items-center gap-2"
+                        title={statusTransitionHints[status]}
                       >
                         <StatusBadge status={status} size="sm" />
                       </button>
@@ -988,6 +999,13 @@ function AssignmentsTab({ initiativeId }: { initiativeId: string }) {
     LOCKED: 'bg-violet-100 text-violet-700',
   };
 
+  const scenarioStatusTooltips: Record<string, string> = {
+    DRAFT: 'Fully editable. Add allocations, set priorities, and configure assumptions.',
+    REVIEW: 'Under stakeholder review. Allocations and priorities can still be adjusted.',
+    APPROVED: 'Allocations and priorities are frozen. Return to Review to make changes.',
+    LOCKED: 'Fully immutable. No changes allowed.',
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-48">
@@ -1126,7 +1144,10 @@ function AssignmentsTab({ initiativeId }: { initiativeId: string }) {
                       >
                         {group.scenarioName}
                       </Link>
-                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${scenarioStatusStyles[group.scenarioStatus] || 'bg-surface-100 text-surface-600'}`}>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${scenarioStatusStyles[group.scenarioStatus] || 'bg-surface-100 text-surface-600'}`}
+                        title={scenarioStatusTooltips[group.scenarioStatus]}
+                      >
                         {group.scenarioStatus}
                       </span>
                     </div>

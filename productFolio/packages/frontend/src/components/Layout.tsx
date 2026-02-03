@@ -82,9 +82,9 @@ const FunnelIcon = () => (
 );
 
 const navigation = [
+  { name: 'Intake', href: '/intake-requests', icon: FunnelIcon },
   { name: 'Initiatives', href: '/initiatives', icon: Icons.Briefcase },
-  { name: 'Intake Pipeline', href: '/intake-requests', icon: FunnelIcon },
-  { name: 'Jira Items', href: '/intake', icon: InboxIcon },
+  // { name: 'Jira Items', href: '/intake', icon: InboxIcon }, // TODO: redesign
   { name: 'Capacity', href: '/capacity', icon: Icons.Users },
   { name: 'Scenarios', href: '/scenarios', icon: Icons.Layers },
   { name: 'Reports', href: '/reports', icon: Icons.ChartBar },

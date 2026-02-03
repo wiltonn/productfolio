@@ -2,7 +2,7 @@ import type { InitiativeOrigin } from '../types';
 
 const ORIGIN_CONFIG: Record<
   InitiativeOrigin,
-  { label: string; bgClass: string; textClass: string }
+  { label: string; bgClass: string; textClass: string; tooltip?: string }
 > = {
   INTAKE_CONVERTED: {
     label: 'Intake',
@@ -18,6 +18,7 @@ const ORIGIN_CONFIG: Record<
     label: 'Legacy',
     bgClass: 'bg-surface-100',
     textClass: 'text-surface-500',
+    tooltip: 'Created before the intake process was introduced, or imported from an external source',
   },
 };
 
@@ -32,6 +33,7 @@ export function OriginBadge({ origin, className = '' }: OriginBadgeProps) {
   return (
     <span
       className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${config.bgClass} ${config.textClass} ${className}`}
+      title={config.tooltip}
     >
       {config.label}
     </span>
