@@ -6,11 +6,13 @@ export {
   getCsvImportQueue,
   getViewRefreshQueue,
   getDriftCheckQueue,
+  getJiraSyncQueue,
   closeQueues,
   enqueueScenarioRecompute,
   enqueueCsvImport,
   enqueueViewRefresh,
   enqueueDriftCheck,
+  enqueueJiraSync,
 } from './queue.js';
 
 export type {
@@ -18,6 +20,7 @@ export type {
   CsvImportJobData,
   ViewRefreshJobData,
   DriftCheckJobData,
+  JiraSyncJobData,
 } from './queue.js';
 
 // Worker exports
@@ -31,3 +34,4 @@ export { processScenarioRecompute } from './processors/scenario-recompute.proces
 export { processCsvImport } from './processors/csv-import.processor.js';
 export { processViewRefresh } from './processors/view-refresh.processor.js';
 export { processDriftCheck } from './processors/drift-check.processor.js';
+export { processJiraSync } from './processors/jira-sync.processor.js';

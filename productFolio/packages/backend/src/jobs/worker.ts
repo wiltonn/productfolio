@@ -1,15 +1,17 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnection, QUEUE_NAMES } from './queue.js';
-import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData, DriftCheckJobData } from './queue.js';
+import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData, DriftCheckJobData, JiraSyncJobData } from './queue.js';
 import { processScenarioRecompute } from './processors/scenario-recompute.processor.js';
 import { processCsvImport } from './processors/csv-import.processor.js';
 import { processViewRefresh } from './processors/view-refresh.processor.js';
 import { processDriftCheck } from './processors/drift-check.processor.js';
+import { processJiraSync } from './processors/jira-sync.processor.js';
 
 let scenarioRecomputeWorker: Worker | null = null;
 let csvImportWorker: Worker | null = null;
 let viewRefreshWorker: Worker | null = null;
 let driftCheckWorker: Worker | null = null;
+let jiraSyncWorker: Worker | null = null;
 
 /**
  * Start all background job workers
@@ -115,6 +117,30 @@ export async function startWorkers(): Promise<void> {
     console.error('[drift-check] Worker error:', err.message);
   });
 
+  // Jira sync worker
+  jiraSyncWorker = new Worker(QUEUE_NAMES.JIRA_SYNC, processJiraSync, {
+    connection: redisConnection,
+    concurrency: 2,
+    limiter: {
+      max: 3,
+      duration: 60000, // Max 3 sync jobs per minute
+    },
+  });
+
+  jiraSyncWorker.on('completed', (job: Job<JiraSyncJobData>, result: { synced: number; errors: string[] }) => {
+    console.log(
+      `[jira-sync] Job ${job.id} completed: ${result.synced} synced, ${result.errors.length} errors`
+    );
+  });
+
+  jiraSyncWorker.on('failed', (job: Job<JiraSyncJobData> | undefined, err: Error) => {
+    console.error(`[jira-sync] Job ${job?.id} failed:`, err.message);
+  });
+
+  jiraSyncWorker.on('error', (err: Error) => {
+    console.error('[jira-sync] Worker error:', err.message);
+  });
+
   console.log('All workers started successfully');
 }
 
@@ -146,6 +172,11 @@ export async function stopWorkers(): Promise<void> {
     driftCheckWorker = null;
   }
 
+  if (jiraSyncWorker) {
+    closePromises.push(jiraSyncWorker.close());
+    jiraSyncWorker = null;
+  }
+
   await Promise.all(closePromises);
   console.log('All workers stopped');
 }
@@ -158,11 +189,13 @@ export function getWorkerStatus(): {
   csvImport: boolean;
   viewRefresh: boolean;
   driftCheck: boolean;
+  jiraSync: boolean;
 } {
   return {
     scenarioRecompute: scenarioRecomputeWorker !== null && !scenarioRecomputeWorker.closing,
     csvImport: csvImportWorker !== null && !csvImportWorker.closing,
     viewRefresh: viewRefreshWorker !== null && !viewRefreshWorker.closing,
     driftCheck: driftCheckWorker !== null && !driftCheckWorker.closing,
+    jiraSync: jiraSyncWorker !== null && !jiraSyncWorker.closing,
   };
 }

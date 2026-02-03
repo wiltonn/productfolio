@@ -17,7 +17,10 @@ import { approvalRoutes } from './routes/approvals.js';
 import { freezePolicyRoutes } from './routes/freeze-policy.js';
 import { driftRoutes } from './routes/drift.js';
 import { portfolioAreasRoutes } from './routes/portfolio-areas.js';
+import { jiraIntegrationRoutes } from './routes/jira-integration.js';
+import { intakeRoutes } from './routes/intake.js';
 import { getWorkerStatus } from './jobs/index.js';
+import { validateJiraConfig } from './lib/config/jira.js';
 
 const fastify = Fastify({
   logger: true,
@@ -36,6 +39,18 @@ await fastify.register(cookie);
 await fastify.register(authPlugin);
 
 registerErrorHandler(fastify);
+
+// Validate Jira integration config at startup (non-fatal)
+try {
+  const jiraConfig = validateJiraConfig();
+  if (jiraConfig) {
+    fastify.log.info('Jira integration: configured');
+  } else {
+    fastify.log.warn('Jira integration: not configured (JIRA_CLIENT_ID, JIRA_CLIENT_SECRET, JIRA_TOKEN_ENCRYPTION_KEY not set)');
+  }
+} catch (err) {
+  fastify.log.warn(`Jira integration: configuration error — ${(err as Error).message}`);
+}
 
 fastify.get('/health', async () => {
   return {
@@ -58,6 +73,8 @@ await fastify.register(approvalRoutes);
 await fastify.register(freezePolicyRoutes);
 await fastify.register(driftRoutes);
 await fastify.register(portfolioAreasRoutes);
+await fastify.register(jiraIntegrationRoutes);
+await fastify.register(intakeRoutes);
 
 const start = async () => {
   try {

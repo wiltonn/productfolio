@@ -15,6 +15,7 @@ export const QUEUE_NAMES = {
   CSV_IMPORT: 'csv-import',
   VIEW_REFRESH: 'view-refresh',
   DRIFT_CHECK: 'drift-check',
+  JIRA_SYNC: 'jira-sync',
 } as const;
 
 // Job data types
@@ -43,11 +44,19 @@ export interface DriftCheckJobData {
   timestamp: string;
 }
 
+export interface JiraSyncJobData {
+  connectionId?: string;
+  siteId?: string;
+  fullResync?: boolean;
+  triggeredBy: 'scheduled' | 'manual';
+}
+
 // Queue instances (lazy initialization)
 let scenarioRecomputeQueue: Queue<ScenarioRecomputeJobData> | null = null;
 let csvImportQueue: Queue<CsvImportJobData> | null = null;
 let viewRefreshQueue: Queue<ViewRefreshJobData> | null = null;
 let driftCheckQueue: Queue<DriftCheckJobData> | null = null;
+let jiraSyncQueue: Queue<JiraSyncJobData> | null = null;
 
 /**
  * Get or create the scenario recompute queue
@@ -153,6 +162,32 @@ export function getDriftCheckQueue(): Queue<DriftCheckJobData> {
 }
 
 /**
+ * Get or create the Jira sync queue
+ */
+export function getJiraSyncQueue(): Queue<JiraSyncJobData> {
+  if (!jiraSyncQueue) {
+    jiraSyncQueue = new Queue<JiraSyncJobData>(QUEUE_NAMES.JIRA_SYNC, {
+      connection: redisConnection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: {
+          age: 24 * 3600,
+          count: 500,
+        },
+        removeOnFail: {
+          age: 7 * 24 * 3600,
+        },
+      },
+    });
+  }
+  return jiraSyncQueue;
+}
+
+/**
  * Close all queue connections
  */
 export async function closeQueues(): Promise<void> {
@@ -176,6 +211,11 @@ export async function closeQueues(): Promise<void> {
   if (driftCheckQueue) {
     closePromises.push(driftCheckQueue.close());
     driftCheckQueue = null;
+  }
+
+  if (jiraSyncQueue) {
+    closePromises.push(jiraSyncQueue.close());
+    jiraSyncQueue = null;
   }
 
   await Promise.all(closePromises);
@@ -284,6 +324,26 @@ export async function enqueueDriftCheck(
       delay: 2000, // Debounce drift checks
     }
   );
+
+  return job.id ?? null;
+}
+
+/**
+ * Helper to add a Jira sync job
+ */
+export async function enqueueJiraSync(
+  data: JiraSyncJobData
+): Promise<string | null> {
+  const queue = getJiraSyncQueue();
+
+  const jobId = data.siteId
+    ? `jira-sync-${data.siteId}`
+    : 'jira-sync-all';
+
+  const job = await queue.add('jira-sync', data, {
+    jobId,
+    delay: 500, // Small debounce
+  });
 
   return job.id ?? null;
 }

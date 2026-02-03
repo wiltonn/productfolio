@@ -97,11 +97,12 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  ownedInitiatives   Initiative[]   @relation("BusinessOwner")
-  managedInitiatives Initiative[]   @relation("ProductOwner")
-  ledInitiatives     Initiative[]   @relation("ProductLeader")
+  ownedInitiatives   Initiative[]     @relation("BusinessOwner")
+  managedInitiatives Initiative[]     @relation("ProductOwner")
+  ledInitiatives     Initiative[]     @relation("ProductLeader")
   approvals          Approval[]
   refreshTokens      RefreshToken[]
+  jiraConnections    JiraConnection[]
 
   @@index([email])
   @@index([role])
@@ -209,6 +210,7 @@ model Initiative {
   scopeItems    ScopeItem[]
   approvals     Approval[]
   allocations   Allocation[]
+  intakeItems   IntakeItem[]
 
   @@index([businessOwnerId])
   @@index([productOwnerId])
@@ -497,4 +499,213 @@ model DriftThreshold {
   updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("drift_thresholds")
+}
+
+// ============================================================================
+// Jira Integration Enums
+// ============================================================================
+
+enum IntakeSourceType {
+  JIRA
+}
+
+enum IntakeItemStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+enum SyncRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+enum WriteActionType {
+  CREATE_SUBTASK
+  ADD_COMMENT
+  ADD_LINK
+}
+
+enum WriteActionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+// ============================================================================
+// Jira Integration Models
+// ============================================================================
+
+model JiraConnection {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @db.Uuid @map("user_id")
+  atlassianAccountId   String   @unique @map("atlassian_account_id")
+  accountEmail         String?  @map("account_email")
+  displayName          String?  @map("display_name")
+  encryptedAccessToken String   @db.Text @map("encrypted_access_token")
+  encryptedRefreshToken String  @db.Text @map("encrypted_refresh_token")
+  tokenExpiresAt       DateTime @map("token_expires_at")
+  scopes               String?
+  isActive             Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sites JiraSite[]
+
+  @@index([userId])
+  @@map("jira_connections")
+}
+
+model JiraSite {
+  id               String  @id @default(uuid()) @db.Uuid
+  jiraConnectionId String  @db.Uuid @map("jira_connection_id")
+  cloudId          String  @map("cloud_id")
+  siteName         String  @map("site_name")
+  siteUrl          String  @map("site_url")
+  isSelected       Boolean @default(false) @map("is_selected")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  jiraConnection    JiraConnection          @relation(fields: [jiraConnectionId], references: [id], onDelete: Cascade)
+  projectSelections JiraProjectSelection[]
+  intakeItems       IntakeItem[]
+  syncCursors       IntegrationSyncCursor[]
+  syncRuns          IntegrationSyncRun[]
+
+  @@unique([jiraConnectionId, cloudId])
+  @@index([jiraConnectionId])
+  @@map("jira_sites")
+}
+
+model JiraProjectSelection {
+  id          String  @id @default(uuid()) @db.Uuid
+  jiraSiteId  String  @db.Uuid @map("jira_site_id")
+  projectId   String  @map("project_id")
+  projectKey  String  @map("project_key")
+  projectName String  @map("project_name")
+  isSelected  Boolean @default(true) @map("is_selected")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  jiraSite    JiraSite                @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+  syncCursors IntegrationSyncCursor[]
+
+  @@unique([jiraSiteId, projectKey])
+  @@index([jiraSiteId])
+  @@map("jira_project_selections")
+}
+
+model IntakeItem {
+  id                 String           @id @default(uuid()) @db.Uuid
+  sourceType         IntakeSourceType @default(JIRA) @map("source_type")
+  jiraSiteId         String           @db.Uuid @map("jira_site_id")
+  jiraIssueId        String           @map("jira_issue_id")
+  jiraIssueKey       String           @map("jira_issue_key")
+  jiraIssueUrl       String?          @map("jira_issue_url")
+  summary            String
+  descriptionExcerpt String?          @db.Text @map("description_excerpt")
+  issueTypeName      String?          @map("issue_type_name")
+  statusName         String?          @map("status_name")
+  statusCategory     String?          @map("status_category")
+  priorityName       String?          @map("priority_name")
+  labels             Json?            @db.JsonB
+  assigneeName       String?          @map("assignee_name")
+  reporterName       String?          @map("reporter_name")
+  jiraCreatedAt      DateTime?        @map("jira_created_at")
+  jiraUpdatedAt      DateTime?        @map("jira_updated_at")
+  contentHash        String?          @map("content_hash")
+  lastSyncedAt       DateTime         @default(now()) @map("last_synced_at")
+  lastSeenAt         DateTime         @default(now()) @map("last_seen_at")
+  itemStatus         IntakeItemStatus @default(ACTIVE) @map("item_status")
+
+  // Optional link to an initiative
+  initiativeId String? @db.Uuid @map("initiative_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  jiraSite   JiraSite    @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+
+  @@unique([jiraSiteId, jiraIssueId])
+  @@index([jiraSiteId])
+  @@index([initiativeId])
+  @@index([itemStatus])
+  @@index([statusCategory])
+  @@index([priorityName])
+  @@index([jiraUpdatedAt])
+  @@map("intake_items")
+}
+
+model IntegrationSyncCursor {
+  id                      String   @id @default(uuid()) @db.Uuid
+  jiraSiteId              String   @db.Uuid @map("jira_site_id")
+  jiraProjectSelectionId  String   @db.Uuid @map("jira_project_selection_id")
+  lastSyncedAt            DateTime @default(now()) @map("last_synced_at")
+  cursorValue             String?  @map("cursor_value")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  jiraSite              JiraSite              @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+  jiraProjectSelection  JiraProjectSelection  @relation(fields: [jiraProjectSelectionId], references: [id], onDelete: Cascade)
+
+  @@unique([jiraSiteId, jiraProjectSelectionId])
+  @@index([jiraSiteId])
+  @@map("integration_sync_cursors")
+}
+
+model IntegrationSyncRun {
+  id             String        @id @default(uuid()) @db.Uuid
+  jiraSiteId     String        @db.Uuid @map("jira_site_id")
+  projectKey     String?       @map("project_key")
+  status         SyncRunStatus @default(RUNNING)
+  startedAt      DateTime      @default(now()) @map("started_at")
+  completedAt    DateTime?     @map("completed_at")
+  issuesFound    Int           @default(0) @map("issues_found")
+  issuesCreated  Int           @default(0) @map("issues_created")
+  issuesUpdated  Int           @default(0) @map("issues_updated")
+  issuesSkipped  Int           @default(0) @map("issues_skipped")
+  errorMessage   String?       @db.Text @map("error_message")
+  triggeredBy    String?       @map("triggered_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  jiraSite JiraSite @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+
+  @@index([jiraSiteId])
+  @@index([status])
+  @@index([startedAt])
+  @@map("integration_sync_runs")
+}
+
+model IntegrationWriteActionLog {
+  id              String            @id @default(uuid()) @db.Uuid
+  intakeItemId    String            @db.Uuid @map("intake_item_id")
+  actionType      WriteActionType   @map("action_type")
+  status          WriteActionStatus @default(PENDING)
+  idempotencyKey  String            @unique @map("idempotency_key")
+  requestPayload  Json?             @db.JsonB @map("request_payload")
+  responsePayload Json?             @db.JsonB @map("response_payload")
+  errorMessage    String?           @db.Text @map("error_message")
+  createdJiraKey  String?           @map("created_jira_key")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([intakeItemId])
+  @@index([status])
+  @@map("integration_write_action_logs")
 }

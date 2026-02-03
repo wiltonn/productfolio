@@ -1,4 +1,4 @@
-import { getViewRefreshQueue, getDriftCheckQueue } from './queue.js';
+import { getViewRefreshQueue, getDriftCheckQueue, getJiraSyncQueue } from './queue.js';
 import { periodService } from '../services/period.service.js';
 
 /**
@@ -40,9 +40,25 @@ export async function setupScheduledJobs(): Promise<void> {
     }
   );
 
+  // Schedule Jira sync every 5 minutes
+  const jiraSyncQueue = getJiraSyncQueue();
+  await jiraSyncQueue.add(
+    'scheduled-jira-sync',
+    {
+      triggeredBy: 'scheduled',
+    },
+    {
+      repeat: {
+        pattern: '*/5 * * * *', // Every 5 minutes
+      },
+      jobId: 'scheduled-jira-sync',
+    }
+  );
+
   console.log('Scheduled jobs configured:');
   console.log('- View refresh: every 15 minutes');
   console.log('- Drift check: every 30 minutes');
+  console.log('- Jira sync: every 5 minutes');
 
   // Run period maintenance on startup (ensure periods exist 2 years into future)
   await runPeriodMaintenance();
@@ -80,6 +96,12 @@ export async function removeScheduledJobs(): Promise<void> {
   const driftRepeatableJobs = await driftCheckQueue.getRepeatableJobs();
   for (const job of driftRepeatableJobs) {
     await driftCheckQueue.removeRepeatableByKey(job.key);
+  }
+
+  const jiraSyncQueue = getJiraSyncQueue();
+  const jiraRepeatableJobs = await jiraSyncQueue.getRepeatableJobs();
+  for (const job of jiraRepeatableJobs) {
+    await jiraSyncQueue.removeRepeatableByKey(job.key);
   }
 
   console.log('Scheduled jobs removed');

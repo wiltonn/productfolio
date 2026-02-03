@@ -51,6 +51,14 @@ const PortfolioAreas = lazy(() =>
   import('./pages/PortfolioAreas').then((m) => ({ default: m.PortfolioAreas }))
 );
 
+const JiraSettings = lazy(() =>
+  import('./pages/JiraSettings').then((m) => ({ default: m.JiraSettings }))
+);
+
+const IntakeList = lazy(() =>
+  import('./pages/IntakeList').then((m) => ({ default: m.IntakeList }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -217,6 +225,26 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <Approvals />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'intake',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <IntakeList />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/jira-settings',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <JiraSettings />
             </LazyPage>
           </ErrorBoundary>
         ),

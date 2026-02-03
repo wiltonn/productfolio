@@ -118,6 +118,29 @@ export { useRoutePrefetch, usePrefetchOnHover } from './useRoutePrefetch';
 export { useFocusTrap } from './useFocusTrap';
 export { useKeyboardShortcuts, formatShortcut, type KeyboardShortcut } from './useKeyboardShortcuts';
 
+// Jira integration hooks
+export {
+  useJiraConnections,
+  useConnectJira,
+  useDisconnectJira,
+  useJiraSites,
+  useSelectSites,
+  useJiraProjects,
+  useSelectProjects,
+  useSyncStatus,
+  useSyncRuns,
+  useTriggerSync,
+  jiraKeys,
+} from './useJiraIntegration';
+
+// Intake hooks
+export {
+  useIntakeItems,
+  useIntakeItem,
+  useIntakeStats,
+  intakeKeys,
+} from './useIntake';
+
 // Types from central types file
 export type {
   Initiative,
@@ -130,3 +153,15 @@ export type {
   BulkUpdateResult,
   PortfolioArea,
 } from '../types';
+
+// Types from intake types
+export type {
+  IntakeItem,
+  IntakeStats,
+  IntakeFilters,
+  JiraConnection,
+  JiraSite,
+  JiraProject,
+  SyncStatus,
+  SyncRun,
+} from '../types/intake';
