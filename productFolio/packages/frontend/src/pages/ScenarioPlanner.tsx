@@ -46,7 +46,7 @@ import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
 import type { InitiativeStatus, InitiativeOrigin, Initiative, ScenarioStatus } from '../types';
 
-const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
+const LOCKED_STATUSES = ['IN_EXECUTION', 'COMPLETE'];
 
 // ============================================================================
 // TYPES

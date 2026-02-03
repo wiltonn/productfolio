@@ -18,7 +18,7 @@ PROPOSED --> SCOPING --> RESOURCING --> IN_EXECUTION --> COMPLETE
 |--------|---------|
 | **PROPOSED** | Default starting state. The initiative idea exists but has no scope or resource plan. |
 | **SCOPING** | Active sizing. Scope items are being added with skill demands and P50/P90 estimates. |
-| **RESOURCING** | Scope is finalized. The initiative is visible in scenario demand calculations and ready for staff assignment. **Allocations are locked at this point** (see below). |
+| **RESOURCING** | Scope is finalized. The initiative is visible in scenario demand calculations and ready for staff assignment. Allocations can still be modified at this stage. |
 | **IN_EXECUTION** | Work is underway. Allocations remain locked. Still contributes to scenario demand. |
 | **COMPLETE** | Terminal state. No further transitions allowed. |
 | **ON_HOLD** | Pause state. Can resume to any prior stage (PROPOSED, SCOPING, RESOURCING, IN_EXECUTION). |
@@ -37,11 +37,11 @@ PROPOSED --> SCOPING --> RESOURCING --> IN_EXECUTION --> COMPLETE
 |--------|--------------|----------------------|-------------------|
 | PROPOSED | Yes | No | No |
 | SCOPING | Yes | No | No |
-| RESOURCING | No | **Yes** | **Yes** |
+| RESOURCING | No | **Yes** | No |
 | IN_EXECUTION | No | **Yes** | **Yes** |
 | COMPLETE | No | No | **Yes** |
 
-**Key takeaway:** Once an initiative reaches RESOURCING, its allocations cannot be modified through the initiative directly. Changes must happen through the scenario system (see below).
+**Key takeaway:** Allocations remain editable through RESOURCING status. Once an initiative reaches IN_EXECUTION, its allocations are locked and cannot be modified.
 
 ---
 
@@ -62,11 +62,11 @@ Only scenarios in **DRAFT** or **REVIEW** status accept new or modified allocati
 
 ### 2. The Initiative Must Not Be Locked
 
-Allocations cannot be created or modified for initiatives in RESOURCING, IN_EXECUTION, or COMPLETE status.
+Allocations cannot be created or modified for initiatives in IN_EXECUTION or COMPLETE status.
 
 This means the typical flow is:
-1. Create allocations while the initiative is in PROPOSED or SCOPING
-2. Transition the initiative to RESOURCING (this locks the allocations in place)
+1. Create allocations while the initiative is in PROPOSED, SCOPING, or RESOURCING status
+2. Transition the initiative to IN_EXECUTION (this locks the allocations in place)
 3. Any further allocation changes require working within the scenario system
 
 ### 3. Dates Must Fall Within the Scenario's Quarter

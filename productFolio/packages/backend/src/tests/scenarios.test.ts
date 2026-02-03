@@ -927,49 +927,105 @@ describe('AllocationService', () => {
   });
 
   describe('allocation locking', () => {
-    it('should reject create when initiative is RESOURCING', async () => {
+    it('should allow create when initiative is RESOURCING', async () => {
       const scenarioId = '00000000-0000-0000-0000-000000000001';
+      const periodId = '00000000-0000-0000-0000-000000000099';
       const employeeId = '00000000-0000-0000-0000-000000000020';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
+      const allocationId = '00000000-0000-0000-0000-000000000002';
 
       mockPrisma.scenario.findUnique.mockResolvedValue({
         id: scenarioId,
         name: 'Test Scenario',
+        status: 'DRAFT',
+        periodId,
+        period: {
+          id: periodId,
+          label: 'Q1 2024',
+          startDate: new Date('2024-01-01'),
+          endDate: new Date('2024-03-31'),
+        },
+        assumptions: {},
       });
       mockPrisma.employee.findUnique.mockResolvedValue({
         id: employeeId,
         name: 'John Doe',
         hoursPerWeek: 40,
       });
-      mockPrisma.initiative.findUnique.mockResolvedValue({
-        id: initiativeId,
-        title: 'Locked Initiative',
-        status: 'RESOURCING',
+      // findUnique is called twice: once for existence check, once for lock check
+      mockPrisma.initiative.findUnique
+        .mockResolvedValueOnce({
+          id: initiativeId,
+          title: 'Resourcing Initiative',
+          status: 'RESOURCING',
+        })
+        .mockResolvedValueOnce({
+          id: initiativeId,
+          title: 'Resourcing Initiative',
+          status: 'RESOURCING',
+        });
+
+      mockPrisma.allocation.create.mockResolvedValue({
+        id: allocationId,
+        scenarioId,
+        employeeId,
+        initiativeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        allocationType: 'PROJECT',
+        employee: { id: employeeId, name: 'John Doe' },
+        initiative: { id: initiativeId, title: 'Resourcing Initiative', status: 'RESOURCING' },
+        allocationPeriods: [],
+      });
+      mockPrisma.allocation.findUnique.mockResolvedValue({
+        id: allocationId,
+        scenarioId,
+        employeeId,
+        initiativeId,
+        percentage: 100,
+        employee: { hoursPerWeek: 40 },
+        initiative: { id: initiativeId, domainComplexity: 'MEDIUM' },
+        allocationPeriods: [],
       });
 
-      await expect(
-        allocationService.create(scenarioId, {
-          employeeId,
-          initiativeId,
-          startDate: new Date('2024-01-01'),
-          endDate: new Date('2024-03-31'),
-          percentage: 100,
-        })
-      ).rejects.toThrow(WorkflowError);
+      // Mock period and allocationPeriod for computeAllocationPeriods
+      mockPrisma.allocationPeriod.deleteMany.mockResolvedValue({ count: 0 });
+      mockPrisma.allocationPeriod.createMany.mockResolvedValue({ count: 0 });
+      mockPrisma.period.findMany.mockResolvedValue([]);
+
+      const result = await allocationService.create(scenarioId, {
+        employeeId,
+        initiativeId,
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-03-31'),
+        percentage: 100,
+      });
+
+      expect(result.id).toBe(allocationId);
+      expect(result.initiativeStatus).toBe('RESOURCING');
     });
 
     it('should reject update when initiative is IN_EXECUTION', async () => {
       const allocationId = '00000000-0000-0000-0000-000000000001';
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
 
       mockPrisma.allocation.findUnique.mockResolvedValue({
         id: allocationId,
-        scenarioId: '00000000-0000-0000-0000-000000000001',
+        scenarioId,
         employeeId: '00000000-0000-0000-0000-000000000020',
         initiativeId,
         startDate: new Date('2024-01-01'),
         endDate: new Date('2024-03-31'),
         percentage: 100,
+      });
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+        status: 'DRAFT',
       });
       mockPrisma.initiative.findUnique.mockResolvedValue({
         id: initiativeId,
@@ -984,12 +1040,18 @@ describe('AllocationService', () => {
 
     it('should reject delete when initiative is COMPLETE', async () => {
       const allocationId = '00000000-0000-0000-0000-000000000001';
+      const scenarioId = '00000000-0000-0000-0000-000000000001';
       const initiativeId = '00000000-0000-0000-0000-000000000010';
 
       mockPrisma.allocation.findUnique.mockResolvedValue({
         id: allocationId,
-        scenarioId: '00000000-0000-0000-0000-000000000001',
+        scenarioId,
         initiativeId,
+      });
+      mockPrisma.scenario.findUnique.mockResolvedValue({
+        id: scenarioId,
+        name: 'Test Scenario',
+        status: 'DRAFT',
       });
       mockPrisma.initiative.findUnique.mockResolvedValue({
         id: initiativeId,

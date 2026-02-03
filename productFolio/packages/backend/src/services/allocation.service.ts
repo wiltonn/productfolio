@@ -17,7 +17,7 @@ import type {
 } from '../types/index.js';
 import { PeriodType, ScenarioStatus, AllocationType } from '@prisma/client';
 
-const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
+const LOCKED_STATUSES = ['IN_EXECUTION', 'COMPLETE'];
 
 interface AllocationWithDetails {
   id: string;
@@ -94,7 +94,7 @@ export class AllocationService {
 
     if (initiative && LOCKED_STATUSES.includes(initiative.status)) {
       throw new WorkflowError(
-        `Cannot modify allocations for initiative "${initiative.title}" with status ${initiative.status}. Allocations are locked for approved, in-progress, and completed initiatives.`,
+        `Cannot modify allocations for initiative "${initiative.title}" with status ${initiative.status}. Allocations are locked for in-progress and completed initiatives.`,
         initiative.status
       );
     }
