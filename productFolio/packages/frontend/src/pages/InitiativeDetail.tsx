@@ -3,6 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useInitiative, useUpdateInitiative, useUpdateInitiativeStatus, useInitiativeAllocationsAll } from '../hooks';
 import { useQuarterPeriods } from '../hooks/usePeriods';
 import { StatusBadge, Select } from '../components/ui';
+import { OriginBadge } from '../components/OriginBadge';
 import type { InitiativeStatus, InitiativeAllocation } from '../types';
 
 // Types for scope items and approvals
@@ -145,6 +146,7 @@ export function InitiativeDetail() {
     title: 'Customer Portal Redesign',
     description: 'Complete redesign of the customer-facing portal to improve user experience, modernize the interface, and add new self-service capabilities. This initiative includes migration to a new component library and implementation of accessibility improvements.',
     status: 'IN_EXECUTION' as InitiativeStatus,
+    origin: 'DIRECT_PM' as const,
     targetQuarter: '2024-Q2',
     businessOwnerId: 'bo-1',
     productOwnerId: 'po-1',
@@ -346,6 +348,11 @@ export function InitiativeDetail() {
                 </h1>
               )}
 
+              {/* Origin badge */}
+              {currentInitiative.origin && (
+                <OriginBadge origin={currentInitiative.origin} />
+              )}
+
               {/* Status badge with dropdown */}
               <div className="relative" ref={statusDropdownRef}>
                 <button
@@ -415,6 +422,20 @@ export function InitiativeDetail() {
                   <div className="flex items-center gap-2">
                     <span className="text-surface-400">Target:</span>
                     <span className="font-mono text-surface-700">{currentInitiative.targetQuarter}</span>
+                  </div>
+                </>
+              )}
+              {currentInitiative.origin === 'INTAKE_CONVERTED' && currentInitiative.intakeRequest && (
+                <>
+                  <span className="text-surface-300">|</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-surface-400">Intake:</span>
+                    <Link
+                      to={`/intake-requests/${currentInitiative.intakeRequest.id}`}
+                      className="text-accent-600 hover:text-accent-700 font-medium transition-colors"
+                    >
+                      {currentInitiative.intakeRequest.title}
+                    </Link>
                   </div>
                 </>
               )}

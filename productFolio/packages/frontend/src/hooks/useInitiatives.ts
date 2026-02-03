@@ -27,6 +27,7 @@ export function useInitiatives(filters: InitiativeFilters = {}) {
       params.set('status', filters.status);
     }
   }
+  if (filters.origin) params.set('origin', filters.origin);
   if (filters.search) params.set('search', filters.search);
   if (filters.targetQuarter) params.set('targetQuarter', filters.targetQuarter);
   if (filters.businessOwnerId) params.set('businessOwnerId', filters.businessOwnerId);

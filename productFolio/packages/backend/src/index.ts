@@ -19,6 +19,7 @@ import { driftRoutes } from './routes/drift.js';
 import { portfolioAreasRoutes } from './routes/portfolio-areas.js';
 import { jiraIntegrationRoutes } from './routes/jira-integration.js';
 import { intakeRoutes } from './routes/intake.js';
+import { intakeRequestRoutes } from './routes/intake-requests.js';
 import { getWorkerStatus } from './jobs/index.js';
 import { validateJiraConfig } from './lib/config/jira.js';
 
@@ -75,6 +76,7 @@ await fastify.register(driftRoutes);
 await fastify.register(portfolioAreasRoutes);
 await fastify.register(jiraIntegrationRoutes);
 await fastify.register(intakeRoutes);
+await fastify.register(intakeRequestRoutes);
 
 const start = async () => {
   try {

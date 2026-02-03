@@ -47,6 +47,8 @@ export interface PortfolioArea {
 }
 
 // Initiative types
+export type InitiativeOrigin = 'INTAKE_CONVERTED' | 'DIRECT_PM' | 'LEGACY';
+
 export interface Initiative {
   id: string;
   title: string;
@@ -56,6 +58,7 @@ export interface Initiative {
   portfolioAreaId: string | null;
   productLeaderId: string | null;
   status: InitiativeStatus;
+  origin: InitiativeOrigin;
   targetQuarter: string | null;
   deliveryHealth: DeliveryHealth | null;
   customFields: Record<string, unknown> | null;
@@ -67,6 +70,15 @@ export interface Initiative {
   portfolioArea?: PortfolioArea;
   productLeader?: User;
   scopeItems?: ScopeItem[];
+  intakeRequest?: {
+    id: string;
+    title: string;
+    status: string;
+    valueScore: number | null;
+    effortEstimate: string | null;
+    urgency: string | null;
+    customerName: string | null;
+  } | null;
 }
 
 // Initiative allocation hours per quarter
@@ -118,6 +130,7 @@ export interface InitiativeFilters {
   page?: number;
   limit?: number;
   status?: InitiativeStatus | InitiativeStatus[];
+  origin?: string;
   search?: string;
   targetQuarter?: string;
   businessOwnerId?: string;

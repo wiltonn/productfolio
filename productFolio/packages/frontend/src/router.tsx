@@ -59,6 +59,14 @@ const IntakeList = lazy(() =>
   import('./pages/IntakeList').then((m) => ({ default: m.IntakeList }))
 );
 
+const IntakeRequestList = lazy(() =>
+  import('./pages/IntakeRequestList').then((m) => ({ default: m.IntakeRequestList }))
+);
+
+const IntakeRequestDetail = lazy(() =>
+  import('./pages/IntakeRequestDetail').then((m) => ({ default: m.IntakeRequestDetail }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -236,6 +244,26 @@ export const router = createBrowserRouter([
             <LazyPage>
               <IntakeList />
             </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'intake-requests',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <IntakeRequestList />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'intake-requests/:id',
+        element: (
+          <ErrorBoundary>
+            <LazyDetailPage>
+              <IntakeRequestDetail />
+            </LazyDetailPage>
           </ErrorBoundary>
         ),
       },

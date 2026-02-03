@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { InitiativeStatus, DeliveryHealth } from '@prisma/client';
+import { InitiativeStatus, DeliveryHealth, InitiativeOrigin } from '@prisma/client';
 
 // Valid status transitions (milestone flow)
 const STATUS_TRANSITIONS: Record<InitiativeStatus, InitiativeStatus[]> = {
@@ -112,6 +112,7 @@ export type UpdateInitiativeInput = z.infer<typeof UpdateInitiativeSchema>;
  */
 export const InitiativeFiltersSchema = z.object({
   status: z.nativeEnum(InitiativeStatus).optional(),
+  origin: z.nativeEnum(InitiativeOrigin).optional(),
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
   portfolioAreaId: uuidSchema.optional(),

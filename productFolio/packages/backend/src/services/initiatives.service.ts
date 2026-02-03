@@ -1,4 +1,4 @@
-import { InitiativeStatus } from '@prisma/client';
+import { InitiativeStatus, InitiativeOrigin } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import {
   NotFoundError,
@@ -35,6 +35,10 @@ export async function list(
 
   if (filters.status) {
     where.status = filters.status;
+  }
+
+  if (filters.origin) {
+    where.origin = filters.origin;
   }
 
   if (filters.businessOwnerId) {
@@ -122,6 +126,17 @@ export async function getById(id: string) {
         include: { approver: true },
         orderBy: { approvedAt: 'desc' },
       },
+      intakeRequest: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          valueScore: true,
+          effortEstimate: true,
+          urgency: true,
+          customerName: true,
+        },
+      },
     },
   });
 
@@ -181,6 +196,7 @@ export async function create(data: CreateInitiativeInput) {
       portfolioAreaId: data.portfolioAreaId || null,
       productLeaderId: data.productLeaderId || null,
       status: data.status || InitiativeStatus.PROPOSED,
+      origin: InitiativeOrigin.DIRECT_PM,
       targetQuarter: data.targetQuarter || null,
       deliveryHealth: data.deliveryHealth || null,
       customFields: data.customFields || null,

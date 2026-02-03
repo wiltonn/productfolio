@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { SearchInput, StatusBadge, Checkbox, Modal, Select } from '../components/ui';
+import { OriginBadge } from '../components/OriginBadge';
 import type { SelectOption } from '../components/ui';
 import {
   useScenario,
@@ -39,7 +40,7 @@ import {
 import type { Allocation, AutoAllocateResult, Scenario } from '../hooks/useScenarios';
 import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
-import type { InitiativeStatus, Initiative, ScenarioStatus } from '../types';
+import type { InitiativeStatus, InitiativeOrigin, Initiative, ScenarioStatus } from '../types';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -52,6 +53,7 @@ interface InitiativeForPlanning {
   title: string;
   quarter: string;
   status: InitiativeStatus;
+  origin: InitiativeOrigin;
   totalHours: number;
   demandBySkill: Record<string, number>;
   hasShortage: boolean;
@@ -148,6 +150,7 @@ function transformInitiativeForPlanning(
     title: initiative.title,
     quarter: initiative.targetQuarter || 'Unassigned',
     status: initiative.status,
+    origin: initiative.origin,
     totalHours,
     demandBySkill,
     hasShortage,
@@ -383,6 +386,7 @@ function SortableInitiativeCard({
           </span>
           <span className="hours-badge">{initiative.totalHours.toLocaleString()}h</span>
           <StatusBadge status={initiative.status} />
+          <OriginBadge origin={initiative.origin} />
         </div>
       </div>
 

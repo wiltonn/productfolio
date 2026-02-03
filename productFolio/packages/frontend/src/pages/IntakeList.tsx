@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useIntakeItems, useIntakeStats } from '../hooks/useIntake';
+import { CreateIntakeRequestModal } from '../components/CreateIntakeRequestModal';
 import type { IntakeFilters, IntakeItem } from '../types/intake';
 
 const STATUS_CATEGORIES = [
@@ -26,6 +28,8 @@ export function IntakeList() {
   const [linked, setLinked] = useState('');
   const [sortBy, setSortBy] = useState('jiraUpdatedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedJiraItem, setSelectedJiraItem] = useState<IntakeItem | null>(null);
 
   const filters = useMemo<IntakeFilters>(() => ({
     page,
@@ -59,11 +63,24 @@ export function IntakeList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-display font-bold text-surface-900">Intake</h1>
-        <p className="mt-1 text-sm text-surface-500">
-          Jira issues synced from connected projects. Review, filter, and track incoming work.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-surface-900">Jira Items</h1>
+          <p className="mt-1 text-sm text-surface-500">
+            Jira issues synced from connected projects. Review, filter, and create intake requests.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link to="/intake-requests" className="btn-secondary text-sm">
+            View Intake Pipeline
+          </Link>
+          <button
+            className="btn-primary text-sm"
+            onClick={() => { setSelectedJiraItem(null); setShowCreateModal(true); }}
+          >
+            New Intake Request
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -187,11 +204,20 @@ export function IntakeList() {
                     </td>
                     <td className="py-3 px-4">
                       {item.initiative ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700" title={item.initiative.title}>
+                        <Link
+                          to={`/initiatives/${item.initiative.id}`}
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                          title={item.initiative.title}
+                        >
                           {item.initiative.title.slice(0, 20)}{item.initiative.title.length > 20 ? '...' : ''}
-                        </span>
+                        </Link>
                       ) : (
-                        <span className="text-xs text-surface-400">-</span>
+                        <button
+                          onClick={() => { setSelectedJiraItem(item); setShowCreateModal(true); }}
+                          className="text-xs text-accent-600 hover:text-accent-700 font-medium transition-colors"
+                        >
+                          Create Request
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -230,6 +256,19 @@ export function IntakeList() {
           </div>
         )}
       </div>
+
+      {/* Create Intake Request Modal */}
+      {showCreateModal && (
+        <CreateIntakeRequestModal
+          onClose={() => { setShowCreateModal(false); setSelectedJiraItem(null); }}
+          prefill={selectedJiraItem ? {
+            intakeItemId: selectedJiraItem.id,
+            title: selectedJiraItem.summary,
+            description: selectedJiraItem.descriptionExcerpt || undefined,
+            sourceType: 'JIRA',
+          } : undefined}
+        />
+      )}
     </div>
   );
 }

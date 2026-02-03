@@ -24,6 +24,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Querystring: {
       status?: string;
+      origin?: string;
       businessOwnerId?: string;
       productOwnerId?: string;
       portfolioAreaId?: string;
@@ -36,6 +37,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   }>('/api/initiatives', async (request, reply) => {
     const filters = {
       status: request.query.status,
+      origin: request.query.origin,
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
       portfolioAreaId: request.query.portfolioAreaId,

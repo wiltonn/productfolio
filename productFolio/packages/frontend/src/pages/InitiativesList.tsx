@@ -11,6 +11,7 @@ import {
   BulkActionsBar,
 } from '../components/ui';
 import { CreateInitiativeModal } from '../components/CreateInitiativeModal';
+import { OriginBadge } from '../components/OriginBadge';
 import {
   useInitiatives,
   useInitiativeAllocationHoursByType,
@@ -35,6 +36,13 @@ const statusOptions = [
 // Quarter options
 const quarterOptions = getQuarterOptions();
 
+// Origin filter options
+const originOptions = [
+  { value: 'INTAKE_CONVERTED', label: 'Intake-origin' },
+  { value: 'DIRECT_PM', label: 'Non-Intake scope' },
+  { value: 'LEGACY', label: 'Legacy' },
+];
+
 export function InitiativesList() {
   const navigate = useNavigate();
 
@@ -42,6 +50,7 @@ export function InitiativesList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState('');
+  const [originFilter, setOriginFilter] = useState('');
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -59,9 +68,10 @@ export function InitiativesList() {
       search: search || undefined,
       status: statusFilter.length > 0 ? (statusFilter as InitiativeStatus[]) : undefined,
       targetQuarter: quarterFilter || undefined,
+      origin: originFilter || undefined,
       limit: 100, // Backend max is 100
     }),
-    [search, statusFilter, quarterFilter]
+    [search, statusFilter, quarterFilter, originFilter]
   );
 
   // API hooks
@@ -260,6 +270,12 @@ export function InitiativesList() {
         cell: ({ row }) => <StatusBadge status={row.original.status} />,
       },
       {
+        accessorKey: 'origin',
+        header: 'Origin',
+        size: 110,
+        cell: ({ row }) => <OriginBadge origin={row.original.origin} />,
+      },
+      {
         id: 'productLeader',
         header: 'Product Leader',
         size: 160,
@@ -396,7 +412,7 @@ export function InitiativesList() {
     [quarterDates, allocationHoursMap]
   );
 
-  const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter;
+  const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter || originFilter;
 
   return (
     <div className="animate-fade-in">
@@ -509,12 +525,20 @@ export function InitiativesList() {
                 placeholder="Quarter"
                 className="w-36"
               />
+              <Select
+                options={originOptions}
+                value={originFilter}
+                onChange={setOriginFilter}
+                placeholder="Origin"
+                className="w-40"
+              />
               {hasActiveFilters && (
                 <button
                   onClick={() => {
                     setSearch('');
                     setStatusFilter([]);
                     setQuarterFilter('');
+                    setOriginFilter('');
                   }}
                   className="text-sm text-surface-500 hover:text-surface-700 transition-colors"
                 >

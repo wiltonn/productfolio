@@ -80,6 +80,21 @@ enum DriftAlertStatus {
   RESOLVED
 }
 
+enum IntakeRequestStatus {
+  DRAFT
+  TRIAGE
+  ASSESSED
+  APPROVED
+  CONVERTED
+  CLOSED
+}
+
+enum InitiativeOrigin {
+  INTAKE_CONVERTED
+  DIRECT_PM
+  LEGACY
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -97,12 +112,14 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  ownedInitiatives   Initiative[]     @relation("BusinessOwner")
-  managedInitiatives Initiative[]     @relation("ProductOwner")
-  ledInitiatives     Initiative[]     @relation("ProductLeader")
-  approvals          Approval[]
-  refreshTokens      RefreshToken[]
-  jiraConnections    JiraConnection[]
+  ownedInitiatives      Initiative[]     @relation("BusinessOwner")
+  managedInitiatives    Initiative[]     @relation("ProductOwner")
+  ledInitiatives        Initiative[]     @relation("ProductLeader")
+  approvals             Approval[]
+  refreshTokens         RefreshToken[]
+  jiraConnections       JiraConnection[]
+  intakeRequestsCreated IntakeRequest[]  @relation("IntakeRequester")
+  intakeRequestsSponsored IntakeRequest[] @relation("IntakeSponsor")
 
   @@index([email])
   @@index([role])
@@ -174,7 +191,8 @@ model PortfolioArea {
   updatedAt DateTime @updatedAt
 
   // Relations
-  initiatives Initiative[]
+  initiatives    Initiative[]
+  intakeRequests IntakeRequest[]
 
   @@index([name])
   @@map("portfolio_areas")
@@ -193,6 +211,7 @@ model Initiative {
   portfolioAreaId String?          @db.Uuid @map("portfolio_area_id")
   productLeaderId String?          @db.Uuid @map("product_leader_id")
   status          InitiativeStatus @default(PROPOSED)
+  origin          InitiativeOrigin @default(LEGACY)
   targetQuarter   String?
   deliveryHealth  DeliveryHealth?
   targetPeriodId  String?          @db.Uuid @map("target_period_id")
@@ -209,14 +228,16 @@ model Initiative {
   targetPeriod  Period?        @relation(fields: [targetPeriodId], references: [id])
   scopeItems    ScopeItem[]
   approvals     Approval[]
-  allocations   Allocation[]
-  intakeItems   IntakeItem[]
+  allocations    Allocation[]
+  intakeItems    IntakeItem[]
+  intakeRequest  IntakeRequest?
 
   @@index([businessOwnerId])
   @@index([productOwnerId])
   @@index([portfolioAreaId])
   @@index([productLeaderId])
   @@index([status])
+  @@index([origin])
   @@index([targetQuarter])
   @@index([targetPeriodId])
 }
@@ -634,8 +655,9 @@ model IntakeItem {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  jiraSite   JiraSite    @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
-  initiative Initiative? @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  jiraSite      JiraSite       @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+  initiative    Initiative?    @relation(fields: [initiativeId], references: [id], onDelete: SetNull)
+  intakeRequest IntakeRequest?
 
   @@unique([jiraSiteId, jiraIssueId])
   @@index([jiraSiteId])
@@ -708,4 +730,61 @@ model IntegrationWriteActionLog {
   @@index([intakeItemId])
   @@index([status])
   @@map("integration_write_action_logs")
+}
+
+// ============================================================================
+// Intake Request (Upstream Funnel Workflow)
+// ============================================================================
+
+model IntakeRequest {
+  id              String              @id @default(uuid()) @db.Uuid
+  title           String              @db.VarChar(500)
+  description     String?             @db.Text
+  status          IntakeRequestStatus @default(DRAFT)
+
+  // Requester & Sponsor
+  requestedById   String?             @db.Uuid @map("requested_by_id")
+  requestedBy     User?               @relation("IntakeRequester", fields: [requestedById], references: [id])
+  sponsorId       String?             @db.Uuid @map("sponsor_id")
+  sponsor         User?               @relation("IntakeSponsor", fields: [sponsorId], references: [id])
+
+  // Classification
+  portfolioAreaId String?             @db.Uuid @map("portfolio_area_id")
+  portfolioArea   PortfolioArea?      @relation(fields: [portfolioAreaId], references: [id])
+  targetQuarter   String?             @db.VarChar(10)
+  valueScore      Int?                @map("value_score")
+  effortEstimate  String?             @db.VarChar(10) @map("effort_estimate")
+  urgency         String?             @db.VarChar(20)
+  customerName    String?             @db.VarChar(255) @map("customer_name")
+  tags            Json?               @db.JsonB
+  strategicThemes Json?               @db.JsonB @map("strategic_themes")
+
+  // Source linkage (optional - from Jira or other)
+  sourceType      IntakeSourceType?   @map("source_type")
+  intakeItemId    String?             @unique @db.Uuid @map("intake_item_id")
+  intakeItem      IntakeItem?         @relation(fields: [intakeItemId], references: [id])
+
+  // Conversion linkage
+  initiativeId       String?          @unique @db.Uuid @map("initiative_id")
+  initiative         Initiative?      @relation(fields: [initiativeId], references: [id])
+  conversionSnapshot Json?            @db.JsonB @map("conversion_snapshot")
+
+  // Decision log
+  decisionNotes   String?             @db.Text @map("decision_notes")
+  closedReason    String?             @db.VarChar(50) @map("closed_reason")
+
+  // Audit
+  createdBy       String?             @db.Uuid @map("created_by")
+  updatedBy       String?             @db.Uuid @map("updated_by")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([portfolioAreaId])
+  @@index([targetQuarter])
+  @@index([initiativeId])
+  @@index([intakeItemId])
+  @@index([requestedById])
+  @@index([sponsorId])
+  @@map("intake_requests")
 }
