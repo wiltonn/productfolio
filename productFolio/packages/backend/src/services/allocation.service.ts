@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError, WorkflowError } from '../lib/errors.js';
 import { scenarioCalculatorService } from './scenario-calculator.service.js';
 import { periodService } from './period.service.js';
+import { rampService } from './ramp.service.js';
 import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateAllocation, UpdateAllocation } from '../schemas/scenarios.schema.js';
 import type {
@@ -12,6 +13,7 @@ import type {
   AutoAllocateResult,
   InitiativeCoverage,
   AutoAllocateOptions,
+  ScenarioAssumptions,
 } from '../types/index.js';
 import { PeriodType, ScenarioStatus, AllocationType } from '@prisma/client';
 
@@ -29,6 +31,7 @@ interface AllocationWithDetails {
   startDate: Date;
   endDate: Date;
   percentage: number;
+  rampModifier?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -165,6 +168,9 @@ export class AllocationService {
             status: true,
           },
         },
+        allocationPeriods: {
+          select: { rampModifier: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -183,6 +189,9 @@ export class AllocationService {
       startDate: allocation.startDate,
       endDate: allocation.endDate,
       percentage: allocation.percentage,
+      rampModifier: allocation.allocationPeriods.length > 0
+        ? allocation.allocationPeriods.reduce((s, ap) => s + (ap.rampModifier ?? 1.0), 0) / allocation.allocationPeriods.length
+        : 1.0,
       createdAt: allocation.createdAt,
       updatedAt: allocation.updatedAt,
     }));
@@ -632,6 +641,15 @@ export class AllocationService {
     // Compute AllocationPeriod rows
     await this.computeAllocationPeriods(allocation.id, data.startDate, data.endDate);
 
+    // Compute ramp modifiers
+    const scenarioForRamp = await prisma.scenario.findUnique({
+      where: { id: scenarioId }, select: { assumptions: true },
+    });
+    await rampService.computeRampModifiers(
+      allocation.id,
+      (scenarioForRamp?.assumptions as ScenarioAssumptions) || {}
+    );
+
     // Invalidate calculator cache and enqueue background recomputation
     await scenarioCalculatorService.invalidateCache(scenarioId);
     await enqueueScenarioRecompute(scenarioId, 'allocation_change');
@@ -725,6 +743,17 @@ export class AllocationService {
         id,
         updated.startDate,
         updated.endDate
+      );
+    }
+
+    // Recompute ramp if dates or initiative changed
+    if (data.startDate !== undefined || data.endDate !== undefined || data.initiativeId !== undefined) {
+      const scenarioForRamp = await prisma.scenario.findUnique({
+        where: { id: updated.scenarioId }, select: { assumptions: true },
+      });
+      await rampService.computeRampModifiers(
+        id,
+        (scenarioForRamp?.assumptions as ScenarioAssumptions) || {}
       );
     }
 
@@ -1300,6 +1329,15 @@ export class AllocationService {
         allocation.startDate,
         allocation.endDate
       );
+    }
+
+    // Compute ramp modifiers for all new allocations
+    const scenarioForRamp = await prisma.scenario.findUnique({
+      where: { id: scenarioId }, select: { assumptions: true },
+    });
+    const rampAssumptions = (scenarioForRamp?.assumptions as ScenarioAssumptions) || {};
+    for (const allocation of result) {
+      await rampService.computeRampModifiers(allocation.id, rampAssumptions);
     }
 
     // Invalidate cache and enqueue background jobs

@@ -161,6 +161,7 @@ export interface CapacityBySkillPeriod {
     proficiency: number;
     effectiveHours: number;
     allocationPercentage: number;
+    rampModifier?: number;
   }>;
 }
 
@@ -206,12 +207,39 @@ export interface SkillMismatch {
   missingSkills: string[];
 }
 
+export type DomainComplexityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+
+export interface RampProfiles {
+  LOW: number[];
+  MEDIUM: number[];
+  HIGH: number[];
+  VERY_HIGH: number[];
+}
+
+export const DEFAULT_RAMP_PROFILES: RampProfiles = {
+  LOW: [0.85, 0.95, 1.0],
+  MEDIUM: [0.65, 0.85, 1.0],
+  HIGH: [0.50, 0.70, 0.90],
+  VERY_HIGH: [0.35, 0.55, 0.75],
+};
+
+export interface RampBreakdown {
+  familiarityLevel: number;
+  domainComplexity: DomainComplexityLevel;
+  rampProfile: number[];
+  baseRampModifier: number;
+  computedModifier: number;
+  source: 'familiar' | 'ramp_applied' | 'ramp_disabled';
+}
+
 export interface ScenarioAssumptions {
   allocationCapPercentage?: number;
   bufferPercentage?: number;
   proficiencyWeightEnabled?: boolean;
   includeContractors?: boolean;
   hoursPerPeriod?: number;
+  rampEnabled?: boolean;
+  rampProfiles?: RampProfiles;
 }
 
 export interface CalculatorResult {
@@ -247,6 +275,7 @@ export interface CalculatorResult {
     skillCount: number;
     employeeCount: number;
     initiativeCount: number;
+    rampCostHours: number;
   };
   cacheHit: boolean;
   cacheExpiry?: Date;
@@ -333,6 +362,7 @@ export interface AllocationSnapshotEntry {
   endDate: string;
   percentage: number;
   hoursInPeriod: number;
+  rampModifier?: number;
 }
 
 export interface SnapshotSummary {

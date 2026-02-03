@@ -35,6 +35,7 @@ export interface Allocation {
   startDate: string;
   endDate: string;
   percentage: number;
+  rampModifier?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +57,7 @@ export interface CalculatorResult {
     totalCapacity: number;
     utilizationPercent: number;
     gap: number;
+    rampCostHours?: number;
   };
   bySkill?: CapacityAnalysis[];
   byInitiative?: Array<{

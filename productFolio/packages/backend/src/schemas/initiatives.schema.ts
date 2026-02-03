@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { InitiativeStatus, DeliveryHealth, InitiativeOrigin } from '@prisma/client';
+import { InitiativeStatus, DeliveryHealth, InitiativeOrigin, DomainComplexity } from '@prisma/client';
 
 // Valid status transitions (milestone flow)
 const STATUS_TRANSITIONS: Record<InitiativeStatus, InitiativeStatus[]> = {
@@ -78,6 +78,7 @@ export const CreateInitiativeSchema = z.object({
   targetQuarter: targetQuarterSchema,
   deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
+  domainComplexity: z.nativeEnum(DomainComplexity).default(DomainComplexity.MEDIUM).optional(),
 });
 
 export type CreateInitiativeInput = z.infer<typeof CreateInitiativeSchema>;
@@ -103,6 +104,7 @@ export const UpdateInitiativeSchema = z.object({
   targetQuarter: targetQuarterSchema,
   deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
+  domainComplexity: z.nativeEnum(DomainComplexity).optional(),
 });
 
 export type UpdateInitiativeInput = z.infer<typeof UpdateInitiativeSchema>;

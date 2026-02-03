@@ -311,6 +311,7 @@ export class ScenarioCalculatorService {
       proficiencyWeightEnabled = true,
       includeContractors = true,
       hoursPerPeriod = DEFAULT_HOURS_PER_PERIOD,
+      rampEnabled = false,
     } = assumptions;
 
     // Build capacity aggregation: Map<periodId, Map<skill, { total, effective, breakdown }>>
@@ -328,6 +329,7 @@ export class ScenarioCalculatorService {
             proficiency: number;
             effectiveHours: number;
             allocationPercentage: number;
+            rampModifier?: number;
           }>;
         }
       >
@@ -404,6 +406,11 @@ export class ScenarioCalculatorService {
 
         const periodMap = capacityMap.get(periodId)!;
 
+        // Compute weighted ramp modifier across all allocations for this employee/period
+        const rampModifier = rampEnabled
+          ? this.getWeightedRampModifier(empAllocations, periodId)
+          : 1.0;
+
         // Add capacity for each skill
         for (const skill of employee.skills) {
           const proficiencyMultiplier = proficiencyWeightEnabled
@@ -414,7 +421,7 @@ export class ScenarioCalculatorService {
           const allocatedHours =
             baseHours * (effectiveAllocationPercentage / 100);
           const effectiveHours =
-            allocatedHours * proficiencyMultiplier * bufferMultiplier;
+            allocatedHours * proficiencyMultiplier * bufferMultiplier * rampModifier;
 
           if (!periodMap.has(skill.name)) {
             periodMap.set(skill.name, {
@@ -434,6 +441,7 @@ export class ScenarioCalculatorService {
             proficiency: skill.proficiency,
             effectiveHours,
             allocationPercentage: effectiveAllocationPercentage,
+            rampModifier,
           });
         }
       }
@@ -812,6 +820,20 @@ export class ScenarioCalculatorService {
     // Count unique employees
     const uniqueEmployees = new Set(allocations.map((a) => a.employeeId));
 
+    // Compute ramp cost: hours lost due to ramp-up
+    let rampCostHours = 0;
+    for (const cap of capacity) {
+      for (const entry of cap.employeeBreakdown) {
+        const rm = entry.rampModifier ?? 1.0;
+        if (rm < 1.0 && rm > 0) {
+          // effectiveHours already includes ramp modifier
+          // hours without ramp = effectiveHours / rm
+          // lost hours = hours_without_ramp - effectiveHours = effectiveHours * (1 - rm) / rm
+          rampCostHours += entry.effectiveHours * (1 - rm) / rm;
+        }
+      }
+    }
+
     return {
       totalDemandHours,
       totalCapacityHours,
@@ -824,6 +846,7 @@ export class ScenarioCalculatorService {
       skillCount: allSkills.size,
       employeeCount: uniqueEmployees.size,
       initiativeCount: priorityRankings.length,
+      rampCostHours: Math.round(rampCostHours),
     };
   }
 
@@ -870,6 +893,26 @@ export class ScenarioCalculatorService {
     if (shortagePercentage >= 30) return 'high';
     if (shortagePercentage >= 15) return 'medium';
     return 'low';
+  }
+
+  private getWeightedRampModifier(
+    allocations: Array<{
+      percentage: number;
+      allocationPeriods: Array<{ periodId: string; overlapRatio: number; rampModifier?: number }>;
+    }>,
+    periodId: string
+  ): number {
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const alloc of allocations) {
+      const ap = alloc.allocationPeriods.find(p => p.periodId === periodId);
+      if (ap) {
+        const weight = alloc.percentage * ap.overlapRatio;
+        weightedSum += weight * (ap.rampModifier ?? 1.0);
+        weightTotal += weight;
+      }
+    }
+    return weightTotal > 0 ? weightedSum / weightTotal : 1.0;
   }
 }
 

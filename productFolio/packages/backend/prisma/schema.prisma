@@ -61,6 +61,19 @@ enum AllocationType {
   SUPPORT
 }
 
+enum DomainComplexity {
+  LOW
+  MEDIUM
+  HIGH
+  VERY_HIGH
+}
+
+enum FamiliaritySource {
+  MANUAL
+  ALLOCATION_HISTORY
+  IMPORT
+}
+
 enum ScenarioType {
   BASELINE
   REVISION
@@ -216,6 +229,7 @@ model Initiative {
   deliveryHealth  DeliveryHealth?
   targetPeriodId  String?          @db.Uuid @map("target_period_id")
   customFields    Json?            @db.JsonB
+  domainComplexity DomainComplexity @default(MEDIUM) @map("domain_complexity")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -231,6 +245,7 @@ model Initiative {
   allocations    Allocation[]
   intakeItems    IntakeItem[]
   intakeRequest  IntakeRequest?
+  domainFamiliarity  EmployeeDomainFamiliarity[]
 
   @@index([businessOwnerId])
   @@index([productOwnerId])
@@ -319,6 +334,7 @@ model Employee {
   domains            Domain[]
   capacityCalendar   CapacityCalendar[]
   allocations        Allocation[]
+  domainFamiliarity  EmployeeDomainFamiliarity[]
 
   @@index([managerId])
   @@index([employmentType])
@@ -445,6 +461,8 @@ model AllocationPeriod {
   periodId      String @db.Uuid @map("period_id")
   hoursInPeriod Float  @map("hours_in_period")
   overlapRatio  Float  @map("overlap_ratio") // 0.0-1.0, for debugging
+  rampModifier  Float  @default(1.0) @map("ramp_modifier")
+  rampBreakdown Json?  @db.JsonB @map("ramp_breakdown")
 
   allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
   period        Period     @relation(fields: [periodId], references: [id])
@@ -452,6 +470,23 @@ model AllocationPeriod {
   @@id([allocationId, periodId])
   @@index([periodId])
   @@map("allocation_periods")
+}
+
+model EmployeeDomainFamiliarity {
+  employeeId          String            @db.Uuid @map("employee_id")
+  initiativeId        String            @db.Uuid @map("initiative_id")
+  familiarityLevel    Float             @default(0.0) @map("familiarity_level")
+  source              FamiliaritySource @default(MANUAL)
+  lastAllocatedPeriodId String?         @db.Uuid @map("last_allocated_period_id")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  @@id([employeeId, initiativeId])
+  @@index([initiativeId])
+  @@map("employee_domain_familiarity")
 }
 
 // ============================================================================

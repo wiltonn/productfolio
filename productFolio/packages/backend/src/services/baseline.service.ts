@@ -111,6 +111,9 @@ export class BaselineService {
         (sum, ap) => sum + ap.hoursInPeriod,
         0
       );
+      const avgRampModifier = alloc.allocationPeriods.length > 0
+        ? alloc.allocationPeriods.reduce((sum, ap) => sum + (ap.rampModifier ?? 1.0), 0) / alloc.allocationPeriods.length
+        : 1.0;
       return {
         allocationId: alloc.id,
         employeeId: alloc.employeeId,
@@ -122,6 +125,7 @@ export class BaselineService {
         endDate: alloc.endDate.toISOString(),
         percentage: alloc.percentage,
         hoursInPeriod: totalHoursInPeriod,
+        rampModifier: avgRampModifier,
       };
     });
 

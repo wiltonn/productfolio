@@ -61,6 +61,7 @@ export interface Initiative {
   origin: InitiativeOrigin;
   targetQuarter: string | null;
   deliveryHealth: DeliveryHealth | null;
+  domainComplexity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
   customFields: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;

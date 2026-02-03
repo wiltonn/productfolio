@@ -139,10 +139,12 @@ async function main() {
       }
 
       // Create capacity calendar entries for Q1 and Q2
+      // ~13 weeks in a quarter
+      const quarterlyHours = empData.hoursPerWeek * 13;
       await prisma.capacityCalendar.createMany({
         data: [
-          { employeeId: employee.id, periodId: q1Period.id, hoursAvailable: 0 },
-          { employeeId: employee.id, periodId: q2Period.id, hoursAvailable: 0 },
+          { employeeId: employee.id, periodId: q1Period.id, hoursAvailable: quarterlyHours },
+          { employeeId: employee.id, periodId: q2Period.id, hoursAvailable: quarterlyHours },
         ],
       });
 
@@ -189,6 +191,7 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        domainComplexity: 'MEDIUM' as const,
         portfolioAreaId: portfolioAreas['Customer Experience'].id,
         productLeaderId: productOwner.id,
         scopeItems: [
@@ -204,6 +207,7 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'AT_RISK' as const,
+        domainComplexity: 'HIGH' as const,
         portfolioAreaId: portfolioAreas['Platform Engineering'].id,
         productLeaderId: admin.id,
         scopeItems: [
@@ -218,6 +222,7 @@ async function main() {
         targetQuarter: '2026-Q2',
         targetPeriodId: q2Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        domainComplexity: 'MEDIUM' as const,
         portfolioAreaId: portfolioAreas['Customer Experience'].id,
         productLeaderId: productOwner.id,
         scopeItems: [
@@ -233,6 +238,7 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'DELAYED' as const,
+        domainComplexity: 'VERY_HIGH' as const,
         portfolioAreaId: portfolioAreas['Data & Analytics'].id,
         productLeaderId: businessOwner.id,
         scopeItems: [
@@ -247,6 +253,7 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        domainComplexity: 'HIGH' as const,
         portfolioAreaId: portfolioAreas['Security & Compliance'].id,
         productLeaderId: admin.id,
         scopeItems: [
@@ -261,6 +268,7 @@ async function main() {
         targetQuarter: '2026-Q1',
         targetPeriodId: q1Period.id,
         deliveryHealth: 'ON_TRACK' as const,
+        domainComplexity: 'LOW' as const,
         portfolioAreaId: portfolioAreas['Platform Engineering'].id,
         productLeaderId: productOwner.id,
         scopeItems: [
@@ -283,6 +291,7 @@ async function main() {
           productOwnerId: productOwner.id,
           portfolioAreaId: initData.portfolioAreaId,
           productLeaderId: initData.productLeaderId,
+          domainComplexity: initData.domainComplexity,
         },
       });
 
@@ -333,6 +342,7 @@ async function main() {
           bufferPercentage: 10,
           proficiencyWeightEnabled: true,
           includeContractors: true,
+          rampEnabled: true,
         },
         priorityRankings: initiatives
           .filter(i => i.targetPeriodId === q1Period.id)
@@ -384,6 +394,42 @@ async function main() {
     }
     console.log(`Created ${allocCount} allocations for Q1 baseline`);
 
+    // Create domain familiarity entries for allocated employees
+    const findEmployeeForFamiliarity = (name: string) => employees.find(e => e.name === name);
+    const findInitiativeForFamiliarity = (title: string) => initiatives.find(i => i.title === title);
+
+    const familiarityData = [
+      { employeeName: 'Sarah Chen', initiativeTitle: 'Customer Portal Redesign', level: 0.9 },
+      { employeeName: 'Mike Johnson', initiativeTitle: 'API Gateway Migration', level: 0.4 },
+      { employeeName: 'Alex Rivera', initiativeTitle: 'Customer Portal Redesign', level: 0.6 },
+      { employeeName: 'Alex Rivera', initiativeTitle: 'Notification System', level: 0.0 },
+      { employeeName: 'Emily Watson', initiativeTitle: 'Data Pipeline Optimization', level: 1.0 },
+      { employeeName: 'Priya Patel', initiativeTitle: 'API Gateway Migration', level: 0.3 },
+      { employeeName: 'Priya Patel', initiativeTitle: 'Security Audit Implementation', level: 0.2 },
+      { employeeName: 'James Lee', initiativeTitle: 'Notification System', level: 0.0 },
+      { employeeName: 'Maria Garcia', initiativeTitle: 'Customer Portal Redesign', level: 0.7 },
+      { employeeName: 'David Kim', initiativeTitle: 'Customer Portal Redesign', level: 0.5 },
+      { employeeName: 'Ryan Martinez', initiativeTitle: 'Security Audit Implementation', level: 0.8 },
+    ];
+
+    let famCount = 0;
+    for (const fam of familiarityData) {
+      const emp = findEmployeeForFamiliarity(fam.employeeName);
+      const init = findInitiativeForFamiliarity(fam.initiativeTitle);
+      if (emp && init) {
+        await prisma.employeeDomainFamiliarity.create({
+          data: {
+            employeeId: emp.id,
+            initiativeId: init.id,
+            familiarityLevel: fam.level,
+            source: 'MANUAL',
+          },
+        });
+        famCount++;
+      }
+    }
+    console.log(`Created ${famCount} domain familiarity entries`);
+
     // Create a WHAT_IF comparison scenario
     const whatIfScenario = await prisma.scenario.create({
       data: {
@@ -396,6 +442,7 @@ async function main() {
           bufferPercentage: 20,
           proficiencyWeightEnabled: true,
           includeContractors: false,
+          rampEnabled: false,
         },
         priorityRankings: initiatives
           .filter(i => i.targetPeriodId === q1Period.id)

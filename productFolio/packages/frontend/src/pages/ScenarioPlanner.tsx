@@ -36,7 +36,11 @@ import {
   useTransitionScenarioStatus,
   useScenarioPermissions,
   useSetPrimary,
+  useUpdateScenario,
+  scenarioKeys,
 } from '../hooks/useScenarios';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '../api/client';
 import type { Allocation, AutoAllocateResult, Scenario } from '../hooks/useScenarios';
 import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
@@ -93,6 +97,7 @@ interface AllocationRow {
   startDate: string;
   endDate: string;
   percentage: number;
+  rampModifier?: number;
   isOverallocated: boolean;
 }
 
@@ -101,6 +106,7 @@ interface ScenarioAssumptions {
   bufferPercentage: number;
   ktloPercentage: number;
   meetingOverheadPercentage: number;
+  rampEnabled: boolean;
 }
 
 // Default holidays – must stay in sync with Capacity.tsx
@@ -1131,6 +1137,8 @@ export function ScenarioPlanner() {
   const { data: employeesData } = useEmployees({ limit: 100 });
   const transitionStatus = useTransitionScenarioStatus();
   const setPrimary = useSetPrimary();
+  const updateScenario = useUpdateScenario();
+  const queryClient = useQueryClient();
   const { canEdit, canTransition, canModifyAllocations, isReadOnly } = useScenarioPermissions(scenario as Scenario | undefined);
   const updatePriorities = useUpdatePriorities();
   const createAllocation = useCreateAllocation();
@@ -1162,6 +1170,7 @@ export function ScenarioPlanner() {
     bufferPercentage: 10,
     ktloPercentage: 15,
     meetingOverheadPercentage: 10,
+    rampEnabled: false,
   });
 
   // Guided mode
@@ -1250,6 +1259,7 @@ export function ScenarioPlanner() {
         startDate: alloc.startDate.split('T')[0],
         endDate: alloc.endDate.split('T')[0],
         percentage: alloc.percentage,
+        rampModifier: alloc.rampModifier,
         isOverallocated: employeeAllocations[alloc.employeeId] > 100,
       };
     });
@@ -1321,12 +1331,13 @@ export function ScenarioPlanner() {
   // Update assumptions from scenario
   useEffect(() => {
     if (scenario?.assumptions) {
-      const a = scenario.assumptions as Record<string, number>;
+      const a = scenario.assumptions as Record<string, unknown>;
       setAssumptions({
-        allocationCap: a.allocationCapPercentage || 100,
-        bufferPercentage: a.bufferPercentage || 10,
-        ktloPercentage: a.ktloPercentage ?? 15,
-        meetingOverheadPercentage: a.meetingOverheadPercentage ?? 10,
+        allocationCap: (a.allocationCapPercentage as number) || 100,
+        bufferPercentage: (a.bufferPercentage as number) || 10,
+        ktloPercentage: (a.ktloPercentage as number) ?? 15,
+        meetingOverheadPercentage: (a.meetingOverheadPercentage as number) ?? 10,
+        rampEnabled: (a.rampEnabled as boolean) ?? false,
       });
     }
   }, [scenario]);
@@ -1420,8 +1431,29 @@ export function ScenarioPlanner() {
 
     const skillGaps = capacityBySkill.filter(s => s.gap < 0).length;
     const utilizationPercent = totalAvailableCapacity > 0 ? Math.round((totalUsedCapacity / totalAvailableCapacity) * 100) : 0;
-    return { totalDemand, totalAvailableCapacity, totalUsedCapacity, skillGaps, utilizationPercent };
-  }, [initiatives, netEffectiveCapacity, capacityBySkill, allocationsData, employeesData]);
+
+    // Compute ramp cost from allocations
+    let rampCostHours = 0;
+    if (assumptions.rampEnabled && allocationsData && employeesData?.data) {
+      const employeeMap = new Map(employeesData.data.map(e => [e.id, e]));
+      allocationsData.forEach(alloc => {
+        const rm = alloc.rampModifier ?? 1.0;
+        if (rm < 1.0 && rm > 0) {
+          const employee = employeeMap.get(alloc.employeeId);
+          const hoursPerWeek = employee?.defaultCapacityHours || 40;
+          const start = new Date(alloc.startDate);
+          const end = new Date(alloc.endDate);
+          const weeks = Math.max(0, (end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000));
+          const allocatedHours = hoursPerWeek * weeks * (alloc.percentage / 100);
+          // Hours with ramp = allocatedHours * rm; lost = allocatedHours * (1 - rm)
+          rampCostHours += allocatedHours * (1 - rm);
+        }
+      });
+      rampCostHours = Math.round(rampCostHours);
+    }
+
+    return { totalDemand, totalAvailableCapacity, totalUsedCapacity, skillGaps, utilizationPercent, rampCostHours };
+  }, [initiatives, netEffectiveCapacity, capacityBySkill, allocationsData, employeesData, assumptions.rampEnabled]);
 
   // Drag handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -1679,6 +1711,12 @@ export function ScenarioPlanner() {
               <span className="pill-label">Gaps</span>
               <span className="pill-value">{stats.skillGaps}</span>
             </div>
+            {assumptions.rampEnabled && (
+              <div className={`stat-pill ${stats.rampCostHours > stats.totalUsedCapacity * 0.15 ? 'danger' : stats.rampCostHours > 0 ? 'warning' : ''}`}>
+                <span className="pill-label">Ramp Cost</span>
+                <span className="pill-value">{stats.rampCostHours.toLocaleString()}h</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1745,6 +1783,45 @@ export function ScenarioPlanner() {
                       max={50}
                     />
                     <span>%</span>
+                  </div>
+                </div>
+                <div className="assumption-row">
+                  <label>Ramp Modeling</label>
+                  <div className="assumption-input">
+                    <button
+                      onClick={async () => {
+                        const newVal = !assumptions.rampEnabled;
+                        setAssumptions(a => ({ ...a, rampEnabled: newVal }));
+                        if (id) {
+                          // Save to backend
+                          const currentAssumptions = scenario?.assumptions as Record<string, unknown> || {};
+                          updateScenario.mutate({
+                            id,
+                            data: { assumptions: { ...currentAssumptions, rampEnabled: newVal } } as Partial<Scenario>,
+                          });
+                          if (newVal) {
+                            // Recompute ramp and invalidate calculator
+                            await api.post(`/scenarios/${id}/recompute-ramp`, {});
+                            queryClient.invalidateQueries({ queryKey: scenarioKeys.allocations(id) });
+                            queryClient.invalidateQueries({ queryKey: scenarioKeys.calculator(id) });
+                          }
+                        }
+                      }}
+                      className={`toggle-btn ${assumptions.rampEnabled ? 'active' : ''}`}
+                      style={{
+                        padding: '2px 12px',
+                        borderRadius: '12px',
+                        border: '1px solid',
+                        borderColor: assumptions.rampEnabled ? 'var(--accent-500, #3b82f6)' : 'var(--surface-300, #d1d5db)',
+                        backgroundColor: assumptions.rampEnabled ? 'var(--accent-500, #3b82f6)' : 'transparent',
+                        color: assumptions.rampEnabled ? '#fff' : 'inherit',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {assumptions.rampEnabled ? 'On' : 'Off'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1979,6 +2056,7 @@ export function ScenarioPlanner() {
                         <th>Start</th>
                         <th>End</th>
                         <th>% Allocation</th>
+                        {assumptions.rampEnabled && <th>Ramp</th>}
                         <th>Status</th>
                         <th>Actions</th>
                       </tr>
@@ -2065,6 +2143,19 @@ export function ScenarioPlanner() {
                                 </div>
                               </div>
                             </td>
+                            {assumptions.rampEnabled && (
+                              <td>
+                                <span className={`text-xs font-mono font-medium ${
+                                  (allocation.rampModifier ?? 1) < 0.75 ? 'text-red-600' :
+                                  (allocation.rampModifier ?? 1) < 0.90 ? 'text-amber-600' :
+                                  'text-green-600'
+                                }`}>
+                                  {allocation.rampModifier !== undefined
+                                    ? `${Math.round(allocation.rampModifier * 100)}%`
+                                    : '100%'}
+                                </span>
+                              </td>
+                            )}
                             <td>
                               {allocation.isOverallocated && (
                                 <span className="overallocation-warning" title="Employee is overallocated">

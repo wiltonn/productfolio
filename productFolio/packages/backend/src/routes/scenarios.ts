@@ -19,6 +19,7 @@ import { allocationService } from '../services/allocation.service.js';
 import { scenarioCalculatorService } from '../services/scenario-calculator.service.js';
 import { baselineService } from '../services/baseline.service.js';
 import { deltaEngineService } from '../services/delta-engine.service.js';
+import { rampService } from '../services/ramp.service.js';
 
 const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
 
@@ -237,6 +238,17 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
     '/api/scenarios/:id/calculator/invalidate',
     { preHandler: authorizeScenarioMutation },
     async (request, reply) => {
+      await scenarioCalculatorService.invalidateCache(request.params.id);
+      return reply.code(204).send();
+    }
+  );
+
+  // POST /api/scenarios/:id/recompute-ramp - Recompute ramp modifiers for all allocations
+  fastify.post<{ Params: { id: string } }>(
+    '/api/scenarios/:id/recompute-ramp',
+    { preHandler: authorizeScenarioMutation },
+    async (request, reply) => {
+      await rampService.recomputeScenarioRamp(request.params.id);
       await scenarioCalculatorService.invalidateCache(request.params.id);
       return reply.code(204).send();
     }

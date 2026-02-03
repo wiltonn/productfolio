@@ -11,9 +11,12 @@ import {
   AvailabilityQuerySchema,
   AllocationSummariesQuerySchema,
 } from '../schemas/resources.schema.js';
+import { upsertFamiliaritySchema } from '../schemas/ramp.schema.js';
 import * as resourcesService from '../services/resources.service.js';
 import * as capacityService from '../services/capacity.service.js';
 import { allocationService } from '../services/allocation.service.js';
+import { prisma } from '../lib/prisma.js';
+import { FamiliaritySource } from '@prisma/client';
 
 // ============================================================================
 // Employee Routes
@@ -255,6 +258,67 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
         query.endDate
       );
       return reply.status(200).send({ availability });
+    }
+  );
+
+  // =========================================================================
+  // Domain Familiarity Routes
+  // =========================================================================
+
+  // GET /api/employees/:id/domain-familiarity - List all familiarity for employee
+  fastify.get<{ Params: { id: string } }>(
+    '/api/employees/:id/domain-familiarity',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const records = await prisma.employeeDomainFamiliarity.findMany({
+        where: { employeeId: id },
+        include: {
+          initiative: { select: { id: true, title: true, domainComplexity: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      return reply.status(200).send(records);
+    }
+  );
+
+  // PUT /api/employees/:id/domain-familiarity/:initiativeId - Upsert familiarity
+  fastify.put<{ Params: { id: string; initiativeId: string } }>(
+    '/api/employees/:id/domain-familiarity/:initiativeId',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id, initiativeId } = request.params as { id: string; initiativeId: string };
+      const data = upsertFamiliaritySchema.parse(request.body);
+      const record = await prisma.employeeDomainFamiliarity.upsert({
+        where: {
+          employeeId_initiativeId: { employeeId: id, initiativeId },
+        },
+        create: {
+          employeeId: id,
+          initiativeId,
+          familiarityLevel: data.familiarityLevel,
+          source: data.source as FamiliaritySource,
+        },
+        update: {
+          familiarityLevel: data.familiarityLevel,
+          source: data.source as FamiliaritySource,
+        },
+      });
+      return reply.status(200).send(record);
+    }
+  );
+
+  // GET /api/initiatives/:id/domain-familiarity - List all employee familiarities for initiative
+  fastify.get<{ Params: { id: string } }>(
+    '/api/initiatives/:id/domain-familiarity',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { id } = request.params as { id: string };
+      const records = await prisma.employeeDomainFamiliarity.findMany({
+        where: { initiativeId: id },
+        include: {
+          employee: { select: { id: true, name: true, role: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      return reply.status(200).send(records);
     }
   );
 }
