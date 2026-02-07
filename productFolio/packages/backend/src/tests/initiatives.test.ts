@@ -33,6 +33,9 @@ vi.mock('../lib/prisma.js', () => ({
     user: {
       findUnique: vi.fn(),
     },
+    initiativeStatusLog: {
+      create: vi.fn(),
+    },
   },
 }));
 

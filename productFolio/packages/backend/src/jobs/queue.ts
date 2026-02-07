@@ -16,6 +16,7 @@ export const QUEUE_NAMES = {
   VIEW_REFRESH: 'view-refresh',
   DRIFT_CHECK: 'drift-check',
   JIRA_SYNC: 'jira-sync',
+  STATUS_LOG_BACKFILL: 'status-log-backfill',
 } as const;
 
 // Job data types
@@ -51,12 +52,18 @@ export interface JiraSyncJobData {
   triggeredBy: 'scheduled' | 'manual';
 }
 
+export interface StatusLogBackfillJobData {
+  batchSize?: number;
+  triggeredBy: 'manual';
+}
+
 // Queue instances (lazy initialization)
 let scenarioRecomputeQueue: Queue<ScenarioRecomputeJobData> | null = null;
 let csvImportQueue: Queue<CsvImportJobData> | null = null;
 let viewRefreshQueue: Queue<ViewRefreshJobData> | null = null;
 let driftCheckQueue: Queue<DriftCheckJobData> | null = null;
 let jiraSyncQueue: Queue<JiraSyncJobData> | null = null;
+let statusLogBackfillQueue: Queue<StatusLogBackfillJobData> | null = null;
 
 /**
  * Get or create the scenario recompute queue
@@ -188,6 +195,30 @@ export function getJiraSyncQueue(): Queue<JiraSyncJobData> {
 }
 
 /**
+ * Get or create the status log backfill queue
+ */
+export function getStatusLogBackfillQueue(): Queue<StatusLogBackfillJobData> {
+  if (!statusLogBackfillQueue) {
+    statusLogBackfillQueue = new Queue<StatusLogBackfillJobData>(
+      QUEUE_NAMES.STATUS_LOG_BACKFILL,
+      {
+        connection: redisConnection,
+        defaultJobOptions: {
+          attempts: 1, // One-time backfill should not retry automatically
+          removeOnComplete: {
+            age: 7 * 24 * 3600, // Keep for 7 days for audit
+          },
+          removeOnFail: {
+            age: 7 * 24 * 3600,
+          },
+        },
+      }
+    );
+  }
+  return statusLogBackfillQueue;
+}
+
+/**
  * Close all queue connections
  */
 export async function closeQueues(): Promise<void> {
@@ -216,6 +247,11 @@ export async function closeQueues(): Promise<void> {
   if (jiraSyncQueue) {
     closePromises.push(jiraSyncQueue.close());
     jiraSyncQueue = null;
+  }
+
+  if (statusLogBackfillQueue) {
+    closePromises.push(statusLogBackfillQueue.close());
+    statusLogBackfillQueue = null;
   }
 
   await Promise.all(closePromises);
@@ -344,6 +380,28 @@ export async function enqueueJiraSync(
     jobId,
     delay: 500, // Small debounce
   });
+
+  return job.id ?? null;
+}
+
+/**
+ * Helper to enqueue a status log backfill job
+ */
+export async function enqueueStatusLogBackfill(
+  batchSize?: number
+): Promise<string | null> {
+  const queue = getStatusLogBackfillQueue();
+
+  const job = await queue.add(
+    'status-log-backfill',
+    {
+      batchSize: batchSize ?? 500,
+      triggeredBy: 'manual',
+    },
+    {
+      jobId: 'status-log-backfill-once',
+    }
+  );
 
   return job.id ?? null;
 }

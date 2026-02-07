@@ -11,6 +11,7 @@ import {
   InitiativeAllocationHoursQuerySchema,
 } from '../schemas/initiatives.schema.js';
 import * as initiativesService from '../services/initiatives.service.js';
+import * as statusLogService from '../services/initiative-status-log.service.js';
 import { allocationService } from '../services/allocation.service.js';
 import { enqueueCsvImport } from '../jobs/index.js';
 
@@ -168,9 +169,21 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
     const validatedData = StatusTransitionSchema.parse(request.body);
     const initiative = await initiativesService.transitionStatus(
       request.params.id,
-      validatedData.newStatus
+      validatedData.newStatus,
+      request.user.sub
     );
     return reply.send(initiative);
+  });
+
+  /**
+   * GET /api/initiatives/:id/status-history
+   * Get the full status transition history for an initiative
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>('/api/initiatives/:id/status-history', async (request, reply) => {
+    const history = await statusLogService.getHistory(request.params.id);
+    return reply.send(history);
   });
 
   /**

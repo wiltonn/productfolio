@@ -475,6 +475,31 @@ async function main() {
     console.log('Created default global drift threshold (5% capacity, 10% demand)');
   }
 
+  // ============================================================================
+  // FEATURE FLAGS
+  // ============================================================================
+
+  const featureFlags = [
+    { key: 'org_capacity_view', description: 'Enable the Org Capacity page for org-scoped supply/demand views' },
+    { key: 'job_profiles', description: 'Enable Job Profiles management and employee assignment' },
+    { key: 'flow_forecast_v1', description: 'Enable Flow Forecast page (Mode A: scope-based forecasting)' },
+    { key: 'forecast_mode_b', description: 'Enable Mode B: empirical forecasting based on historical throughput' },
+  ];
+
+  for (const flag of featureFlags) {
+    const existing = await prisma.featureFlag.findUnique({ where: { key: flag.key } });
+    if (!existing) {
+      await prisma.featureFlag.create({
+        data: {
+          key: flag.key,
+          enabled: false,
+          description: flag.description,
+        },
+      });
+      console.log(`Created feature flag: ${flag.key} (disabled)`);
+    }
+  }
+
   console.log('Seeding complete!');
 }
 

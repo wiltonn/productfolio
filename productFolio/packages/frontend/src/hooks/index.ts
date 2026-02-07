@@ -141,6 +141,47 @@ export {
   intakeKeys,
 } from './useIntake';
 
+// Feature flag hooks
+export {
+  useFeatureFlags,
+  useFeatureFlag,
+  useUpdateFeatureFlag,
+  featureFlagKeys,
+  type FeatureFlag,
+} from './useFeatureFlags';
+
+// Job profile hooks
+export {
+  useJobProfiles,
+  useJobProfile,
+  useCreateJobProfile,
+  useUpdateJobProfile,
+  useDeleteJobProfile,
+  useAssignJobProfile,
+  jobProfileKeys,
+  type JobProfile,
+  type JobProfileSkill,
+  type CostBand,
+  type JobProfileFilters,
+} from './useJobProfiles';
+
+// Org capacity hooks
+export {
+  useOrgCapacity,
+  useOrgNodeEmployees,
+  orgCapacityKeys,
+} from './useOrgCapacity';
+
+// Forecast hooks
+export {
+  useRunScopeBasedForecast,
+  useRunEmpiricalForecast,
+  useDataQuality,
+  useForecastRuns,
+  useForecastRun,
+  forecastKeys,
+} from './useForecast';
+
 // Types from central types file
 export type {
   Initiative,

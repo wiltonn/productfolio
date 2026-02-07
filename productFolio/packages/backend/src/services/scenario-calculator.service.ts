@@ -21,6 +21,7 @@ import type {
   PeriodInfo,
 } from '../types/index.js';
 import { InitiativeStatus } from '@prisma/client';
+import { getEmployeesInSubtree } from './org-tree.service.js';
 
 const DEFAULT_HOURS_PER_PERIOD = 520; // 40 hours/week * 13 weeks (quarter default)
 
@@ -32,11 +33,14 @@ export class ScenarioCalculatorService {
     scenarioId: string,
     options: CalculatorOptions = {}
   ): Promise<CalculatorResult> {
-    const { skipCache = false, includeBreakdown = true } = options;
+    const { skipCache = false, includeBreakdown = true, orgNodeId } = options;
+
+    // Cache key includes orgNodeId when present
+    const cacheKeySuffix = orgNodeId ? `${scenarioId}:org:${orgNodeId}` : scenarioId;
 
     // Check cache first (unless skipCache is true)
     if (!skipCache) {
-      const cacheKey = CACHE_KEYS.scenarioCalculation(scenarioId);
+      const cacheKey = CACHE_KEYS.scenarioCalculation(cacheKeySuffix);
       const cached = await getCachedData<CalculatorResult>(cacheKey);
       if (cached) {
         return {
@@ -77,6 +81,15 @@ export class ScenarioCalculatorService {
 
     if (!scenario) {
       throw new NotFoundError('Scenario', scenarioId);
+    }
+
+    // Filter allocations to org subtree when orgNodeId is provided
+    if (orgNodeId) {
+      const employeeIds = await getEmployeesInSubtree(orgNodeId);
+      const employeeIdSet = new Set(employeeIds);
+      scenario.allocations = scenario.allocations.filter(
+        (a) => employeeIdSet.has(a.employeeId)
+      );
     }
 
     const assumptions = this.parseAssumptions(scenario.assumptions);
@@ -151,7 +164,7 @@ export class ScenarioCalculatorService {
     };
 
     // Cache the result
-    const cacheKey = CACHE_KEYS.scenarioCalculation(scenarioId);
+    const cacheKey = CACHE_KEYS.scenarioCalculation(cacheKeySuffix);
     await setCachedData(cacheKey, result, CACHE_TTL.CALCULATION);
 
     return result;

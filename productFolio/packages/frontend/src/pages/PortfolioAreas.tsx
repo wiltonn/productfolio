@@ -63,12 +63,12 @@ function PortfolioAreaModal({
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="px-4 py-2 text-sm text-surface-600" onClick={onClose}>
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+            className="btn-primary"
             disabled={isPending || !name.trim()}
           >
             {isPending ? (isEdit ? 'Saving...' : 'Creating...') : isEdit ? 'Save' : 'Create'}
@@ -108,11 +108,11 @@ function DeleteConfirmModal({
           </div>
         )}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="px-4 py-2 text-sm text-surface-600" onClick={onClose}>
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
           <button
-            className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+            className="btn-danger"
             onClick={handleDelete}
             disabled={deleteArea.isPending}
           >
@@ -148,7 +148,7 @@ export function PortfolioAreas() {
             </p>
           </div>
           <button
-            className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+            className="btn-primary"
             onClick={() => setShowCreateModal(true)}
           >
             + Add Portfolio Area
@@ -187,7 +187,7 @@ export function PortfolioAreas() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        className="text-xs text-primary-600 hover:text-primary-700 mr-3"
+                        className="px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 rounded transition-colors mr-2"
                         onClick={() => setEditArea(area)}
                       >
                         Edit

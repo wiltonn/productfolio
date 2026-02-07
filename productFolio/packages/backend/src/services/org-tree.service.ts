@@ -501,3 +501,40 @@ export async function getCoverageReport() {
     nodesWithoutPolicies,
   };
 }
+
+// ============================================================================
+// Org-Scoped Employee Lookup
+// ============================================================================
+
+/**
+ * Get all employee IDs within an org subtree (the node itself + all descendants).
+ * Uses active OrgMemberships to find employees assigned to those nodes.
+ */
+export async function getEmployeesInSubtree(nodeId: string): Promise<string[]> {
+  const node = await prisma.orgNode.findUnique({ where: { id: nodeId } });
+  if (!node) throw new NotFoundError('OrgNode', nodeId);
+
+  // Get all descendant nodes
+  const descendants = await prisma.orgNode.findMany({
+    where: {
+      path: { startsWith: node.path },
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  const nodeIds = descendants.map((n) => n.id);
+
+  // Find all active memberships in those nodes
+  const memberships = await prisma.orgMembership.findMany({
+    where: {
+      orgNodeId: { in: nodeIds },
+      effectiveEnd: null, // active memberships only
+    },
+    select: { employeeId: true },
+  });
+
+  // Deduplicate (an employee could be in multiple nodes)
+  const employeeIds = [...new Set(memberships.map((m) => m.employeeId))];
+  return employeeIds;
+}

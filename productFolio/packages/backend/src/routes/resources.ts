@@ -17,6 +17,9 @@ import * as capacityService from '../services/capacity.service.js';
 import { allocationService } from '../services/allocation.service.js';
 import { prisma } from '../lib/prisma.js';
 import { FamiliaritySource } from '@prisma/client';
+import { z } from 'zod';
+import { isEnabled } from '../services/feature-flag.service.js';
+import { NotFoundError } from '../lib/errors.js';
 
 // ============================================================================
 // Employee Routes
@@ -319,6 +322,50 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
         orderBy: { updatedAt: 'desc' },
       });
       return reply.status(200).send(records);
+    }
+  );
+
+  // =========================================================================
+  // Job Profile Assignment (guarded by job_profiles feature flag)
+  // =========================================================================
+
+  const AssignJobProfileSchema = z.object({
+    jobProfileId: z.string().uuid().nullable(),
+  });
+
+  // PUT /api/employees/:id/job-profile - Assign or remove job profile
+  fastify.put<{ Params: { id: string } }>(
+    '/api/employees/:id/job-profile',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const enabled = await isEnabled('job_profiles');
+      if (!enabled) {
+        throw new NotFoundError('Resource');
+      }
+
+      const { id } = request.params as { id: string };
+      const { jobProfileId } = AssignJobProfileSchema.parse(request.body);
+
+      const employee = await prisma.employee.findUnique({ where: { id } });
+      if (!employee) {
+        throw new NotFoundError('Employee', id);
+      }
+
+      if (jobProfileId) {
+        const profile = await prisma.jobProfile.findUnique({ where: { id: jobProfileId } });
+        if (!profile) {
+          throw new NotFoundError('JobProfile', jobProfileId);
+        }
+      }
+
+      const updated = await prisma.employee.update({
+        where: { id },
+        data: { jobProfileId },
+        include: {
+          jobProfile: { include: { skills: true, costBand: true } },
+        },
+      });
+
+      return reply.status(200).send(updated);
     }
   );
 }

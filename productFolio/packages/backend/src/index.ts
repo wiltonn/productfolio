@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import 'dotenv/config';
 import { registerErrorHandler } from './lib/error-handler.js';
 import authPlugin from './plugins/auth.plugin.js';
+import featureFlagPlugin from './plugins/feature-flag.plugin.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
 import { initiativesRoutes } from './routes/initiatives.js';
@@ -20,6 +21,9 @@ import { portfolioAreasRoutes } from './routes/portfolio-areas.js';
 import { jiraIntegrationRoutes } from './routes/jira-integration.js';
 import { intakeRoutes } from './routes/intake.js';
 import { intakeRequestRoutes } from './routes/intake-requests.js';
+import { featureFlagsRoutes } from './routes/feature-flags.js';
+import { jobProfilesRoutes } from './routes/job-profiles.js';
+import { forecastRoutes } from './routes/forecast.js';
 import { getWorkerStatus } from './jobs/index.js';
 import { validateJiraConfig } from './lib/config/jira.js';
 
@@ -38,6 +42,9 @@ await fastify.register(cookie);
 
 // Auth plugin (JWT + decorators)
 await fastify.register(authPlugin);
+
+// Feature flag plugin (requireFeature decorator)
+await fastify.register(featureFlagPlugin);
 
 registerErrorHandler(fastify);
 
@@ -77,6 +84,9 @@ await fastify.register(portfolioAreasRoutes);
 await fastify.register(jiraIntegrationRoutes);
 await fastify.register(intakeRoutes);
 await fastify.register(intakeRequestRoutes);
+await fastify.register(featureFlagsRoutes);
+await fastify.register(jobProfilesRoutes);
+await fastify.register(forecastRoutes);
 
 const start = async () => {
   try {

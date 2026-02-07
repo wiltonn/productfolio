@@ -5,6 +5,7 @@ import {
   getCsvImportQueue,
   getViewRefreshQueue,
   QUEUE_NAMES,
+  enqueueStatusLogBackfill,
 } from '../jobs/index.js';
 
 export async function jobsRoutes(fastify: FastifyInstance) {
@@ -191,5 +192,26 @@ export async function jobsRoutes(fastify: FastifyInstance) {
     await job.remove();
 
     return reply.send({ success: true, message: 'Job removed' });
+  });
+
+  /**
+   * POST /api/jobs/backfill-status-logs
+   * Trigger a one-time backfill of InitiativeStatusLog from AuditEvent records
+   */
+  fastify.post<{
+    Body: { batchSize?: number };
+  }>('/api/jobs/backfill-status-logs', async (request, reply) => {
+    const batchSize = (request.body as any)?.batchSize;
+    const jobId = await enqueueStatusLogBackfill(batchSize);
+
+    if (!jobId) {
+      return reply.status(500).send({ error: 'Failed to enqueue backfill job' });
+    }
+
+    return reply.status(202).send({
+      message: 'Status log backfill job queued',
+      jobId,
+      queue: QUEUE_NAMES.STATUS_LOG_BACKFILL,
+    });
   });
 }

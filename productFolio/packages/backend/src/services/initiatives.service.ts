@@ -20,6 +20,7 @@ import type {
   CsvImportResult,
   BulkUpdateResult,
 } from '../types/index.js';
+import { logTransition } from './initiative-status-log.service.js';
 
 /**
  * List initiatives with filtering and pagination
@@ -336,7 +337,7 @@ export async function deleteInitiative(id: string) {
 /**
  * Transition initiative status
  */
-export async function transitionStatus(id: string, newStatus: InitiativeStatus) {
+export async function transitionStatus(id: string, newStatus: InitiativeStatus, actorId?: string) {
   const initiative = await prisma.initiative.findUnique({
     where: { id },
   });
@@ -364,6 +365,9 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus) 
       productLeader: true,
     },
   });
+
+  // Log the status transition for cycle-time analytics and Mode B forecasting
+  await logTransition(id, initiative.status, newStatus, actorId);
 
   return updated;
 }

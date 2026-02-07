@@ -46,7 +46,7 @@ function ChainSteps({ chain, currentLevel }: { chain: ChainStep[]; currentLevel:
             <div
               className={`px-3 py-1.5 rounded text-xs border ${
                 isActive
-                  ? 'bg-primary-50 border-primary-300 text-primary-700'
+                  ? 'bg-accent-50 border-accent-300 text-accent-700'
                   : isPast
                     ? 'bg-green-50 border-green-300 text-green-700'
                     : 'bg-surface-50 border-surface-200 text-surface-500'
@@ -284,7 +284,7 @@ export function Approvals() {
               key={tab.key}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? 'text-primary-600 border-primary-600'
+                  ? 'text-accent-600 border-accent-600'
                   : 'text-surface-500 border-transparent hover:text-surface-700'
               }`}
               onClick={() => setActiveTab(tab.key)}
@@ -294,7 +294,7 @@ export function Approvals() {
                 <span
                   className={`ml-2 px-1.5 py-0.5 text-xs rounded-full ${
                     activeTab === tab.key
-                      ? 'bg-primary-100 text-primary-700'
+                      ? 'bg-accent-100 text-accent-700'
                       : 'bg-surface-100 text-surface-500'
                   }`}
                 >

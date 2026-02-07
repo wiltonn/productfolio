@@ -108,6 +108,52 @@ enum InitiativeOrigin {
   LEGACY
 }
 
+enum OrgNodeType {
+  ROOT
+  DIVISION
+  DEPARTMENT
+  TEAM
+  VIRTUAL
+}
+
+enum ApprovalScope {
+  RESOURCE_ALLOCATION
+  INITIATIVE
+  SCENARIO
+}
+
+enum ApprovalRuleType {
+  NODE_MANAGER
+  SPECIFIC_PERSON
+  ROLE_BASED
+  ANCESTOR_MANAGER
+  COMMITTEE
+  FALLBACK_ADMIN
+}
+
+enum CrossBuStrategy {
+  COMMON_ANCESTOR
+  ALL_BRANCHES
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum ApprovalDecisionType {
+  APPROVED
+  REJECTED
+}
+
+enum ForecastMode {
+  SCOPE_BASED
+  EMPIRICAL
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -125,14 +171,19 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  ownedInitiatives      Initiative[]     @relation("BusinessOwner")
-  managedInitiatives    Initiative[]     @relation("ProductOwner")
-  ledInitiatives        Initiative[]     @relation("ProductLeader")
-  approvals             Approval[]
-  refreshTokens         RefreshToken[]
-  jiraConnections       JiraConnection[]
-  intakeRequestsCreated IntakeRequest[]  @relation("IntakeRequester")
-  intakeRequestsSponsored IntakeRequest[] @relation("IntakeSponsor")
+  ownedInitiatives        Initiative[]         @relation("BusinessOwner")
+  managedInitiatives      Initiative[]         @relation("ProductOwner")
+  ledInitiatives          Initiative[]         @relation("ProductLeader")
+  approvals               Approval[]
+  refreshTokens           RefreshToken[]
+  jiraConnections         JiraConnection[]
+  intakeRequestsCreated   IntakeRequest[]      @relation("IntakeRequester")
+  intakeRequestsSponsored IntakeRequest[]      @relation("IntakeSponsor")
+  auditEvents             AuditEvent[]
+  approvalRequests        ApprovalRequest[]
+  approvalDecisions       ApprovalDecision[]
+  delegationsGiven        ApprovalDelegation[] @relation("Delegator")
+  delegationsReceived     ApprovalDelegation[] @relation("Delegate")
 
   @@index([email])
   @@index([role])
@@ -141,7 +192,7 @@ model User {
 model RefreshToken {
   id        String    @id @default(uuid()) @db.Uuid
   token     String    @unique @db.VarChar(512)
-  userId    String    @db.Uuid @map("user_id")
+  userId    String    @map("user_id") @db.Uuid
   expiresAt DateTime  @map("expires_at")
   createdAt DateTime  @default(now()) @map("created_at")
   revokedAt DateTime? @map("revoked_at")
@@ -161,28 +212,28 @@ model RefreshToken {
 model Period {
   id        String     @id @default(uuid()) @db.Uuid
   type      PeriodType
-  startDate DateTime   @db.Date @map("start_date")
-  endDate   DateTime   @db.Date @map("end_date")
-  label     String     // "2024-Q1", "2024-01", "2024-W01"
+  startDate DateTime   @map("start_date") @db.Date
+  endDate   DateTime   @map("end_date") @db.Date
+  label     String // "2024-Q1", "2024-01", "2024-W01"
   year      Int
-  ordinal   Int        // Q: 1-4, M: 1-12, W: 1-53
+  ordinal   Int // Q: 1-4, M: 1-12, W: 1-53
 
-  parentId  String?    @db.Uuid @map("parent_id")
-  parent    Period?    @relation("PeriodHierarchy", fields: [parentId], references: [id])
-  children  Period[]   @relation("PeriodHierarchy")
+  parentId String?  @map("parent_id") @db.Uuid
+  parent   Period?  @relation("PeriodHierarchy", fields: [parentId], references: [id])
+  children Period[] @relation("PeriodHierarchy")
 
-  createdAt DateTime   @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   // Relations to other models
-  targetedInitiatives            Initiative[]
-  capacityCalendars              CapacityCalendar[]
-  scenarios                      Scenario[]
-  allocationPeriods              AllocationPeriod[]
-  scopeItemPeriodDistributions   ScopeItemPeriodDistribution[]
-  activeStartEmployees           Employee[] @relation("ActiveStartPeriod")
-  activeEndEmployees             Employee[] @relation("ActiveEndPeriod")
-  freezePolicy                   FreezePolicy?
-  driftAlerts                    DriftAlert[]
+  targetedInitiatives          Initiative[]
+  capacityCalendars            CapacityCalendar[]
+  scenarios                    Scenario[]
+  allocationPeriods            AllocationPeriod[]
+  scopeItemPeriodDistributions ScopeItemPeriodDistribution[]
+  activeStartEmployees         Employee[]                    @relation("ActiveStartPeriod")
+  activeEndEmployees           Employee[]                    @relation("ActiveEndPeriod")
+  freezePolicy                 FreezePolicy?
+  driftAlerts                  DriftAlert[]
 
   @@unique([type, year, ordinal])
   @@index([type])
@@ -216,36 +267,37 @@ model PortfolioArea {
 // ============================================================================
 
 model Initiative {
-  id              String           @id @default(uuid()) @db.Uuid
-  title           String
-  description     String?          @db.Text
-  businessOwnerId String           @db.Uuid
-  productOwnerId  String           @db.Uuid
-  portfolioAreaId String?          @db.Uuid @map("portfolio_area_id")
-  productLeaderId String?          @db.Uuid @map("product_leader_id")
-  status          InitiativeStatus @default(PROPOSED)
-  origin          InitiativeOrigin @default(LEGACY)
-  targetQuarter   String?
-  deliveryHealth  DeliveryHealth?
-  targetPeriodId  String?          @db.Uuid @map("target_period_id")
-  customFields    Json?            @db.JsonB
+  id               String           @id @default(uuid()) @db.Uuid
+  title            String
+  description      String?          @db.Text
+  businessOwnerId  String           @db.Uuid
+  productOwnerId   String           @db.Uuid
+  portfolioAreaId  String?          @map("portfolio_area_id") @db.Uuid
+  productLeaderId  String?          @map("product_leader_id") @db.Uuid
+  status           InitiativeStatus @default(PROPOSED)
+  origin           InitiativeOrigin @default(LEGACY)
+  targetQuarter    String?
+  deliveryHealth   DeliveryHealth?
+  targetPeriodId   String?          @map("target_period_id") @db.Uuid
+  customFields     Json?            @db.JsonB
   domainComplexity DomainComplexity @default(MEDIUM) @map("domain_complexity")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  businessOwner User           @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
-  productOwner  User           @relation("ProductOwner", fields: [productOwnerId], references: [id])
-  portfolioArea PortfolioArea? @relation(fields: [portfolioAreaId], references: [id])
-  productLeader User?          @relation("ProductLeader", fields: [productLeaderId], references: [id])
-  targetPeriod  Period?        @relation(fields: [targetPeriodId], references: [id])
-  scopeItems    ScopeItem[]
-  approvals     Approval[]
-  allocations    Allocation[]
-  intakeItems    IntakeItem[]
-  intakeRequest  IntakeRequest?
-  domainFamiliarity  EmployeeDomainFamiliarity[]
+  businessOwner     User                        @relation("BusinessOwner", fields: [businessOwnerId], references: [id])
+  productOwner      User                        @relation("ProductOwner", fields: [productOwnerId], references: [id])
+  portfolioArea     PortfolioArea?              @relation(fields: [portfolioAreaId], references: [id])
+  productLeader     User?                       @relation("ProductLeader", fields: [productLeaderId], references: [id])
+  targetPeriod      Period?                     @relation(fields: [targetPeriodId], references: [id])
+  scopeItems        ScopeItem[]
+  approvals         Approval[]
+  allocations       Allocation[]
+  intakeItems       IntakeItem[]
+  intakeRequest     IntakeRequest?
+  domainFamiliarity EmployeeDomainFamiliarity[]
+  statusLogs        InitiativeStatusLog[]
 
   @@index([businessOwnerId])
   @@index([productOwnerId])
@@ -258,13 +310,13 @@ model Initiative {
 }
 
 model ScopeItem {
-  id                  String @id @default(uuid()) @db.Uuid
-  initiativeId        String @db.Uuid
-  name                String
-  description         String? @db.Text
-  skillDemand         Json?  @db.JsonB // e.g., { "frontend": 2, "backend": 3 }
-  estimateP50         Float? // 50th percentile estimate in hours
-  estimateP90         Float? // 90th percentile estimate in hours
+  id           String  @id @default(uuid()) @db.Uuid
+  initiativeId String  @db.Uuid
+  name         String
+  description  String? @db.Text
+  skillDemand  Json?   @db.JsonB // e.g., { "frontend": 2, "backend": 3 }
+  estimateP50  Float? // 50th percentile estimate in hours
+  estimateP90  Float? // 90th percentile estimate in hours
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -277,12 +329,12 @@ model ScopeItem {
 }
 
 model ScopeItemPeriodDistribution {
-  scopeItemId  String @db.Uuid @map("scope_item_id")
-  periodId     String @db.Uuid @map("period_id")
-  distribution Float  // 0.0-1.0
+  scopeItemId  String @map("scope_item_id") @db.Uuid
+  periodId     String @map("period_id") @db.Uuid
+  distribution Float // 0.0-1.0
 
-  scopeItem    ScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
-  period       Period    @relation(fields: [periodId], references: [id])
+  scopeItem ScopeItem @relation(fields: [scopeItemId], references: [id], onDelete: Cascade)
+  period    Period    @relation(fields: [periodId], references: [id])
 
   @@id([scopeItemId, periodId])
   @@index([periodId])
@@ -311,34 +363,39 @@ model Approval {
 // ============================================================================
 
 model Employee {
-  id                   String         @id @default(uuid()) @db.Uuid
-  name                 String
-  role                 String
-  managerId            String?        @db.Uuid
-  employmentType       EmploymentType @default(FULL_TIME)
-  hoursPerWeek         Float          @default(40)
-  activeStart          DateTime       @default(now())
-  activeEnd            DateTime?
-  activeStartPeriodId  String?        @db.Uuid @map("active_start_period_id")
-  activeEndPeriodId    String?        @db.Uuid @map("active_end_period_id")
+  id                  String         @id @default(uuid()) @db.Uuid
+  name                String
+  role                String
+  managerId           String?        @db.Uuid
+  employmentType      EmploymentType @default(FULL_TIME)
+  hoursPerWeek        Float          @default(40)
+  activeStart         DateTime       @default(now())
+  activeEnd           DateTime?
+  activeStartPeriodId String?        @map("active_start_period_id") @db.Uuid
+  activeEndPeriodId   String?        @map("active_end_period_id") @db.Uuid
+  jobProfileId        String?        @map("job_profile_id") @db.Uuid
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  manager            Employee?          @relation("EmployeeManager", fields: [managerId], references: [id])
-  directReports      Employee[]         @relation("EmployeeManager")
-  activeStartPeriod  Period?            @relation("ActiveStartPeriod", fields: [activeStartPeriodId], references: [id])
-  activeEndPeriod    Period?            @relation("ActiveEndPeriod", fields: [activeEndPeriodId], references: [id])
-  skills             Skill[]
-  domains            Domain[]
-  capacityCalendar   CapacityCalendar[]
-  allocations        Allocation[]
-  domainFamiliarity  EmployeeDomainFamiliarity[]
+  manager           Employee?                   @relation("EmployeeManager", fields: [managerId], references: [id])
+  directReports     Employee[]                  @relation("EmployeeManager")
+  activeStartPeriod Period?                     @relation("ActiveStartPeriod", fields: [activeStartPeriodId], references: [id])
+  activeEndPeriod   Period?                     @relation("ActiveEndPeriod", fields: [activeEndPeriodId], references: [id])
+  skills            Skill[]
+  domains           Domain[]
+  capacityCalendar  CapacityCalendar[]
+  allocations       Allocation[]
+  domainFamiliarity EmployeeDomainFamiliarity[]
+  orgMemberships    OrgMembership[]
+  managedOrgNodes   OrgNode[]
+  jobProfile        JobProfile?                 @relation(fields: [jobProfileId], references: [id])
 
   @@index([managerId])
   @@index([employmentType])
   @@index([activeStart, activeEnd])
+  @@index([jobProfileId])
 }
 
 model Skill {
@@ -377,7 +434,7 @@ model Domain {
 
 model CapacityCalendar {
   employeeId     String @db.Uuid
-  periodId       String @db.Uuid @map("period_id")
+  periodId       String @map("period_id") @db.Uuid
   hoursAvailable Float
 
   createdAt DateTime @default(now())
@@ -396,31 +453,31 @@ model CapacityCalendar {
 // ============================================================================
 
 model Scenario {
-  id                    String          @id @default(uuid()) @db.Uuid
-  name                  String
-  periodId              String          @db.Uuid @map("period_id")
-  status                ScenarioStatus  @default(DRAFT)
-  isPrimary             Boolean         @default(false) @map("is_primary")
-  planLockDate          DateTime?       @map("plan_lock_date")
-  assumptions           Json?           @db.JsonB
-  priorityRankings      Json?           @db.JsonB
-  version               Int             @default(1)
-  scenarioType          ScenarioType    @default(WHAT_IF) @map("scenario_type")
-  revisionOfScenarioId  String?         @db.Uuid @map("revision_of_scenario_id")
-  revisionReason        RevisionReason? @map("revision_reason")
-  changeLog             String?         @db.Text @map("change_log")
-  needsReconciliation   Boolean         @default(false) @map("needs_reconciliation")
+  id                   String          @id @default(uuid()) @db.Uuid
+  name                 String
+  periodId             String          @map("period_id") @db.Uuid
+  status               ScenarioStatus  @default(DRAFT)
+  isPrimary            Boolean         @default(false) @map("is_primary")
+  planLockDate         DateTime?       @map("plan_lock_date")
+  assumptions          Json?           @db.JsonB
+  priorityRankings     Json?           @db.JsonB
+  version              Int             @default(1)
+  scenarioType         ScenarioType    @default(WHAT_IF) @map("scenario_type")
+  revisionOfScenarioId String?         @map("revision_of_scenario_id") @db.Uuid
+  revisionReason       RevisionReason? @map("revision_reason")
+  changeLog            String?         @map("change_log") @db.Text
+  needsReconciliation  Boolean         @default(false) @map("needs_reconciliation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  period              Period            @relation(fields: [periodId], references: [id])
-  allocations         Allocation[]
-  revisionOfScenario  Scenario?         @relation("ScenarioRevisions", fields: [revisionOfScenarioId], references: [id])
-  revisions           Scenario[]        @relation("ScenarioRevisions")
-  baselineSnapshot    BaselineSnapshot?
-  driftAlerts         DriftAlert[]
+  period             Period            @relation(fields: [periodId], references: [id])
+  allocations        Allocation[]
+  revisionOfScenario Scenario?         @relation("ScenarioRevisions", fields: [revisionOfScenarioId], references: [id])
+  revisions          Scenario[]        @relation("ScenarioRevisions")
+  baselineSnapshot   BaselineSnapshot?
+  driftAlerts        DriftAlert[]
 
   @@index([name])
   @@index([periodId])
@@ -457,15 +514,15 @@ model Allocation {
 }
 
 model AllocationPeriod {
-  allocationId  String @db.Uuid @map("allocation_id")
-  periodId      String @db.Uuid @map("period_id")
+  allocationId  String @map("allocation_id") @db.Uuid
+  periodId      String @map("period_id") @db.Uuid
   hoursInPeriod Float  @map("hours_in_period")
   overlapRatio  Float  @map("overlap_ratio") // 0.0-1.0, for debugging
   rampModifier  Float  @default(1.0) @map("ramp_modifier")
-  rampBreakdown Json?  @db.JsonB @map("ramp_breakdown")
+  rampBreakdown Json?  @map("ramp_breakdown") @db.JsonB
 
-  allocation    Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
-  period        Period     @relation(fields: [periodId], references: [id])
+  allocation Allocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  period     Period     @relation(fields: [periodId], references: [id])
 
   @@id([allocationId, periodId])
   @@index([periodId])
@@ -473,13 +530,13 @@ model AllocationPeriod {
 }
 
 model EmployeeDomainFamiliarity {
-  employeeId          String            @db.Uuid @map("employee_id")
-  initiativeId        String            @db.Uuid @map("initiative_id")
-  familiarityLevel    Float             @default(0.0) @map("familiarity_level")
-  source              FamiliaritySource @default(MANUAL)
-  lastAllocatedPeriodId String?         @db.Uuid @map("last_allocated_period_id")
-  updatedAt           DateTime          @updatedAt @map("updated_at")
-  createdAt           DateTime          @default(now()) @map("created_at")
+  employeeId            String            @map("employee_id") @db.Uuid
+  initiativeId          String            @map("initiative_id") @db.Uuid
+  familiarityLevel      Float             @default(0.0) @map("familiarity_level")
+  source                FamiliaritySource @default(MANUAL)
+  lastAllocatedPeriodId String?           @map("last_allocated_period_id") @db.Uuid
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  createdAt             DateTime          @default(now()) @map("created_at")
 
   employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
@@ -495,12 +552,12 @@ model EmployeeDomainFamiliarity {
 
 model BaselineSnapshot {
   id                 String   @id @default(uuid()) @db.Uuid
-  scenarioId         String   @unique @db.Uuid @map("scenario_id")
+  scenarioId         String   @unique @map("scenario_id") @db.Uuid
   snapshotDate       DateTime @default(now()) @map("snapshot_date")
-  capacitySnapshot   Json     @db.JsonB @map("capacity_snapshot")
-  demandSnapshot     Json     @db.JsonB @map("demand_snapshot")
-  allocationSnapshot Json     @db.JsonB @map("allocation_snapshot")
-  summarySnapshot    Json     @db.JsonB @map("summary_snapshot")
+  capacitySnapshot   Json     @map("capacity_snapshot") @db.JsonB
+  demandSnapshot     Json     @map("demand_snapshot") @db.JsonB
+  allocationSnapshot Json     @map("allocation_snapshot") @db.JsonB
+  summarySnapshot    Json     @map("summary_snapshot") @db.JsonB
   createdAt          DateTime @default(now()) @map("created_at")
 
   scenario Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
@@ -511,7 +568,7 @@ model BaselineSnapshot {
 
 model FreezePolicy {
   id               String   @id @default(uuid()) @db.Uuid
-  periodId         String   @unique @db.Uuid @map("period_id")
+  periodId         String   @unique @map("period_id") @db.Uuid
   changeFreezeDate DateTime @map("change_freeze_date")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
@@ -523,13 +580,13 @@ model FreezePolicy {
 
 model DriftAlert {
   id               String           @id @default(uuid()) @db.Uuid
-  scenarioId       String           @db.Uuid @map("scenario_id")
-  periodId         String           @db.Uuid @map("period_id")
+  scenarioId       String           @map("scenario_id") @db.Uuid
+  periodId         String           @map("period_id") @db.Uuid
   status           DriftAlertStatus @default(ACTIVE)
   capacityDriftPct Float            @map("capacity_drift_pct")
   demandDriftPct   Float            @map("demand_drift_pct")
   netGapDrift      Float            @map("net_gap_drift")
-  driftDetails     Json             @db.JsonB @map("drift_details")
+  driftDetails     Json             @map("drift_details") @db.JsonB
   detectedAt       DateTime         @default(now()) @map("detected_at")
   acknowledgedAt   DateTime?        @map("acknowledged_at")
   resolvedAt       DateTime?        @map("resolved_at")
@@ -550,7 +607,7 @@ model DriftThreshold {
   capacityThresholdPct Float    @default(5.0) @map("capacity_threshold_pct")
   demandThresholdPct   Float    @default(10.0) @map("demand_threshold_pct")
   isGlobal             Boolean  @default(true) @map("is_global")
-  periodId             String?  @db.Uuid @map("period_id")
+  periodId             String?  @map("period_id") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
@@ -595,16 +652,16 @@ enum WriteActionStatus {
 // ============================================================================
 
 model JiraConnection {
-  id                   String   @id @default(uuid()) @db.Uuid
-  userId               String   @db.Uuid @map("user_id")
-  atlassianAccountId   String   @unique @map("atlassian_account_id")
-  accountEmail         String?  @map("account_email")
-  displayName          String?  @map("display_name")
-  encryptedAccessToken String   @db.Text @map("encrypted_access_token")
-  encryptedRefreshToken String  @db.Text @map("encrypted_refresh_token")
-  tokenExpiresAt       DateTime @map("token_expires_at")
-  scopes               String?
-  isActive             Boolean  @default(true) @map("is_active")
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  atlassianAccountId    String   @unique @map("atlassian_account_id")
+  accountEmail          String?  @map("account_email")
+  displayName           String?  @map("display_name")
+  encryptedAccessToken  String   @map("encrypted_access_token") @db.Text
+  encryptedRefreshToken String   @map("encrypted_refresh_token") @db.Text
+  tokenExpiresAt        DateTime @map("token_expires_at")
+  scopes                String?
+  isActive              Boolean  @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -619,7 +676,7 @@ model JiraConnection {
 
 model JiraSite {
   id               String  @id @default(uuid()) @db.Uuid
-  jiraConnectionId String  @db.Uuid @map("jira_connection_id")
+  jiraConnectionId String  @map("jira_connection_id") @db.Uuid
   cloudId          String  @map("cloud_id")
   siteName         String  @map("site_name")
   siteUrl          String  @map("site_url")
@@ -642,7 +699,7 @@ model JiraSite {
 
 model JiraProjectSelection {
   id          String  @id @default(uuid()) @db.Uuid
-  jiraSiteId  String  @db.Uuid @map("jira_site_id")
+  jiraSiteId  String  @map("jira_site_id") @db.Uuid
   projectId   String  @map("project_id")
   projectKey  String  @map("project_key")
   projectName String  @map("project_name")
@@ -663,12 +720,12 @@ model JiraProjectSelection {
 model IntakeItem {
   id                 String           @id @default(uuid()) @db.Uuid
   sourceType         IntakeSourceType @default(JIRA) @map("source_type")
-  jiraSiteId         String           @db.Uuid @map("jira_site_id")
+  jiraSiteId         String           @map("jira_site_id") @db.Uuid
   jiraIssueId        String           @map("jira_issue_id")
   jiraIssueKey       String           @map("jira_issue_key")
   jiraIssueUrl       String?          @map("jira_issue_url")
   summary            String
-  descriptionExcerpt String?          @db.Text @map("description_excerpt")
+  descriptionExcerpt String?          @map("description_excerpt") @db.Text
   issueTypeName      String?          @map("issue_type_name")
   statusName         String?          @map("status_name")
   statusCategory     String?          @map("status_category")
@@ -684,7 +741,7 @@ model IntakeItem {
   itemStatus         IntakeItemStatus @default(ACTIVE) @map("item_status")
 
   // Optional link to an initiative
-  initiativeId String? @db.Uuid @map("initiative_id")
+  initiativeId String? @map("initiative_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -705,18 +762,18 @@ model IntakeItem {
 }
 
 model IntegrationSyncCursor {
-  id                      String   @id @default(uuid()) @db.Uuid
-  jiraSiteId              String   @db.Uuid @map("jira_site_id")
-  jiraProjectSelectionId  String   @db.Uuid @map("jira_project_selection_id")
-  lastSyncedAt            DateTime @default(now()) @map("last_synced_at")
-  cursorValue             String?  @map("cursor_value")
+  id                     String   @id @default(uuid()) @db.Uuid
+  jiraSiteId             String   @map("jira_site_id") @db.Uuid
+  jiraProjectSelectionId String   @map("jira_project_selection_id") @db.Uuid
+  lastSyncedAt           DateTime @default(now()) @map("last_synced_at")
+  cursorValue            String?  @map("cursor_value")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  jiraSite              JiraSite              @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
-  jiraProjectSelection  JiraProjectSelection  @relation(fields: [jiraProjectSelectionId], references: [id], onDelete: Cascade)
+  jiraSite             JiraSite             @relation(fields: [jiraSiteId], references: [id], onDelete: Cascade)
+  jiraProjectSelection JiraProjectSelection @relation(fields: [jiraProjectSelectionId], references: [id], onDelete: Cascade)
 
   @@unique([jiraSiteId, jiraProjectSelectionId])
   @@index([jiraSiteId])
@@ -724,18 +781,18 @@ model IntegrationSyncCursor {
 }
 
 model IntegrationSyncRun {
-  id             String        @id @default(uuid()) @db.Uuid
-  jiraSiteId     String        @db.Uuid @map("jira_site_id")
-  projectKey     String?       @map("project_key")
-  status         SyncRunStatus @default(RUNNING)
-  startedAt      DateTime      @default(now()) @map("started_at")
-  completedAt    DateTime?     @map("completed_at")
-  issuesFound    Int           @default(0) @map("issues_found")
-  issuesCreated  Int           @default(0) @map("issues_created")
-  issuesUpdated  Int           @default(0) @map("issues_updated")
-  issuesSkipped  Int           @default(0) @map("issues_skipped")
-  errorMessage   String?       @db.Text @map("error_message")
-  triggeredBy    String?       @map("triggered_by")
+  id            String        @id @default(uuid()) @db.Uuid
+  jiraSiteId    String        @map("jira_site_id") @db.Uuid
+  projectKey    String?       @map("project_key")
+  status        SyncRunStatus @default(RUNNING)
+  startedAt     DateTime      @default(now()) @map("started_at")
+  completedAt   DateTime?     @map("completed_at")
+  issuesFound   Int           @default(0) @map("issues_found")
+  issuesCreated Int           @default(0) @map("issues_created")
+  issuesUpdated Int           @default(0) @map("issues_updated")
+  issuesSkipped Int           @default(0) @map("issues_skipped")
+  errorMessage  String?       @map("error_message") @db.Text
+  triggeredBy   String?       @map("triggered_by")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -750,13 +807,13 @@ model IntegrationSyncRun {
 
 model IntegrationWriteActionLog {
   id              String            @id @default(uuid()) @db.Uuid
-  intakeItemId    String            @db.Uuid @map("intake_item_id")
+  intakeItemId    String            @map("intake_item_id") @db.Uuid
   actionType      WriteActionType   @map("action_type")
   status          WriteActionStatus @default(PENDING)
   idempotencyKey  String            @unique @map("idempotency_key")
-  requestPayload  Json?             @db.JsonB @map("request_payload")
-  responsePayload Json?             @db.JsonB @map("response_payload")
-  errorMessage    String?           @db.Text @map("error_message")
+  requestPayload  Json?             @map("request_payload") @db.JsonB
+  responsePayload Json?             @map("response_payload") @db.JsonB
+  errorMessage    String?           @map("error_message") @db.Text
   createdJiraKey  String?           @map("created_jira_key")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -772,47 +829,47 @@ model IntegrationWriteActionLog {
 // ============================================================================
 
 model IntakeRequest {
-  id              String              @id @default(uuid()) @db.Uuid
-  title           String              @db.VarChar(500)
-  description     String?             @db.Text
-  status          IntakeRequestStatus @default(DRAFT)
+  id          String              @id @default(uuid()) @db.Uuid
+  title       String              @db.VarChar(500)
+  description String?             @db.Text
+  status      IntakeRequestStatus @default(DRAFT)
 
   // Requester & Sponsor
-  requestedById   String?             @db.Uuid @map("requested_by_id")
-  requestedBy     User?               @relation("IntakeRequester", fields: [requestedById], references: [id])
-  sponsorId       String?             @db.Uuid @map("sponsor_id")
-  sponsor         User?               @relation("IntakeSponsor", fields: [sponsorId], references: [id])
+  requestedById String? @map("requested_by_id") @db.Uuid
+  requestedBy   User?   @relation("IntakeRequester", fields: [requestedById], references: [id])
+  sponsorId     String? @map("sponsor_id") @db.Uuid
+  sponsor       User?   @relation("IntakeSponsor", fields: [sponsorId], references: [id])
 
   // Classification
-  portfolioAreaId String?             @db.Uuid @map("portfolio_area_id")
-  portfolioArea   PortfolioArea?      @relation(fields: [portfolioAreaId], references: [id])
-  targetQuarter   String?             @db.VarChar(10)
-  valueScore      Int?                @map("value_score")
-  effortEstimate  String?             @db.VarChar(10) @map("effort_estimate")
-  urgency         String?             @db.VarChar(20)
-  customerName    String?             @db.VarChar(255) @map("customer_name")
-  tags            Json?               @db.JsonB
-  strategicThemes Json?               @db.JsonB @map("strategic_themes")
+  portfolioAreaId String?        @map("portfolio_area_id") @db.Uuid
+  portfolioArea   PortfolioArea? @relation(fields: [portfolioAreaId], references: [id])
+  targetQuarter   String?        @db.VarChar(10)
+  valueScore      Int?           @map("value_score")
+  effortEstimate  String?        @map("effort_estimate") @db.VarChar(10)
+  urgency         String?        @db.VarChar(20)
+  customerName    String?        @map("customer_name") @db.VarChar(255)
+  tags            Json?          @db.JsonB
+  strategicThemes Json?          @map("strategic_themes") @db.JsonB
 
   // Source linkage (optional - from Jira or other)
-  sourceType      IntakeSourceType?   @map("source_type")
-  intakeItemId    String?             @unique @db.Uuid @map("intake_item_id")
-  intakeItem      IntakeItem?         @relation(fields: [intakeItemId], references: [id])
+  sourceType   IntakeSourceType? @map("source_type")
+  intakeItemId String?           @unique @map("intake_item_id") @db.Uuid
+  intakeItem   IntakeItem?       @relation(fields: [intakeItemId], references: [id])
 
   // Conversion linkage
-  initiativeId       String?          @unique @db.Uuid @map("initiative_id")
-  initiative         Initiative?      @relation(fields: [initiativeId], references: [id])
-  conversionSnapshot Json?            @db.JsonB @map("conversion_snapshot")
+  initiativeId       String?     @unique @map("initiative_id") @db.Uuid
+  initiative         Initiative? @relation(fields: [initiativeId], references: [id])
+  conversionSnapshot Json?       @map("conversion_snapshot") @db.JsonB
 
   // Decision log
-  decisionNotes   String?             @db.Text @map("decision_notes")
-  closedReason    String?             @db.VarChar(50) @map("closed_reason")
+  decisionNotes String? @map("decision_notes") @db.Text
+  closedReason  String? @map("closed_reason") @db.VarChar(50)
 
   // Audit
-  createdBy       String?             @db.Uuid @map("created_by")
-  updatedBy       String?             @db.Uuid @map("updated_by")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([portfolioAreaId])
@@ -822,4 +879,296 @@ model IntakeRequest {
   @@index([requestedById])
   @@index([sponsorId])
   @@map("intake_requests")
+}
+
+// ============================================================================
+// Org Tree
+// ============================================================================
+
+model OrgNode {
+  id        String      @id @default(uuid()) @db.Uuid
+  name      String
+  code      String      @unique
+  type      OrgNodeType
+  parentId  String?     @db.Uuid
+  path      String
+  depth     Int         @default(0)
+  managerId String?     @db.Uuid
+  sortOrder Int         @default(0)
+  isActive  Boolean     @default(true)
+  metadata  Json?       @db.JsonB
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  parent              OrgNode?             @relation("OrgNodeTree", fields: [parentId], references: [id])
+  children            OrgNode[]            @relation("OrgNodeTree")
+  manager             Employee?            @relation(fields: [managerId], references: [id])
+  memberships         OrgMembership[]
+  approvalPolicies    ApprovalPolicy[]
+  approvalDelegations ApprovalDelegation[]
+
+  @@index([parentId])
+  @@index([type])
+  @@index([managerId])
+  @@index([isActive])
+}
+
+model OrgMembership {
+  id             String    @id @default(uuid()) @db.Uuid
+  employeeId     String    @db.Uuid
+  orgNodeId      String    @db.Uuid
+  effectiveStart DateTime  @default(now())
+  effectiveEnd   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  orgNode  OrgNode  @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([orgNodeId])
+  @@index([effectiveEnd])
+}
+
+// ============================================================================
+// Audit
+// ============================================================================
+
+model AuditEvent {
+  id         String  @id @default(uuid()) @db.Uuid
+  actorId    String? @db.Uuid
+  entityType String
+  entityId   String
+  action     String
+  payload    Json    @db.JsonB
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Approval Policies & Workflow
+// ============================================================================
+
+model ApprovalPolicy {
+  id              String           @id @default(uuid()) @db.Uuid
+  orgNodeId       String           @db.Uuid
+  scope           ApprovalScope
+  level           Int
+  ruleType        ApprovalRuleType
+  ruleConfig      Json             @default("{}") @db.JsonB
+  crossBuStrategy CrossBuStrategy  @default(COMMON_ANCESTOR)
+  isActive        Boolean          @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  orgNode OrgNode @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+
+  @@index([orgNodeId])
+  @@index([scope])
+  @@index([isActive])
+}
+
+model ApprovalRequest {
+  id              String                @id @default(uuid()) @db.Uuid
+  scope           ApprovalScope
+  subjectType     String
+  subjectId       String
+  requesterId     String                @db.Uuid
+  status          ApprovalRequestStatus @default(PENDING)
+  snapshotChain   Json                  @db.JsonB
+  snapshotContext Json                  @default("{}") @db.JsonB
+  currentLevel    Int
+  resolvedAt      DateTime?
+  expiresAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  requester User               @relation(fields: [requesterId], references: [id])
+  decisions ApprovalDecision[]
+
+  @@index([scope])
+  @@index([status])
+  @@index([requesterId])
+  @@index([subjectType, subjectId])
+}
+
+model ApprovalDecision {
+  id        String               @id @default(uuid()) @db.Uuid
+  requestId String               @db.Uuid
+  level     Int
+  deciderId String               @db.Uuid
+  decision  ApprovalDecisionType
+  comments  String?              @db.Text
+
+  decidedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  // Relations
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  decider User            @relation(fields: [deciderId], references: [id])
+
+  @@index([requestId])
+  @@index([deciderId])
+}
+
+model ApprovalDelegation {
+  id             String         @id @default(uuid()) @db.Uuid
+  delegatorId    String         @db.Uuid
+  delegateId     String         @db.Uuid
+  scope          ApprovalScope?
+  orgNodeId      String?        @db.Uuid
+  effectiveStart DateTime
+  effectiveEnd   DateTime
+  reason         String?        @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  delegator User     @relation("Delegator", fields: [delegatorId], references: [id])
+  delegate  User     @relation("Delegate", fields: [delegateId], references: [id])
+  orgNode   OrgNode? @relation(fields: [orgNodeId], references: [id])
+
+  @@index([delegatorId])
+  @@index([delegateId])
+  @@index([effectiveStart, effectiveEnd])
+}
+
+// ============================================================================
+// Feature Flags
+// ============================================================================
+
+model FeatureFlag {
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
+  enabled     Boolean @default(false)
+  description String? @db.Text
+  metadata    Json?   @db.JsonB
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+// ============================================================================
+// Job Profiles & Cost Bands
+// ============================================================================
+
+model JobProfile {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  level       String?
+  band        String?
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  skills    JobProfileSkill[]
+  costBand  CostBand?
+  employees Employee[]
+
+  @@map("job_profiles")
+}
+
+model JobProfileSkill {
+  id                  String @id @default(uuid()) @db.Uuid
+  jobProfileId        String @map("job_profile_id") @db.Uuid
+  skillName           String @map("skill_name")
+  expectedProficiency Int    @default(3) @map("expected_proficiency")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  jobProfile JobProfile @relation(fields: [jobProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([jobProfileId, skillName])
+  @@index([jobProfileId])
+  @@map("job_profile_skills")
+}
+
+model CostBand {
+  id            String   @id @default(uuid()) @db.Uuid
+  jobProfileId  String   @unique @map("job_profile_id") @db.Uuid
+  annualCostMin Float?   @map("annual_cost_min")
+  annualCostMax Float?   @map("annual_cost_max")
+  hourlyRate    Float?   @map("hourly_rate")
+  currency      String   @default("USD")
+  effectiveDate DateTime @map("effective_date") @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  jobProfile JobProfile @relation(fields: [jobProfileId], references: [id], onDelete: Cascade)
+
+  @@index([jobProfileId])
+  @@map("cost_bands")
+}
+
+// ============================================================================
+// Forecasting
+// ============================================================================
+
+model ForecastRun {
+  id               String       @id @default(uuid()) @db.Uuid
+  mode             ForecastMode
+  scenarioId       String?      @map("scenario_id") @db.Uuid
+  orgNodeId        String?      @map("org_node_id") @db.Uuid
+  initiativeIds    Json         @map("initiative_ids") @db.JsonB
+  simulationCount  Int          @default(1000) @map("simulation_count")
+  confidenceLevels Json         @map("confidence_levels") @db.JsonB
+  inputSnapshot    Json         @map("input_snapshot") @db.JsonB
+  results          Json         @db.JsonB
+  warnings         Json?        @db.JsonB
+  dataQuality      Json?        @map("data_quality") @db.JsonB
+  computedAt       DateTime     @default(now()) @map("computed_at")
+  durationMs       Int?         @map("duration_ms")
+
+  createdAt DateTime @default(now())
+
+  @@index([scenarioId])
+  @@index([mode])
+  @@map("forecast_runs")
+}
+
+// ============================================================================
+// Initiative Status Log
+// ============================================================================
+
+model InitiativeStatusLog {
+  id             String           @id @default(uuid()) @db.Uuid
+  initiativeId   String           @map("initiative_id") @db.Uuid
+  fromStatus     InitiativeStatus @map("from_status")
+  toStatus       InitiativeStatus @map("to_status")
+  transitionedAt DateTime         @default(now()) @map("transitioned_at")
+  actorId        String?          @map("actor_id") @db.Uuid
+
+  // Relations
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  @@index([initiativeId])
+  @@index([toStatus])
+  @@map("initiative_status_logs")
 }

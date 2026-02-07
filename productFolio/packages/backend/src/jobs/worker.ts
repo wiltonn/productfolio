@@ -1,17 +1,19 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnection, QUEUE_NAMES } from './queue.js';
-import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData, DriftCheckJobData, JiraSyncJobData } from './queue.js';
+import type { ScenarioRecomputeJobData, CsvImportJobData, ViewRefreshJobData, DriftCheckJobData, JiraSyncJobData, StatusLogBackfillJobData } from './queue.js';
 import { processScenarioRecompute } from './processors/scenario-recompute.processor.js';
 import { processCsvImport } from './processors/csv-import.processor.js';
 import { processViewRefresh } from './processors/view-refresh.processor.js';
 import { processDriftCheck } from './processors/drift-check.processor.js';
 import { processJiraSync } from './processors/jira-sync.processor.js';
+import { processStatusLogBackfill } from './processors/status-log-backfill.processor.js';
 
 let scenarioRecomputeWorker: Worker | null = null;
 let csvImportWorker: Worker | null = null;
 let viewRefreshWorker: Worker | null = null;
 let driftCheckWorker: Worker | null = null;
 let jiraSyncWorker: Worker | null = null;
+let statusLogBackfillWorker: Worker | null = null;
 
 /**
  * Start all background job workers
@@ -141,6 +143,26 @@ export async function startWorkers(): Promise<void> {
     console.error('[jira-sync] Worker error:', err.message);
   });
 
+  // Status log backfill worker
+  statusLogBackfillWorker = new Worker(QUEUE_NAMES.STATUS_LOG_BACKFILL, processStatusLogBackfill, {
+    connection: redisConnection,
+    concurrency: 1, // One-time backfill, single concurrency
+  });
+
+  statusLogBackfillWorker.on('completed', (job: Job<StatusLogBackfillJobData>, result: { inserted: number; processed: number }) => {
+    console.log(
+      `[status-log-backfill] Job ${job.id} completed: ${result.inserted} inserted from ${result.processed} events`
+    );
+  });
+
+  statusLogBackfillWorker.on('failed', (job: Job<StatusLogBackfillJobData> | undefined, err: Error) => {
+    console.error(`[status-log-backfill] Job ${job?.id} failed:`, err.message);
+  });
+
+  statusLogBackfillWorker.on('error', (err: Error) => {
+    console.error('[status-log-backfill] Worker error:', err.message);
+  });
+
   console.log('All workers started successfully');
 }
 
@@ -177,6 +199,11 @@ export async function stopWorkers(): Promise<void> {
     jiraSyncWorker = null;
   }
 
+  if (statusLogBackfillWorker) {
+    closePromises.push(statusLogBackfillWorker.close());
+    statusLogBackfillWorker = null;
+  }
+
   await Promise.all(closePromises);
   console.log('All workers stopped');
 }
@@ -190,6 +217,7 @@ export function getWorkerStatus(): {
   viewRefresh: boolean;
   driftCheck: boolean;
   jiraSync: boolean;
+  statusLogBackfill: boolean;
 } {
   return {
     scenarioRecompute: scenarioRecomputeWorker !== null && !scenarioRecomputeWorker.closing,
@@ -197,5 +225,6 @@ export function getWorkerStatus(): {
     viewRefresh: viewRefreshWorker !== null && !viewRefreshWorker.closing,
     driftCheck: driftCheckWorker !== null && !driftCheckWorker.closing,
     jiraSync: jiraSyncWorker !== null && !jiraSyncWorker.closing,
+    statusLogBackfill: statusLogBackfillWorker !== null && !statusLogBackfillWorker.closing,
   };
 }

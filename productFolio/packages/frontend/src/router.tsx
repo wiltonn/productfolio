@@ -67,6 +67,22 @@ const IntakeRequestDetail = lazy(() =>
   import('./pages/IntakeRequestDetail').then((m) => ({ default: m.IntakeRequestDetail }))
 );
 
+const FeatureFlagsAdmin = lazy(() =>
+  import('./pages/FeatureFlagsAdmin').then((m) => ({ default: m.FeatureFlagsAdmin }))
+);
+
+const JobProfilesAdmin = lazy(() =>
+  import('./pages/JobProfilesAdmin').then((m) => ({ default: m.JobProfilesAdmin }))
+);
+
+const OrgCapacity = lazy(() =>
+  import('./pages/OrgCapacity').then((m) => ({ default: m.OrgCapacity }))
+);
+
+const FlowForecast = lazy(() =>
+  import('./pages/FlowForecast').then((m) => ({ default: m.FlowForecast }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -168,6 +184,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'org-capacity',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <OrgCapacity />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
         path: 'scenarios',
         element: (
           <ErrorBoundary>
@@ -203,6 +229,16 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <DeliveryForecast />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'forecast',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <FlowForecast />
             </LazyPage>
           </ErrorBoundary>
         ),
@@ -264,6 +300,26 @@ export const router = createBrowserRouter([
             <LazyDetailPage>
               <IntakeRequestDetail />
             </LazyDetailPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/feature-flags',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <FeatureFlagsAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/job-profiles',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <JobProfilesAdmin />
+            </LazyPage>
           </ErrorBoundary>
         ),
       },

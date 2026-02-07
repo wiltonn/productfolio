@@ -46,7 +46,7 @@ function TreeNodeItem({
     <div>
       <div
         className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-surface-100 ${
-          isSelected ? 'bg-primary-50 border-l-2 border-primary-500' : ''
+          isSelected ? 'bg-accent-50 border-l-2 border-accent-500' : ''
         }`}
         style={{ paddingLeft: `${depth * 20 + 12}px` }}
         onClick={() => onSelect(node.id)}
@@ -161,7 +161,7 @@ function NodeDetailPanel({ nodeId }: { nodeId: string }) {
             Approval Policies ({policies?.length ?? 0})
           </h3>
           <button
-            className="text-xs text-primary-600 hover:text-primary-700"
+            className="px-2 py-1 text-xs font-medium text-accent-700 hover:bg-accent-50 rounded transition-colors"
             onClick={() => setShowPolicyModal(true)}
           >
             + Add Policy
@@ -282,12 +282,12 @@ function AddPolicyModal({ nodeId, onClose }: { nodeId: string; onClose: () => vo
           </div>
         )}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="px-4 py-2 text-sm text-surface-600" onClick={onClose}>
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+            className="btn-primary"
             disabled={createPolicy.isPending}
           >
             {createPolicy.isPending ? 'Creating...' : 'Create Policy'}
@@ -391,12 +391,12 @@ function CreateNodeModal({
           </select>
         </div>
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="px-4 py-2 text-sm text-surface-600" onClick={onClose}>
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
           <button
             type="submit"
-            className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+            className="btn-primary"
             disabled={createNode.isPending}
           >
             {createNode.isPending ? 'Creating...' : 'Create'}
@@ -428,7 +428,7 @@ export function OrgTreeAdmin() {
             </p>
           </div>
           <button
-            className="px-4 py-2 text-sm bg-primary-600 text-white rounded hover:bg-primary-700"
+            className="btn-primary"
             onClick={() => setShowCreateModal(true)}
           >
             + Add Node

@@ -284,6 +284,7 @@ export interface CalculatorResult {
 export interface CalculatorOptions {
   skipCache?: boolean;
   includeBreakdown?: boolean;
+  orgNodeId?: string;
 }
 
 // Auto-Allocate Types
