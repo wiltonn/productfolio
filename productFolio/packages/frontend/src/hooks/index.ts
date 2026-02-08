@@ -255,6 +255,24 @@ export {
   type ApprovalStatusResult,
 } from './useApprovalStatus';
 
+// Employee Org Links (Matrix Org) hooks
+export {
+  useEmployeeOrgLinks,
+  useActiveEmployeeLinks,
+  useEmployeeHomeOrg,
+  useEmployeeLinkHistory,
+  useEmployeeCapacityLinks,
+  useOrgNodeLinks,
+  useCreateEmployeeOrgLink,
+  useUpdateEmployeeOrgLink,
+  useEndEmployeeOrgLink,
+  useReassignPrimaryReporting,
+  useMigrateFromMemberships,
+  employeeOrgLinkKeys,
+  type LinkListFilters,
+  type CreateLinkInput,
+} from './useEmployeeOrgLinks';
+
 // Auth0 admin hooks
 export { useSyncRoles, useSyncAllUsers, useSyncUser } from './useAuth0Admin';
 

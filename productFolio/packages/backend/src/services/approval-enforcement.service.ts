@@ -56,17 +56,26 @@ class ApprovalEnforcementService {
     }
 
     // 3. Determine enforcement from highest applicable policy
-    const nodeIds = chain.map((step) => step.orgNodeId);
-    const highestPolicy = await prisma.approvalPolicy.findFirst({
-      where: {
-        orgNodeId: { in: nodeIds },
-        scope: params.scope,
-        isActive: true,
-      },
-      orderBy: { level: 'desc' },
-    });
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const nodeIds = chain.map((step) => step.orgNodeId).filter((id) => UUID_RE.test(id));
 
-    const enforcement: PolicyEnforcement = highestPolicy?.enforcement ?? 'BLOCKING';
+    const highestPolicy = nodeIds.length > 0
+      ? await prisma.approvalPolicy.findFirst({
+          where: {
+            orgNodeId: { in: nodeIds },
+            scope: params.scope,
+            isActive: true,
+          },
+          orderBy: { level: 'desc' },
+        })
+      : null;
+
+    // No matching policy → no enforcement required
+    if (!highestPolicy) {
+      return { allowed: true, enforcement: 'NONE', warnings: [], chain };
+    }
+
+    const enforcement: PolicyEnforcement = highestPolicy.enforcement;
 
     // 4. Check for existing APPROVED request for this subject
     const approvedRequest = await prisma.approvalRequest.findFirst({

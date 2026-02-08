@@ -114,6 +114,10 @@ enum OrgNodeType {
   DEPARTMENT
   TEAM
   VIRTUAL
+  PRODUCT
+  PLATFORM
+  FUNCTIONAL
+  CHAPTER
 }
 
 enum ApprovalScope {
@@ -157,6 +161,14 @@ enum ForecastMode {
 enum PlanningMode {
   LEGACY
   TOKEN
+}
+
+enum EmployeeOrgRelationshipType {
+  PRIMARY_REPORTING
+  DELIVERY_ASSIGNMENT
+  FUNCTIONAL_ALIGNMENT
+  CAPABILITY_POOL
+  TEMPORARY_ROTATION
 }
 
 enum PolicyEnforcement {
@@ -403,6 +415,7 @@ model Employee {
   allocations       Allocation[]
   domainFamiliarity EmployeeDomainFamiliarity[]
   orgMemberships    OrgMembership[]
+  orgUnitLinks      EmployeeOrgUnitLink[]
   managedOrgNodes   OrgNode[]
   jobProfile        JobProfile?                 @relation(fields: [jobProfileId], references: [id])
 
@@ -929,6 +942,7 @@ model OrgNode {
   children            OrgNode[]            @relation("OrgNodeTree")
   manager             Employee?            @relation(fields: [managerId], references: [id])
   memberships         OrgMembership[]
+  orgUnitLinks        EmployeeOrgUnitLink[]
   approvalPolicies    ApprovalPolicy[]
   approvalDelegations ApprovalDelegation[]
   initiatives         Initiative[]         @relation("OrgNodeInitiatives")
@@ -1339,4 +1353,34 @@ model EntitlementEvent {
   @@index([userId])
   @@index([createdAt])
   @@map("entitlement_events")
+}
+
+// ============================================================================
+// Matrix Org — Employee ↔ OrgUnit Links
+// ============================================================================
+
+model EmployeeOrgUnitLink {
+  id               String                       @id @default(uuid()) @db.Uuid
+  employeeId       String                       @map("employee_id") @db.Uuid
+  orgNodeId        String                       @map("org_node_id") @db.Uuid
+  relationshipType EmployeeOrgRelationshipType  @map("relationship_type")
+  allocationPct    Float?                       @map("allocation_pct")
+  consumeCapacity  Boolean                      @default(false) @map("consume_capacity")
+  startDate        DateTime                     @default(now()) @map("start_date")
+  endDate          DateTime?                    @map("end_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  orgNode  OrgNode  @relation(fields: [orgNodeId], references: [id], onDelete: Cascade)
+
+  // Composite indexes for common query patterns
+  @@index([employeeId, relationshipType, endDate])
+  @@index([orgNodeId, relationshipType, endDate])
+  @@index([employeeId])
+  @@index([orgNodeId])
+  @@index([consumeCapacity])
+  @@map("employee_org_unit_links")
 }

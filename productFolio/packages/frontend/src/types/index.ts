@@ -156,7 +156,29 @@ export interface BulkUpdateResult {
 // Org Structure Types
 // ============================================================================
 
-export type OrgNodeType = 'ROOT' | 'DIVISION' | 'DEPARTMENT' | 'TEAM' | 'VIRTUAL';
+export type OrgNodeType = 'ROOT' | 'DIVISION' | 'DEPARTMENT' | 'TEAM' | 'VIRTUAL' | 'PRODUCT' | 'PLATFORM' | 'FUNCTIONAL' | 'CHAPTER';
+
+export type EmployeeOrgRelationshipType =
+  | 'PRIMARY_REPORTING'
+  | 'DELIVERY_ASSIGNMENT'
+  | 'FUNCTIONAL_ALIGNMENT'
+  | 'CAPABILITY_POOL'
+  | 'TEMPORARY_ROTATION';
+
+export interface EmployeeOrgUnitLink {
+  id: string;
+  employeeId: string;
+  orgNodeId: string;
+  relationshipType: EmployeeOrgRelationshipType;
+  allocationPct: number | null;
+  consumeCapacity: boolean;
+  startDate: string;
+  endDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employee?: { id: string; name: string; role?: string; employmentType?: string };
+  orgNode?: { id: string; name: string; code: string; type: OrgNodeType };
+}
 export type ApprovalScope = 'RESOURCE_ALLOCATION' | 'INITIATIVE' | 'SCENARIO';
 export type ApprovalRuleType = 'NODE_MANAGER' | 'SPECIFIC_PERSON' | 'ROLE_BASED' | 'ANCESTOR_MANAGER' | 'COMMITTEE' | 'FALLBACK_ADMIN';
 export type ApprovalRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
