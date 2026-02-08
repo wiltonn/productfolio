@@ -289,6 +289,14 @@ export type {
   PortfolioArea,
 } from '../types';
 
+// Rollup hooks
+export {
+  usePortfolioAreaRollup,
+  useOrgNodeRollup,
+  useBusinessOwnerRollup,
+  rollupKeys,
+} from './useRollups';
+
 // Types from intake types
 export type {
   IntakeItem,

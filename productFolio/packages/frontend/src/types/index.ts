@@ -337,3 +337,6 @@ export function getQuarterOptions(yearsBack = 1, yearsForward = 2): { value: str
 
   return options;
 }
+
+// Rollup types
+export type { RollupResponse, RollupGroupRow, RollupScope, RollupBudget, RollupTimeline } from './rollup.types';

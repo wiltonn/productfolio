@@ -83,6 +83,10 @@ const TokenLedger = lazy(() =>
   import('./pages/TokenLedger').then((m) => ({ default: m.TokenLedger }))
 );
 
+const ScenarioRollups = lazy(() =>
+  import('./pages/ScenarioRollups').then((m) => ({ default: m.ScenarioRollups }))
+);
+
 const AuthoritiesAdmin = lazy(() =>
   import('./pages/AuthoritiesAdmin').then((m) => ({ default: m.AuthoritiesAdmin }))
 );
@@ -231,6 +235,16 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <TokenLedger />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'scenarios/:id/rollups',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <ScenarioRollups />
             </LazyPage>
           </ErrorBoundary>
         ),

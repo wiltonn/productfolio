@@ -31,6 +31,7 @@ import { authorityRoutes } from './routes/authorities.js';
 import { entitlementRoutes } from './routes/entitlements.js';
 import { auth0AdminRoutes } from './routes/auth0-admin.js';
 import { pricingRoutes } from './routes/pricing.js';
+import { rollupRoutes } from './routes/rollups.js';
 import { getWorkerStatus } from './jobs/index.js';
 import { validateJiraConfig } from './lib/config/jira.js';
 
@@ -103,6 +104,7 @@ await fastify.register(employeeOrgLinksRoutes);
 await fastify.register(authorityRoutes);
 await fastify.register(entitlementRoutes);
 await fastify.register(auth0AdminRoutes);
+await fastify.register(rollupRoutes);
 
 const start = async () => {
   try {
