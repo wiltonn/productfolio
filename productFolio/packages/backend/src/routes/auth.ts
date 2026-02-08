@@ -22,7 +22,13 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
           : userResponse.permissions;
 
       const seatType = deriveSeatType(permissions);
-      const tenantConfig = await prisma.tenantConfig.findFirst();
+      let tier = 'starter';
+      try {
+        const tenantConfig = await prisma.tenantConfig.findFirst();
+        tier = tenantConfig?.tier ?? 'starter';
+      } catch {
+        // tenant_config table may not exist yet
+      }
 
       return reply.send({
         user: {
@@ -30,7 +36,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
           permissions,
           seatType,
           licensed: seatType === 'decision',
-          tier: tenantConfig?.tier ?? 'starter',
+          tier,
         },
       });
     }

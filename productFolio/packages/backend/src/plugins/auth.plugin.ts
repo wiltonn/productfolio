@@ -102,13 +102,16 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
           token
         );
 
-        // Extract permissions: prefer JWT claim, fallback to role-based
+        // Merge JWT claim permissions with role-derived permissions.
+        // Role-derived permissions are always included so that local role
+        // changes (e.g. authority:admin) take effect without updating Auth0.
         const claimPermissions = payload[PERMISSIONS_CLAIM];
+        const rolePermissions = permissionsForRole(localUser.role);
         let permissions: string[];
         if (Array.isArray(claimPermissions) && claimPermissions.length > 0) {
-          permissions = claimPermissions as string[];
+          permissions = [...new Set([...claimPermissions as string[], ...rolePermissions])];
         } else {
-          permissions = permissionsForRole(localUser.role);
+          permissions = rolePermissions;
         }
 
         const seatType = deriveSeatType(permissions);
