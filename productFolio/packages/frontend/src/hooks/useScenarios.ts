@@ -20,6 +20,7 @@ export interface Scenario {
   createdAt: string;
   updatedAt: string;
   allocationsCount?: number;
+  planningMode?: 'LEGACY' | 'TOKEN';
 }
 
 export type AllocationType = 'PROJECT' | 'RUN' | 'SUPPORT';

@@ -172,6 +172,30 @@ export {
   orgCapacityKeys,
 } from './useOrgCapacity';
 
+// Planning mode hooks
+export {
+  usePlanningModeToggle,
+  planningModeKeys,
+  type PlanningMode,
+} from './usePlanningMode';
+
+// Token ledger hooks
+export {
+  useTokenLedger,
+  useSkillPools,
+  useTokenSupply,
+  useTokenDemand,
+  useUpdateTokenSupply,
+  useUpdateTokenDemand,
+  useDeriveTokenDemand,
+  tokenLedgerKeys,
+  type TokenLedgerRow,
+  type TokenLedgerSummary,
+  type SkillPool,
+  type TokenSupplyEntry,
+  type TokenDemandEntry,
+} from './useTokenLedger';
+
 // Forecast hooks
 export {
   useRunScopeBasedForecast,

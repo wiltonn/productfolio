@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, InitiativeStatus, EmploymentType, PeriodType, ScenarioStatus, ScenarioType, AllocationType } from '@prisma/client';
+import { PrismaClient, UserRole, InitiativeStatus, EmploymentType, PeriodType, ScenarioStatus, ScenarioType, AllocationType, OrgNodeType } from '@prisma/client';
 import { hashPassword } from '../src/lib/auth.js';
 
 const prisma = new PrismaClient();
@@ -484,6 +484,7 @@ async function main() {
     { key: 'job_profiles', description: 'Enable Job Profiles management and employee assignment' },
     { key: 'flow_forecast_v1', description: 'Enable Flow Forecast page (Mode A: scope-based forecasting)' },
     { key: 'forecast_mode_b', description: 'Enable Mode B: empirical forecasting based on historical throughput' },
+    { key: 'token_planning_v1', description: 'Enable Token+Flow planning mode for scenarios' },
   ];
 
   for (const flag of featureFlags) {
@@ -498,6 +499,405 @@ async function main() {
       });
       console.log(`Created feature flag: ${flag.key} (disabled)`);
     }
+  }
+
+  // ============================================================================
+  // SKILL POOLS
+  // ============================================================================
+
+  const skillPoolData = [
+    { name: 'backend', description: 'Backend development capacity' },
+    { name: 'frontend', description: 'Frontend development capacity' },
+    { name: 'data', description: 'Data engineering and analytics capacity' },
+    { name: 'qa', description: 'Quality assurance and testing capacity' },
+    { name: 'domain', description: 'Domain expertise and product knowledge' },
+  ];
+
+  const skillPools: Record<string, Awaited<ReturnType<typeof prisma.skillPool.upsert>>> = {};
+  for (const pool of skillPoolData) {
+    const sp = await prisma.skillPool.upsert({
+      where: { name: pool.name },
+      update: {},
+      create: pool,
+    });
+    skillPools[pool.name] = sp;
+    console.log(`Upserted skill pool: ${pool.name}`);
+  }
+
+  // ============================================================================
+  // TOKEN CALIBRATIONS
+  // ============================================================================
+
+  const calibrationData = [
+    { pool: 'backend', tokenPerHour: 1.0 },
+    { pool: 'frontend', tokenPerHour: 1.2 },
+    { pool: 'data', tokenPerHour: 0.8 },
+    { pool: 'qa', tokenPerHour: 1.5 },
+    { pool: 'domain', tokenPerHour: 0.5 },
+  ];
+
+  for (const cal of calibrationData) {
+    const poolId = skillPools[cal.pool].id;
+    const effectiveDate = new Date('2026-01-01');
+    await prisma.tokenCalibration.upsert({
+      where: { skillPoolId_effectiveDate: { skillPoolId: poolId, effectiveDate } },
+      update: {},
+      create: {
+        skillPoolId: poolId,
+        tokenPerHour: cal.tokenPerHour,
+        effectiveDate,
+        notes: `Default calibration for ${cal.pool}`,
+      },
+    });
+    console.log(`Upserted token calibration: ${cal.pool} → ${cal.tokenPerHour} tok/hr`);
+  }
+
+  // ============================================================================
+  // TOKEN-MODE SCENARIO (with supply & demand data)
+  // ============================================================================
+
+  const existingTokenScenario = await prisma.scenario.findFirst({
+    where: { name: 'Q1 2026 Token Flow Plan' },
+  });
+
+  if (!existingTokenScenario) {
+    const tokenScenario = await prisma.scenario.create({
+      data: {
+        name: 'Q1 2026 Token Flow Plan',
+        periodId: q1Period.id,
+        status: ScenarioStatus.DRAFT,
+        scenarioType: ScenarioType.WHAT_IF,
+        planningMode: 'TOKEN',
+        assumptions: {
+          allocationCapPercentage: 100,
+          bufferPercentage: 10,
+        },
+        priorityRankings: initiatives
+          .filter(i => i.targetPeriodId === q1Period.id)
+          .map((init, idx) => ({ initiativeId: init.id, rank: idx + 1 })),
+      },
+    });
+    console.log(`Created TOKEN scenario: ${tokenScenario.name}`);
+
+    // Seed token supply for each skill pool
+    const supplyData = [
+      { pool: 'backend', tokens: 200 },
+      { pool: 'frontend', tokens: 150 },
+      { pool: 'data', tokens: 80 },
+      { pool: 'qa', tokens: 60 },
+      { pool: 'domain', tokens: 40 },
+    ];
+
+    for (const s of supplyData) {
+      await prisma.tokenSupply.create({
+        data: {
+          scenarioId: tokenScenario.id,
+          skillPoolId: skillPools[s.pool].id,
+          tokens: s.tokens,
+          notes: `Q1 capacity for ${s.pool}`,
+        },
+      });
+    }
+    console.log(`Created ${supplyData.length} token supply entries`);
+
+    // Seed token demand from Q1 initiatives
+    const q1Initiatives = initiatives.filter(i => i.targetPeriodId === q1Period.id);
+    const demandMap: Record<string, { pool: string; tokensP50: number; tokensP90: number }[]> = {
+      'Customer Portal Redesign': [
+        { pool: 'frontend', tokensP50: 80, tokensP90: 100 },
+        { pool: 'backend', tokensP50: 45, tokensP90: 56 },
+        { pool: 'domain', tokensP50: 20, tokensP90: 25 },
+      ],
+      'API Gateway Migration': [
+        { pool: 'backend', tokensP50: 70, tokensP90: 88 },
+        { pool: 'qa', tokensP50: 20, tokensP90: 28 },
+      ],
+      'Data Pipeline Optimization': [
+        { pool: 'data', tokensP50: 60, tokensP90: 75 },
+        { pool: 'backend', tokensP50: 35, tokensP90: 44 },
+      ],
+      'Security Audit Implementation': [
+        { pool: 'backend', tokensP50: 30, tokensP90: 40 },
+        { pool: 'qa', tokensP50: 25, tokensP90: 32 },
+      ],
+      'Notification System': [
+        { pool: 'backend', tokensP50: 45, tokensP90: 56 },
+        { pool: 'frontend', tokensP50: 35, tokensP90: 44 },
+      ],
+    };
+
+    let demandCount = 0;
+    for (const init of q1Initiatives) {
+      const demands = demandMap[init.title];
+      if (!demands) continue;
+      for (const d of demands) {
+        await prisma.tokenDemand.create({
+          data: {
+            scenarioId: tokenScenario.id,
+            initiativeId: init.id,
+            skillPoolId: skillPools[d.pool].id,
+            tokensP50: d.tokensP50,
+            tokensP90: d.tokensP90,
+            notes: `${init.title} → ${d.pool}`,
+          },
+        });
+        demandCount++;
+      }
+    }
+    console.log(`Created ${demandCount} token demand entries`);
+  } else {
+    console.log('Token Flow scenario already exists, skipping...');
+  }
+
+  // ============================================================================
+  // ORG TREE
+  // ============================================================================
+
+  const existingOrgNodes = await prisma.orgNode.count();
+  if (existingOrgNodes === 0) {
+    console.log('Creating org tree...');
+
+    const root = await prisma.orgNode.create({
+      data: {
+        name: 'ProductFolio Corp',
+        code: 'PF',
+        type: OrgNodeType.ROOT,
+        path: '/PF',
+        depth: 0,
+        sortOrder: 0,
+      },
+    });
+
+    const engineering = await prisma.orgNode.create({
+      data: {
+        name: 'Engineering',
+        code: 'ENG',
+        type: OrgNodeType.DIVISION,
+        parentId: root.id,
+        path: '/PF/ENG',
+        depth: 1,
+        sortOrder: 0,
+      },
+    });
+
+    const product = await prisma.orgNode.create({
+      data: {
+        name: 'Product',
+        code: 'PROD',
+        type: OrgNodeType.DIVISION,
+        parentId: root.id,
+        path: '/PF/PROD',
+        depth: 1,
+        sortOrder: 1,
+      },
+    });
+
+    const platformTeam = await prisma.orgNode.create({
+      data: {
+        name: 'Platform Team',
+        code: 'PLAT',
+        type: OrgNodeType.TEAM,
+        parentId: engineering.id,
+        path: '/PF/ENG/PLAT',
+        depth: 2,
+        sortOrder: 0,
+      },
+    });
+
+    const frontendTeam = await prisma.orgNode.create({
+      data: {
+        name: 'Frontend Team',
+        code: 'FE',
+        type: OrgNodeType.TEAM,
+        parentId: engineering.id,
+        path: '/PF/ENG/FE',
+        depth: 2,
+        sortOrder: 1,
+      },
+    });
+
+    const dataTeam = await prisma.orgNode.create({
+      data: {
+        name: 'Data Team',
+        code: 'DATA',
+        type: OrgNodeType.TEAM,
+        parentId: engineering.id,
+        path: '/PF/ENG/DATA',
+        depth: 2,
+        sortOrder: 2,
+      },
+    });
+
+    console.log('Created org tree: PF → ENG (PLAT, FE, DATA), PROD');
+
+    // Assign employees to teams via OrgMembership
+    const teamAssignments: { employeeName: string; teamId: string }[] = [
+      { employeeName: 'Mike Johnson', teamId: platformTeam.id },
+      { employeeName: 'James Lee', teamId: platformTeam.id },
+      { employeeName: 'Priya Patel', teamId: platformTeam.id },
+      { employeeName: 'Ryan Martinez', teamId: platformTeam.id },
+      { employeeName: 'Sarah Chen', teamId: frontendTeam.id },
+      { employeeName: 'David Kim', teamId: frontendTeam.id },
+      { employeeName: 'Alex Rivera', teamId: frontendTeam.id },
+      { employeeName: 'Maria Garcia', teamId: frontendTeam.id },
+      { employeeName: 'Emily Watson', teamId: dataTeam.id },
+      { employeeName: 'Lisa Thompson', teamId: product.id },
+    ];
+
+    let membershipCount = 0;
+    for (const ta of teamAssignments) {
+      const emp = employees.find(e => e.name === ta.employeeName);
+      if (emp) {
+        await prisma.orgMembership.create({
+          data: {
+            employeeId: emp.id,
+            orgNodeId: ta.teamId,
+          },
+        });
+        membershipCount++;
+      }
+    }
+    console.log(`Created ${membershipCount} org memberships`);
+  } else {
+    console.log(`Org nodes already exist (${existingOrgNodes}), skipping...`);
+  }
+
+  // ============================================================================
+  // JOB PROFILES + COST BANDS
+  // ============================================================================
+
+  const existingProfiles = await prisma.jobProfile.count();
+  if (existingProfiles === 0) {
+    console.log('Creating job profiles...');
+
+    const profilesData = [
+      {
+        name: 'Senior Frontend Engineer',
+        level: 'L5',
+        band: 'IC5',
+        description: 'Leads frontend architecture and mentors junior engineers',
+        skills: [{ skillName: 'Frontend', proficiency: 4 }, { skillName: 'React', proficiency: 4 }, { skillName: 'TypeScript', proficiency: 4 }],
+        cost: { annualCostMin: 140000, annualCostMax: 180000, hourlyRate: 85 },
+      },
+      {
+        name: 'Backend Engineer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Designs and implements backend services and APIs',
+        skills: [{ skillName: 'Backend', proficiency: 3 }, { skillName: 'Go', proficiency: 3 }, { skillName: 'PostgreSQL', proficiency: 3 }],
+        cost: { annualCostMin: 110000, annualCostMax: 145000, hourlyRate: 70 },
+      },
+      {
+        name: 'Senior Backend Engineer',
+        level: 'L5',
+        band: 'IC5',
+        description: 'Owns backend platform components and drives technical decisions',
+        skills: [{ skillName: 'Backend', proficiency: 4 }, { skillName: 'Go', proficiency: 4 }, { skillName: 'Redis', proficiency: 3 }, { skillName: 'PostgreSQL', proficiency: 4 }],
+        cost: { annualCostMin: 140000, annualCostMax: 180000, hourlyRate: 85 },
+      },
+      {
+        name: 'Full Stack Developer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Works across the stack on features end-to-end',
+        skills: [{ skillName: 'Frontend', proficiency: 3 }, { skillName: 'Backend', proficiency: 3 }, { skillName: 'React', proficiency: 3 }],
+        cost: { annualCostMin: 115000, annualCostMax: 150000, hourlyRate: 72 },
+      },
+      {
+        name: 'Data Engineer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Builds and maintains data pipelines and analytics infrastructure',
+        skills: [{ skillName: 'Data', proficiency: 4 }, { skillName: 'Python', proficiency: 3 }, { skillName: 'PostgreSQL', proficiency: 3 }],
+        cost: { annualCostMin: 120000, annualCostMax: 155000, hourlyRate: 75 },
+      },
+      {
+        name: 'DevOps Engineer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Manages infrastructure, CI/CD, and cloud operations',
+        skills: [{ skillName: 'DevOps', proficiency: 4 }, { skillName: 'AWS', proficiency: 3 }, { skillName: 'Docker', proficiency: 3 }],
+        cost: { annualCostMin: 125000, annualCostMax: 160000, hourlyRate: 78 },
+      },
+      {
+        name: 'UX Designer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Designs user experiences and conducts user research',
+        skills: [{ skillName: 'Design', proficiency: 4 }, { skillName: 'Figma', proficiency: 4 }, { skillName: 'Research', proficiency: 3 }],
+        cost: { annualCostMin: 105000, annualCostMax: 140000, hourlyRate: 68 },
+      },
+      {
+        name: 'Security Engineer',
+        level: 'L4',
+        band: 'IC4',
+        description: 'Identifies vulnerabilities and implements security controls',
+        skills: [{ skillName: 'Security', proficiency: 4 }, { skillName: 'Backend', proficiency: 3 }],
+        cost: { annualCostMin: 130000, annualCostMax: 170000, hourlyRate: 82 },
+      },
+    ];
+
+    for (const pd of profilesData) {
+      const profile = await prisma.jobProfile.create({
+        data: {
+          name: pd.name,
+          level: pd.level,
+          band: pd.band,
+          description: pd.description,
+        },
+      });
+
+      for (const sk of pd.skills) {
+        await prisma.jobProfileSkill.create({
+          data: {
+            jobProfileId: profile.id,
+            skillName: sk.skillName,
+            expectedProficiency: sk.proficiency,
+          },
+        });
+      }
+
+      await prisma.costBand.create({
+        data: {
+          jobProfileId: profile.id,
+          annualCostMin: pd.cost.annualCostMin,
+          annualCostMax: pd.cost.annualCostMax,
+          hourlyRate: pd.cost.hourlyRate,
+          currency: 'USD',
+          effectiveDate: new Date('2026-01-01'),
+        },
+      });
+
+      console.log(`Created job profile: ${pd.name} (${pd.level}/${pd.band})`);
+    }
+
+    // Assign job profiles to employees
+    const profileAssignments: Record<string, string> = {
+      'Sarah Chen': 'Senior Frontend Engineer',
+      'Mike Johnson': 'Backend Engineer',
+      'Alex Rivera': 'Full Stack Developer',
+      'Emily Watson': 'Data Engineer',
+      'Priya Patel': 'DevOps Engineer',
+      'James Lee': 'Senior Backend Engineer',
+      'Maria Garcia': 'UX Designer',
+      'David Kim': 'Senior Frontend Engineer',
+      'Ryan Martinez': 'Security Engineer',
+    };
+
+    const allProfiles = await prisma.jobProfile.findMany();
+    for (const [empName, profileName] of Object.entries(profileAssignments)) {
+      const emp = employees.find(e => e.name === empName);
+      const prof = allProfiles.find(p => p.name === profileName);
+      if (emp && prof) {
+        await prisma.employee.update({
+          where: { id: emp.id },
+          data: { jobProfileId: prof.id },
+        });
+      }
+    }
+    console.log('Assigned job profiles to employees');
+  } else {
+    console.log(`Job profiles already exist (${existingProfiles}), skipping...`);
   }
 
   console.log('Seeding complete!');

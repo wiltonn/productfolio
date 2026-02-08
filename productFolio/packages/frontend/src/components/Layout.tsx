@@ -113,7 +113,7 @@ type NavItem = { name: string; href: string; icon: () => React.JSX.Element };
 const coreNavigation: NavItem[] = [
   { name: 'Intake', href: '/intake-requests', icon: FunnelIcon },
   { name: 'Initiatives', href: '/initiatives', icon: Icons.Briefcase },
-  { name: 'Capacity', href: '/capacity', icon: Icons.Users },
+  { name: 'Employees', href: '/capacity', icon: Icons.Users },
   // Org Capacity inserts here when org_capacity_view flag is enabled
   { name: 'Scenarios', href: '/scenarios', icon: Icons.Layers },
   { name: 'Reports', href: '/reports', icon: Icons.ChartBar },
@@ -142,7 +142,7 @@ export function Layout() {
   const navigation = useMemo(() => {
     const nav: NavItem[] = [...coreNavigation];
 
-    // Insert Org Capacity after Capacity
+    // Insert Org Capacity after Employees
     if (orgCapacityEnabled) {
       const capacityIdx = nav.findIndex((item) => item.href === '/capacity');
       nav.splice(capacityIdx + 1, 0, {
@@ -201,7 +201,7 @@ export function Layout() {
         key: 'c',
         alt: true,
         callback: () => navigate('/capacity'),
-        description: 'Go to Capacity',
+        description: 'Go to Employees',
       },
       {
         key: 's',
@@ -359,7 +359,7 @@ function Breadcrumb() {
     initiatives: 'Initiatives',
     intake: 'Jira Items',
     'intake-requests': 'Intake Pipeline',
-    capacity: 'Capacity',
+    capacity: 'Employees',
     'org-capacity': 'Org Capacity',
     scenarios: 'Scenarios',
     reports: 'Reports',
@@ -372,6 +372,7 @@ function Breadcrumb() {
     'job-profiles': 'Job Profiles',
     'feature-flags': 'Feature Flags',
     'jira-settings': 'Jira Settings',
+    'token-ledger': 'Token Ledger',
   };
 
   return (

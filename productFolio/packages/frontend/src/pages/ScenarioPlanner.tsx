@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -45,6 +45,8 @@ import type { Allocation, AutoAllocateResult, Scenario } from '../hooks/useScena
 import { useInitiatives } from '../hooks/useInitiatives';
 import { useEmployees } from '../hooks/useEmployees';
 import type { InitiativeStatus, InitiativeOrigin, Initiative, ScenarioStatus } from '../types';
+import { usePlanningModeToggle, type PlanningMode } from '../hooks/usePlanningMode';
+import { useFeatureFlag } from '../hooks/useFeatureFlags';
 
 const LOCKED_STATUSES = ['IN_EXECUTION', 'COMPLETE'];
 
@@ -1148,6 +1150,9 @@ export function ScenarioPlanner() {
   const updateScenario = useUpdateScenario();
   const queryClient = useQueryClient();
   const { canEdit, canTransition, canModifyAllocations, isReadOnly } = useScenarioPermissions(scenario as Scenario | undefined);
+  const navigate = useNavigate();
+  const planningModeToggle = usePlanningModeToggle();
+  const { enabled: tokenFlowEnabled } = useFeatureFlag('token_planning_v1');
   const updatePriorities = useUpdatePriorities();
   const createAllocation = useCreateAllocation();
   const updateAllocation = useUpdateAllocation();
@@ -1184,6 +1189,11 @@ export function ScenarioPlanner() {
   // Guided mode
   const [showGuidedMode, setShowGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState(0);
+
+  // Planning mode confirmation modal
+  const [showPlanningModeConfirm, setShowPlanningModeConfirm] = useState(false);
+  const [pendingPlanningMode, setPendingPlanningMode] = useState<PlanningMode | null>(null);
+  const currentPlanningMode: PlanningMode = (scenario?.planningMode as PlanningMode) || 'LEGACY';
 
   // Auto-allocate hooks and state
   const autoAllocatePreview = useAutoAllocatePreview();
@@ -1729,6 +1739,53 @@ export function ScenarioPlanner() {
         </div>
 
         <div className="header-right">
+          {/* Planning Mode toggle — visible when token_planning_v1 flag is enabled */}
+          {tokenFlowEnabled && canEdit && (
+            <div className="flex items-center gap-1 rounded-lg border border-surface-200 bg-surface-50 p-0.5">
+              <button
+                onClick={() => {
+                  if (currentPlanningMode !== 'LEGACY') {
+                    setPendingPlanningMode('LEGACY');
+                    setShowPlanningModeConfirm(true);
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  currentPlanningMode === 'LEGACY'
+                    ? 'bg-white text-surface-900 shadow-sm'
+                    : 'text-surface-500 hover:text-surface-700'
+                }`}
+              >
+                Legacy
+              </button>
+              <button
+                onClick={() => {
+                  if (currentPlanningMode !== 'TOKEN') {
+                    setPendingPlanningMode('TOKEN');
+                    setShowPlanningModeConfirm(true);
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                  currentPlanningMode === 'TOKEN'
+                    ? 'bg-accent-500 text-white shadow-sm'
+                    : 'text-surface-500 hover:text-surface-700'
+                }`}
+              >
+                Token Flow
+              </button>
+            </div>
+          )}
+          {/* Token Ledger link — visible in TOKEN mode */}
+          {tokenFlowEnabled && currentPlanningMode === 'TOKEN' && id && (
+            <button
+              onClick={() => navigate(`/scenarios/${id}/token-ledger`)}
+              className="btn-secondary"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+              </svg>
+              Token Ledger
+            </button>
+          )}
           <div className="relative">
             <button
               onClick={() => setShowAssumptions(!showAssumptions)}
@@ -2217,6 +2274,44 @@ export function ScenarioPlanner() {
           onSkip={() => setShowGuidedMode(false)}
         />
       )}
+
+      {/* Planning Mode Confirmation Modal */}
+      <Modal
+        isOpen={showPlanningModeConfirm}
+        onClose={() => { setShowPlanningModeConfirm(false); setPendingPlanningMode(null); }}
+        title="Switch Planning Mode"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-surface-600">
+            {pendingPlanningMode === 'TOKEN'
+              ? 'Switching to Token Flow mode will use token-based capacity planning for this scenario. You can switch back at any time.'
+              : 'Switching to Legacy mode will use time-based capacity planning. Any token data will be preserved.'}
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => { setShowPlanningModeConfirm(false); setPendingPlanningMode(null); }}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (id && pendingPlanningMode) {
+                  planningModeToggle.mutate(
+                    { id, planningMode: pendingPlanningMode },
+                    { onSettled: () => { setShowPlanningModeConfirm(false); setPendingPlanningMode(null); } },
+                  );
+                }
+              }}
+              disabled={planningModeToggle.isPending}
+              className="btn-primary"
+            >
+              {planningModeToggle.isPending ? 'Switching...' : 'Confirm'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Auto-Allocate Preview Modal */}
       <Modal

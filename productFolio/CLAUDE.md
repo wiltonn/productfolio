@@ -39,6 +39,14 @@ packages/
 │       ├── routes/           # API route handlers
 │       ├── services/         # Business logic
 │       ├── schemas/          # Zod validation schemas
+│       ├── planning/         # Planning engine (Strangler Pattern)
+│       │   ├── types.ts      # TokenLedgerSummary, BindingConstraint DTOs
+│       │   ├── planning-engine.ts  # PlanningEngine interface
+│       │   ├── planning.service.ts # Mode dispatch (LEGACY/TOKEN)
+│       │   ├── legacy-time-model.ts # Delegates to existing services
+│       │   ├── token-flow-model.ts  # Token ledger computation
+│       │   └── derive-demand.ts     # Derive token demand from scope items
+│       ├── plugins/          # Fastify plugins (auth, feature flags)
 │       ├── lib/              # Error handling, Prisma client, Redis
 │       ├── jobs/             # BullMQ background jobs
 │       │   ├── queue.ts      # Queue definitions
@@ -67,13 +75,19 @@ packages/
 ## Architecture
 
 **Layers**: Routes → Services → Prisma (Database)
+**Planning Layer**: Routes → PlanningService → PlanningEngine (LegacyTimeModel | TokenFlowModel) → Services → Prisma
 
 **Core Entities**:
-- **Initiative**: Business projects with status workflow (DRAFT → PENDING_APPROVAL → APPROVED → IN_PROGRESS → COMPLETED)
+- **Initiative**: Business projects with status workflow (PROPOSED → SCOPING → RESOURCING → IN_EXECUTION → COMPLETE)
 - **ScopeItem**: Work items with skill demands and P50/P90 estimates
 - **Employee**: Team members with skills, capacity calendars, and manager hierarchy
-- **Scenario**: What-if planning with allocations and priority rankings
+- **Scenario**: What-if planning with allocations and priority rankings; supports `planningMode` (LEGACY or TOKEN)
 - **Allocation**: Employee assignments to initiatives with date ranges and percentages
+- **SkillPool**: Named capacity pools (backend, frontend, data, qa, domain) for token planning
+- **TokenSupply/TokenDemand**: Token-based supply and demand per skill pool per scenario
+- **TokenCalibration**: Conversion rate (tokenPerHour) for deriving token demand from hour estimates
+- **ForecastRun**: Monte Carlo simulation results (scope-based or empirical mode)
+- **FeatureFlag**: Feature flags for gradual rollout (`token_planning_v1`, `flow_forecast_v1`, etc.)
 
 ## API Patterns
 
@@ -87,7 +101,12 @@ packages/
 **Initiatives**: `/api/initiatives` - CRUD, status transitions, bulk ops, CSV import/export
 **Scoping**: `/api/initiatives/:id/scope-items` - Scope items, approval workflow
 **Resources**: `/api/employees` - Employees, skills, capacity calendars
-**Scenarios**: `/api/scenarios` - Scenarios, allocations, capacity-demand analysis
+**Scenarios**: `/api/scenarios` - Scenarios, allocations, capacity-demand analysis, planning mode toggle
+**Planning (Token)**: `/api/scenarios/:id/token-supply`, `token-demand`, `token-ledger`, `derive-token-demand` (requires `token_planning_v1` flag)
+**Skill Pools**: `/api/skill-pools` - CRUD for token planning pools (requires `token_planning_v1` flag)
+**Forecasting**: `/api/forecast` - Monte Carlo scope-based and empirical forecasts (requires `flow_forecast_v1` flag)
+**Feature Flags**: `/api/feature-flags` - Admin CRUD for feature flags
+**Job Profiles**: `/api/job-profiles` - Job profiles with skills and cost bands
 **Jobs**: `/api/jobs` - Background job status and management
 
 ## Background Jobs (BullMQ)
@@ -132,6 +151,29 @@ REDIS_PASSWORD=
 REDIS_DB=0
 ```
 
+## Planning Modes (Strangler Pattern)
+
+Scenarios have a `planningMode` field (`LEGACY` default, `TOKEN` opt-in):
+- **LEGACY**: Time-based planning via `allocationService` and `scenarioCalculatorService`
+- **TOKEN**: Token flow planning via skill pools, token supply/demand, and ledger summaries
+
+`PlanningService.getEngine(scenarioId)` reads `planningMode` and returns the appropriate `PlanningEngine` implementation. Existing `/capacity-demand` and `/calculator` endpoints are routed through this layer — LEGACY mode output is identical to pre-Strangler behavior.
+
+Toggle mode: `PUT /api/scenarios/:id/planning-mode` with `{ mode: "TOKEN" | "LEGACY" }`.
+
+## Feature Flags
+
+| Flag | Description |
+|------|-------------|
+| `token_planning_v1` | Token flow planning mode + skill pools + token ledger |
+| `flow_forecast_v1` | Flow forecasting (Monte Carlo Mode A) |
+| `forecast_mode_b` | Empirical forecasting (Mode B) |
+| `org_capacity_view` | Org capacity rollup page |
+| `job_profiles` | Job profiles admin |
+
+Backend: `fastify.requireFeature('flag_key')` returns a preHandler that throws `NotFoundError('Resource')` when disabled.
+Frontend: `useFeatureFlag('flag_key')` hook for conditional rendering.
+
 ## Conventions
 
 - UUIDs for all primary keys
@@ -139,4 +181,6 @@ REDIS_DB=0
 - ESM modules throughout
 - Skill demands stored as JSON: `{frontend: 2, backend: 3}`
 - Approval workflow uses version tracking for audit trails
+- ADDITIVE schema changes only — never rename or remove existing tables/fields
+- Feature flag guards on new feature routes
 - Use agent-browser skill for browser tests

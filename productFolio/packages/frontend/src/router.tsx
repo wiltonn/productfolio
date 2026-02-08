@@ -83,6 +83,10 @@ const FlowForecast = lazy(() =>
   import('./pages/FlowForecast').then((m) => ({ default: m.FlowForecast }))
 );
 
+const TokenLedger = lazy(() =>
+  import('./pages/TokenLedger').then((m) => ({ default: m.TokenLedger }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -210,6 +214,16 @@ export const router = createBrowserRouter([
             <LazyPlannerPage>
               <ScenarioPlanner />
             </LazyPlannerPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'scenarios/:id/token-ledger',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <TokenLedger />
+            </LazyPage>
           </ErrorBoundary>
         ),
       },

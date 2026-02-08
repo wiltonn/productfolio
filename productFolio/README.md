@@ -8,8 +8,13 @@ Portfolio management and resource allocation platform for planning initiatives, 
 - **Resource Planning** - Manage employee skills, capacity, and availability
 - **Scenario Planning** - Model what-if scenarios with different allocations
 - **Capacity Analysis** - Compare demand vs. capacity across teams
+- **Token Flow Planning** - Token-based capacity planning with skill pools, supply/demand ledger, and binding constraints (Strangler Pattern alongside legacy time-based planning)
+- **Flow Forecasting** - Monte Carlo simulation with scope-based (Mode A) and empirical (Mode B) forecasting
+- **Org Hierarchy** - Org tree with capacity rollups and coverage reporting
+- **Intake Pipeline** - Intake request workflow with Jira integration
 - **Background Jobs** - Async processing for imports and calculations
 - **JWT Authentication** - Secure API with refresh token rotation
+- **Feature Flags** - Gradual rollout of new features via feature flag system
 
 ## Tech Stack
 
@@ -81,7 +86,8 @@ productfolio/
 │   │       ├── routes/          # API route handlers
 │   │       ├── services/        # Business logic
 │   │       ├── schemas/         # Zod validation schemas
-│   │       ├── plugins/         # Fastify plugins (auth)
+│   │       ├── planning/        # Planning engine (Strangler Pattern)
+│   │       ├── plugins/         # Fastify plugins (auth, feature flags)
 │   │       ├── lib/             # Utilities, Prisma client, errors
 │   │       ├── jobs/            # BullMQ job processors
 │   │       └── tests/           # Vitest tests
@@ -168,7 +174,38 @@ productfolio/
 | GET | `/api/scenarios/:id/allocations` | Get allocations |
 | POST | `/api/scenarios/:id/allocations` | Create allocation |
 | GET | `/api/scenarios/:id/capacity-demand` | Capacity vs demand analysis |
+| GET | `/api/scenarios/:id/calculator` | Demand vs capacity with caching |
 | GET | `/api/scenarios/compare` | Compare multiple scenarios |
+| PUT | `/api/scenarios/:id/planning-mode` | Switch planning mode (LEGACY/TOKEN) |
+
+### Token Planning (Feature Flag: `token_planning_v1`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/skill-pools` | List skill pools |
+| GET | `/api/skill-pools/:id` | Get skill pool details |
+| POST | `/api/skill-pools` | Create skill pool (Admin) |
+| PUT | `/api/skill-pools/:id` | Update skill pool (Admin) |
+| DELETE | `/api/skill-pools/:id` | Soft-delete skill pool (Admin) |
+| GET | `/api/scenarios/:id/token-supply` | List token supply for scenario |
+| PUT | `/api/scenarios/:id/token-supply` | Upsert token supply |
+| DELETE | `/api/scenarios/:id/token-supply/:poolId` | Remove token supply |
+| GET | `/api/scenarios/:id/token-demand` | List token demand for scenario |
+| PUT | `/api/scenarios/:id/token-demand` | Upsert token demand |
+| POST | `/api/scenarios/:id/token-demand/bulk` | Bulk upsert token demand |
+| DELETE | `/api/scenarios/:id/token-demand/:id` | Remove token demand |
+| GET | `/api/scenarios/:id/token-ledger` | Token ledger summary (TOKEN mode only) |
+| POST | `/api/scenarios/:id/derive-token-demand` | Derive demand from scope items |
+
+### Forecasting (Feature Flag: `flow_forecast_v1`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/forecast/scope-based` | Run Monte Carlo scope-based forecast |
+| POST | `/api/forecast/empirical` | Run empirical forecast from cycle times |
+| GET | `/api/forecast/runs` | List forecast runs |
+| GET | `/api/forecast/runs/:id` | Get forecast run details |
+| POST | `/api/forecast/data-quality` | Assess data quality for forecasting |
 
 ## Environment Variables
 
@@ -202,8 +239,11 @@ REDIS_DB=0
 - **Initiative** - Business projects with status workflow (DRAFT → PENDING_APPROVAL → APPROVED → IN_PROGRESS → COMPLETED)
 - **ScopeItem** - Work items with skill demands and P50/P90 estimates
 - **Employee** - Team members with skills, capacity calendars, and manager hierarchy
-- **Scenario** - What-if planning with allocations and priority rankings
+- **Scenario** - What-if planning with allocations and priority rankings, supports LEGACY (time-based) and TOKEN (token flow) planning modes
 - **Allocation** - Employee assignments to initiatives with date ranges and percentages
+- **SkillPool** - Named capacity pools (backend, frontend, data, qa, domain) for token planning
+- **TokenSupply/TokenDemand** - Token-based supply and demand per skill pool per scenario
+- **ForecastRun** - Monte Carlo simulation results with data quality assessments
 
 ### Authentication Flow
 
@@ -227,6 +267,31 @@ Run the worker alongside the API server:
 ```bash
 npm run dev:worker
 ```
+
+## Planning Modes (Strangler Pattern)
+
+Scenarios support two planning modes, selectable per-scenario:
+
+| Mode | Description |
+|------|-------------|
+| **LEGACY** (default) | Time-based planning using employee allocations, capacity calendars, and hour-based demand |
+| **TOKEN** | Token flow planning using skill pools, token supply/demand, and a ledger-based balance sheet |
+
+The `PlanningService` reads `scenario.planningMode` and dispatches to the appropriate engine:
+- `LegacyTimeModel` delegates to existing `allocationService` and `scenarioCalculatorService`
+- `TokenFlowModel` provides token ledger summaries with binding constraint analysis
+
+Both modes coexist — switching modes preserves existing data. Enable token planning via the `token_planning_v1` feature flag.
+
+## Feature Flags
+
+| Flag | Description | Dependencies |
+|------|-------------|-------------|
+| `org_capacity_view` | Org capacity rollup page | None |
+| `job_profiles` | Job profiles admin page | None |
+| `flow_forecast_v1` | Flow forecasting (Mode A) | None |
+| `forecast_mode_b` | Empirical forecasting (Mode B) | `flow_forecast_v1` |
+| `token_planning_v1` | Token flow planning mode | None |
 
 ## Testing
 

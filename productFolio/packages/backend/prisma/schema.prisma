@@ -154,6 +154,11 @@ enum ForecastMode {
   EMPIRICAL
 }
 
+enum PlanningMode {
+  LEGACY
+  TOKEN
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -467,6 +472,7 @@ model Scenario {
   revisionReason       RevisionReason? @map("revision_reason")
   changeLog            String?         @map("change_log") @db.Text
   needsReconciliation  Boolean         @default(false) @map("needs_reconciliation")
+  planningMode         PlanningMode    @default(LEGACY) @map("planning_mode")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -485,6 +491,7 @@ model Scenario {
   @@index([isPrimary])
   @@index([scenarioType])
   @@index([revisionOfScenarioId])
+  @@index([planningMode])
 }
 
 model Allocation {
@@ -1171,4 +1178,86 @@ model InitiativeStatusLog {
   @@index([initiativeId])
   @@index([toStatus])
   @@map("initiative_status_logs")
+}
+
+// ============================================================================
+// Token Planning (Skill Pools & Token Ledger)
+// ============================================================================
+
+model SkillPool {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tokenSupplies     TokenSupply[]
+  tokenDemands      TokenDemand[]
+  tokenCalibrations TokenCalibration[]
+
+  @@index([name])
+  @@index([isActive])
+  @@map("skill_pools")
+}
+
+model TokenSupply {
+  id          String  @id @default(uuid()) @db.Uuid
+  scenarioId  String  @map("scenario_id") @db.Uuid
+  skillPoolId String  @map("skill_pool_id") @db.Uuid
+  tokens      Float
+  notes       String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  skillPool SkillPool @relation(fields: [skillPoolId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, skillPoolId])
+  @@index([scenarioId])
+  @@index([skillPoolId])
+  @@map("token_supplies")
+}
+
+model TokenDemand {
+  id           String  @id @default(uuid()) @db.Uuid
+  scenarioId   String  @map("scenario_id") @db.Uuid
+  initiativeId String  @map("initiative_id") @db.Uuid
+  skillPoolId  String  @map("skill_pool_id") @db.Uuid
+  tokensP50    Float   @map("tokens_p50")
+  tokensP90    Float?  @map("tokens_p90")
+  notes        String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  skillPool SkillPool @relation(fields: [skillPoolId], references: [id], onDelete: Cascade)
+
+  @@unique([scenarioId, initiativeId, skillPoolId])
+  @@index([scenarioId])
+  @@index([initiativeId])
+  @@index([skillPoolId])
+  @@map("token_demands")
+}
+
+model TokenCalibration {
+  id            String   @id @default(uuid()) @db.Uuid
+  skillPoolId   String   @map("skill_pool_id") @db.Uuid
+  tokenPerHour  Float    @default(1.0) @map("token_per_hour")
+  effectiveDate DateTime @map("effective_date") @db.Date
+  notes         String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  skillPool SkillPool @relation(fields: [skillPoolId], references: [id], onDelete: Cascade)
+
+  @@unique([skillPoolId, effectiveDate])
+  @@index([skillPoolId])
+  @@map("token_calibrations")
 }

@@ -20,6 +20,7 @@ import { scenarioCalculatorService } from '../services/scenario-calculator.servi
 import { baselineService } from '../services/baseline.service.js';
 import { deltaEngineService } from '../services/delta-engine.service.js';
 import { rampService } from '../services/ramp.service.js';
+import { planningService } from '../planning/planning.service.js';
 
 const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
 
@@ -199,7 +200,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{ Params: { id: string } }>(
     '/api/scenarios/:id/capacity-demand',
     async (request, reply) => {
-      const results = await allocationService.calculateCapacityDemand(request.params.id);
+      const results = await planningService.getCapacityDemand(request.params.id);
       return reply.code(200).send(results);
     }
   );
@@ -224,7 +225,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         skipCache: request.query.skipCache,
         includeBreakdown: request.query.includeBreakdown,
       });
-      const results = await scenarioCalculatorService.calculate(
+      const results = await planningService.getCalculator(
         request.params.id,
         options
       );

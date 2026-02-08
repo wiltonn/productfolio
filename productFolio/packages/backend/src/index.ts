@@ -24,6 +24,8 @@ import { intakeRequestRoutes } from './routes/intake-requests.js';
 import { featureFlagsRoutes } from './routes/feature-flags.js';
 import { jobProfilesRoutes } from './routes/job-profiles.js';
 import { forecastRoutes } from './routes/forecast.js';
+import { planningRoutes } from './routes/planning.js';
+import { skillPoolsRoutes } from './routes/skill-pools.js';
 import { getWorkerStatus } from './jobs/index.js';
 import { validateJiraConfig } from './lib/config/jira.js';
 
@@ -87,6 +89,8 @@ await fastify.register(intakeRequestRoutes);
 await fastify.register(featureFlagsRoutes);
 await fastify.register(jobProfilesRoutes);
 await fastify.register(forecastRoutes);
+await fastify.register(planningRoutes);
+await fastify.register(skillPoolsRoutes);
 
 const start = async () => {
   try {
