@@ -21,6 +21,7 @@ import type {
   BulkUpdateResult,
 } from '../types/index.js';
 import { logTransition } from './initiative-status-log.service.js';
+import { approvalEnforcementService } from './approval-enforcement.service.js';
 
 /**
  * List initiatives with filtering and pagination
@@ -375,6 +376,21 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus, 
 
   if (!initiative) {
     throw new NotFoundError('Initiative', id);
+  }
+
+  // Check approval enforcement
+  const approvalResult = await approvalEnforcementService.checkApproval({
+    scope: 'INITIATIVE',
+    subjectType: 'initiative',
+    subjectId: id,
+    actorId: actorId || 'system',
+  });
+  if (!approvalResult.allowed) {
+    throw new WorkflowError(
+      `Approval required: pending request created (${approvalResult.pendingRequestId})`,
+      initiative.status,
+      newStatus
+    );
   }
 
   // Validate transition

@@ -16,6 +16,7 @@ import type {
   ScenarioAssumptions,
 } from '../types/index.js';
 import { PeriodType, ScenarioStatus, AllocationType } from '@prisma/client';
+import { approvalEnforcementService } from './approval-enforcement.service.js';
 
 const LOCKED_STATUSES = ['IN_EXECUTION', 'COMPLETE'];
 
@@ -582,6 +583,17 @@ export class AllocationService {
       throw new NotFoundError('Scenario', scenarioId);
     }
 
+    // Check approval enforcement for resource allocation
+    const approvalResult = await approvalEnforcementService.checkApproval({
+      scope: 'RESOURCE_ALLOCATION',
+      subjectType: 'allocation',
+      subjectId: scenarioId,
+      actorId: 'system',
+    });
+    if (!approvalResult.allowed) {
+      throw new WorkflowError('Approval required for resource allocation');
+    }
+
     // Guard: scenario must be editable (not LOCKED or APPROVED)
     await this.assertScenarioEditable(scenarioId);
 
@@ -680,6 +692,17 @@ export class AllocationService {
 
     if (!allocation) {
       throw new NotFoundError('Allocation', id);
+    }
+
+    // Check approval enforcement for resource allocation
+    const approvalResult = await approvalEnforcementService.checkApproval({
+      scope: 'RESOURCE_ALLOCATION',
+      subjectType: 'allocation',
+      subjectId: allocation.scenarioId,
+      actorId: 'system',
+    });
+    if (!approvalResult.allowed) {
+      throw new WorkflowError('Approval required for resource allocation');
     }
 
     // Guard: scenario must be editable

@@ -4,6 +4,7 @@ import { useInitiative, useUpdateInitiative, useUpdateInitiativeStatus, useIniti
 import { useQuarterPeriods } from '../hooks/usePeriods';
 import { StatusBadge, Select } from '../components/ui';
 import { OriginBadge } from '../components/OriginBadge';
+import { ApprovalStatusBanner } from '../components/ApprovalStatusBanner';
 import type { InitiativeStatus, InitiativeAllocation } from '../types';
 
 // Types for scope items and approvals
@@ -456,6 +457,15 @@ export function InitiativeDetail() {
           </div>
         </div>
       </div>
+
+      {/* Approval Status Banner */}
+      {id && (
+        <ApprovalStatusBanner
+          subjectType="initiative"
+          subjectId={id}
+          scope="INITIATIVE"
+        />
+      )}
 
       {/* Tabs */}
       <div className="border-b border-surface-200 mb-6">

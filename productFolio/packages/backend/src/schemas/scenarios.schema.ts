@@ -15,6 +15,7 @@ export type PriorityRanking = z.infer<typeof priorityRankingSchema>;
 export const createScenarioSchema = z.object({
   name: z.string().min(1).max(255),
   periodId: uuidSchema,
+  orgNodeId: z.string().uuid().optional(),
   assumptions: z.record(z.string(), z.unknown()).optional(),
   priorityRankings: z.array(priorityRankingSchema).optional(),
   scenarioType: z.enum(['BASELINE', 'REVISION', 'WHAT_IF']).default('WHAT_IF').optional(),
@@ -25,6 +26,7 @@ export type CreateScenario = z.infer<typeof createScenarioSchema>;
 // Update Scenario Schema (quarter/periodId is immutable)
 export const updateScenarioSchema = z.object({
   name: z.string().min(1).max(255).optional(),
+  orgNodeId: z.string().uuid().nullable().optional(),
   assumptions: z.record(z.string(), z.unknown()).optional(),
   priorityRankings: z.array(priorityRankingSchema).optional(),
 });

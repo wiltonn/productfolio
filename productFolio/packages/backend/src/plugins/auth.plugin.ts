@@ -7,9 +7,13 @@ import { findOrProvisionUser } from '../services/auth.service.js';
 import { permissionsForRole, deriveSeatType, SeatType } from '../lib/permissions.js';
 
 const PERMISSIONS_CLAIM = 'https://productfolio.local/permissions';
+const ROLES_CLAIM = 'https://productfolio.local/roles';
+
+const VALID_ROLES = new Set<string>(Object.values(UserRole));
 
 export interface JwtPayload {
   sub: string; // local user id
+  auth0Sub: string; // Auth0 subject (e.g. auth0|abc123)
   email: string;
   role: UserRole;
   permissions: string[];
@@ -102,11 +106,31 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
           token
         );
 
+        // Determine effective role: Auth0 RBAC claim overrides local role
+        let effectiveRole = localUser.role;
+        const rolesClaim = payload[ROLES_CLAIM];
+        if (Array.isArray(rolesClaim) && rolesClaim.length > 0) {
+          const auth0Role = rolesClaim[0] as string;
+          if (VALID_ROLES.has(auth0Role)) {
+            effectiveRole = auth0Role as UserRole;
+          }
+        }
+
+        // Fire-and-forget: sync role to Auth0 when a new user is provisioned
+        // (non-blocking — don't await or fail the request)
+        import('../services/auth0-management.service.js')
+          .then(({ auth0ManagementService }) => {
+            auth0ManagementService
+              .assignRoleToUser(auth0Sub, effectiveRole)
+              .catch(() => {}); // swallow errors
+          })
+          .catch(() => {}); // swallow import errors (e.g. mgmt not configured)
+
         // Merge JWT claim permissions with role-derived permissions.
         // Role-derived permissions are always included so that local role
         // changes (e.g. authority:admin) take effect without updating Auth0.
         const claimPermissions = payload[PERMISSIONS_CLAIM];
-        const rolePermissions = permissionsForRole(localUser.role);
+        const rolePermissions = permissionsForRole(effectiveRole);
         let permissions: string[];
         if (Array.isArray(claimPermissions) && claimPermissions.length > 0) {
           permissions = [...new Set([...claimPermissions as string[], ...rolePermissions])];
@@ -118,8 +142,9 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
 
         request.user = {
           sub: localUser.id,
+          auth0Sub,
           email: localUser.email,
-          role: localUser.role,
+          role: effectiveRole,
           permissions,
           seatType,
         };

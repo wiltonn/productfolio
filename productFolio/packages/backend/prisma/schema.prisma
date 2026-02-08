@@ -159,6 +159,11 @@ enum PlanningMode {
   TOKEN
 }
 
+enum PolicyEnforcement {
+  BLOCKING
+  ADVISORY
+}
+
 // ============================================================================
 // User
 // ============================================================================
@@ -477,6 +482,7 @@ model Scenario {
   changeLog            String?         @map("change_log") @db.Text
   needsReconciliation  Boolean         @default(false) @map("needs_reconciliation")
   planningMode         PlanningMode    @default(LEGACY) @map("planning_mode")
+  orgNodeId            String?         @map("org_node_id") @db.Uuid
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -488,6 +494,7 @@ model Scenario {
   revisions          Scenario[]        @relation("ScenarioRevisions")
   baselineSnapshot   BaselineSnapshot?
   driftAlerts        DriftAlert[]
+  orgNode            OrgNode?          @relation("OrgNodeScenarios", fields: [orgNodeId], references: [id])
 
   @@index([name])
   @@index([periodId])
@@ -496,6 +503,7 @@ model Scenario {
   @@index([scenarioType])
   @@index([revisionOfScenarioId])
   @@index([planningMode])
+  @@index([orgNodeId])
 }
 
 model Allocation {
@@ -924,6 +932,7 @@ model OrgNode {
   approvalPolicies    ApprovalPolicy[]
   approvalDelegations ApprovalDelegation[]
   initiatives         Initiative[]         @relation("OrgNodeInitiatives")
+  scenarios           Scenario[]           @relation("OrgNodeScenarios")
   intakeRequests      IntakeRequest[]      @relation("OrgNodeIntakeRequests")
 
   @@index([parentId])
@@ -988,6 +997,7 @@ model ApprovalPolicy {
   ruleType        ApprovalRuleType
   ruleConfig      Json             @default("{}") @db.JsonB
   crossBuStrategy CrossBuStrategy  @default(COMMON_ANCESTOR)
+  enforcement     PolicyEnforcement @default(BLOCKING)
   isActive        Boolean          @default(true)
 
   createdAt DateTime @default(now())

@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { logAuditEvent } from './audit.service.js';
 import { getActiveMembership } from './org-membership.service.js';
-import type { ApprovalScope, ApprovalRuleType, CrossBuStrategy, Prisma, UserRole } from '@prisma/client';
+import type { ApprovalScope, ApprovalRuleType, CrossBuStrategy, PolicyEnforcement, Prisma, UserRole } from '@prisma/client';
 
 // ============================================================================
 // Types
@@ -15,12 +15,14 @@ export interface CreatePolicyInput {
   ruleType: ApprovalRuleType;
   ruleConfig?: Record<string, unknown>;
   crossBuStrategy?: CrossBuStrategy;
+  enforcement?: PolicyEnforcement;
 }
 
 export interface UpdatePolicyInput {
   ruleType?: ApprovalRuleType;
   ruleConfig?: Record<string, unknown>;
   crossBuStrategy?: CrossBuStrategy;
+  enforcement?: PolicyEnforcement;
   isActive?: boolean;
 }
 
@@ -61,6 +63,7 @@ export async function createPolicy(input: CreatePolicyInput, actorId?: string) {
       ruleType: input.ruleType,
       ruleConfig: (input.ruleConfig ?? {}) as Prisma.InputJsonValue,
       crossBuStrategy: input.crossBuStrategy ?? 'COMMON_ANCESTOR',
+      enforcement: input.enforcement ?? 'BLOCKING',
     },
     include: {
       orgNode: { select: { id: true, name: true, code: true } },
@@ -92,6 +95,7 @@ export async function updatePolicy(id: string, input: UpdatePolicyInput, actorId
   if (input.ruleType !== undefined) data.ruleType = input.ruleType;
   if (input.ruleConfig !== undefined) data.ruleConfig = input.ruleConfig;
   if (input.crossBuStrategy !== undefined) data.crossBuStrategy = input.crossBuStrategy;
+  if (input.enforcement !== undefined) data.enforcement = input.enforcement;
   if (input.isActive !== undefined) data.isActive = input.isActive;
 
   const updated = await prisma.approvalPolicy.update({

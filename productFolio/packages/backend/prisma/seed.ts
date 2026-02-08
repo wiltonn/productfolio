@@ -494,6 +494,7 @@ async function main() {
     { key: 'flow_forecast_v1', description: 'Enable Flow Forecast page (Mode A: scope-based forecasting)' },
     { key: 'forecast_mode_b', description: 'Enable Mode B: empirical forecasting based on historical throughput' },
     { key: 'token_planning_v1', description: 'Enable Token+Flow planning mode for scenarios' },
+    { key: 'approval_enforcement_v1', description: 'Enable approval policy enforcement (BLOCKING/ADVISORY) on operations' },
   ];
 
   for (const flag of featureFlags) {

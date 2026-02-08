@@ -19,8 +19,21 @@ import {
   useBulkDeleteInitiatives,
   useExportInitiatives,
 } from '../hooks/useInitiatives';
-import type { Initiative, InitiativeStatus, InitiativeFilters } from '../types';
+import { useOrgTree } from '../hooks/useOrgTree';
+import type { Initiative, InitiativeStatus, InitiativeFilters, OrgNode } from '../types';
 import { getQuarterOptions } from '../types';
+
+// Flatten org tree into a list for the filter dropdown
+function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
+  const result: Array<{ id: string; name: string; depth: number }> = [];
+  for (const node of nodes) {
+    result.push({ id: node.id, name: node.name, depth });
+    if (node.children?.length) {
+      result.push(...flattenOrgTree(node.children, depth + 1));
+    }
+  }
+  return result;
+}
 
 // Status filter options
 const statusOptions = [
@@ -51,6 +64,17 @@ export function InitiativesList() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [quarterFilter, setQuarterFilter] = useState('');
   const [originFilter, setOriginFilter] = useState('');
+  const [orgNodeFilter, setOrgNodeFilter] = useState('');
+
+  // Org tree for dropdown
+  const { data: orgTree } = useOrgTree();
+  const orgNodeOptions = useMemo(() => {
+    const flat = flattenOrgTree(orgTree ?? []);
+    return flat.map((n) => ({
+      value: n.id,
+      label: '\u00A0\u00A0'.repeat(n.depth) + n.name,
+    }));
+  }, [orgTree]);
 
   // Table state
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -69,9 +93,10 @@ export function InitiativesList() {
       status: statusFilter.length > 0 ? (statusFilter as InitiativeStatus[]) : undefined,
       targetQuarter: quarterFilter || undefined,
       origin: originFilter || undefined,
+      orgNodeId: orgNodeFilter || undefined,
       limit: 100, // Backend max is 100
     }),
-    [search, statusFilter, quarterFilter, originFilter]
+    [search, statusFilter, quarterFilter, originFilter, orgNodeFilter]
   );
 
   // API hooks
@@ -412,7 +437,7 @@ export function InitiativesList() {
     [quarterDates, allocationHoursMap]
   );
 
-  const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter || originFilter;
+  const hasActiveFilters = search || statusFilter.length > 0 || quarterFilter || originFilter || orgNodeFilter;
 
   return (
     <div className="animate-fade-in">
@@ -532,6 +557,13 @@ export function InitiativesList() {
                 placeholder="Origin"
                 className="w-40"
               />
+              <Select
+                options={orgNodeOptions}
+                value={orgNodeFilter}
+                onChange={setOrgNodeFilter}
+                placeholder="Org Unit"
+                className="w-44"
+              />
               {hasActiveFilters && (
                 <button
                   onClick={() => {
@@ -539,6 +571,7 @@ export function InitiativesList() {
                     setStatusFilter([]);
                     setQuarterFilter('');
                     setOriginFilter('');
+                    setOrgNodeFilter('');
                   }}
                   className="text-sm text-surface-500 hover:text-surface-700 transition-colors"
                 >

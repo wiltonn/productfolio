@@ -13,7 +13,7 @@ import {
   useDeletePolicy,
 } from '../hooks/useApprovals';
 import { Modal } from '../components/ui';
-import type { OrgNode, OrgNodeType, ApprovalScope, ApprovalRuleType } from '../types';
+import type { OrgNode, OrgNodeType, ApprovalScope, ApprovalRuleType, PolicyEnforcement, ApprovalPolicy } from '../types';
 
 // ============================================================================
 // Tree Node Component
@@ -193,20 +193,51 @@ function NodeDetailPanel({ nodeId }: { nodeId: string }) {
   );
 }
 
-function PolicyCard({ policy }: { policy: { id: string; scope: string; level: number; ruleType: string } }) {
+function getRuleDetail(ruleType: string, ruleConfig: Record<string, unknown>): string {
+  switch (ruleType) {
+    case 'ROLE_BASED':
+      return `Role: ${ruleConfig.role ?? 'N/A'}`;
+    case 'COMMITTEE':
+      return `Committee: ${(ruleConfig.userIds as string[])?.length ?? 0} members, quorum ${ruleConfig.quorum ?? '?'}`;
+    case 'SPECIFIC_PERSON':
+      return `User: ${(ruleConfig.userId as string)?.slice(0, 8) ?? 'N/A'}...`;
+    case 'NODE_MANAGER':
+      return 'Node Manager';
+    case 'ANCESTOR_MANAGER':
+      return 'Ancestor Manager';
+    case 'FALLBACK_ADMIN':
+      return 'Admin Fallback';
+    default:
+      return ruleType;
+  }
+}
+
+function PolicyCard({ policy }: { policy: ApprovalPolicy }) {
   const deletePolicy = useDeletePolicy();
+  const enforcement = policy.enforcement ?? 'BLOCKING';
+  const enforcementColors = enforcement === 'BLOCKING'
+    ? 'bg-red-100 text-red-700'
+    : 'bg-amber-100 text-amber-700';
 
   return (
-    <div className="flex items-center justify-between p-2 bg-surface-50 rounded text-sm">
-      <div>
-        <span className="font-medium text-surface-700">{policy.scope}</span>
-        <span className="text-surface-400 mx-1">&middot;</span>
-        <span className="text-surface-500">L{policy.level}</span>
-        <span className="text-surface-400 mx-1">&middot;</span>
-        <span className="text-surface-500">{policy.ruleType}</span>
+    <div className="flex items-center justify-between p-2.5 bg-surface-50 rounded text-sm">
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-surface-700">{policy.scope}</span>
+          <span className="text-surface-400">&middot;</span>
+          <span className="text-surface-500">L{policy.level}</span>
+          <span className="text-surface-400">&middot;</span>
+          <span className="text-surface-500">{policy.ruleType}</span>
+          <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${enforcementColors}`}>
+            {enforcement}
+          </span>
+        </div>
+        <span className="text-xs text-surface-400">
+          {getRuleDetail(policy.ruleType, policy.ruleConfig ?? {})}
+        </span>
       </div>
       <button
-        className="text-xs text-red-500 hover:text-red-600"
+        className="text-xs text-red-500 hover:text-red-600 flex-shrink-0"
         onClick={() => deletePolicy.mutate(policy.id)}
       >
         Remove
@@ -222,17 +253,29 @@ function PolicyCard({ policy }: { policy: { id: string; scope: string; level: nu
 function AddPolicyModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const createPolicy = useCreatePolicy();
   const [scope, setScope] = useState<ApprovalScope>('INITIATIVE');
+  const [enforcement, setEnforcement] = useState<PolicyEnforcement>('BLOCKING');
   const [level, setLevel] = useState(1);
   const [ruleType, setRuleType] = useState<ApprovalRuleType>('NODE_MANAGER');
   const [userId, setUserId] = useState('');
+  const [role, setRole] = useState('ADMIN');
+  const [committeeUserIds, setCommitteeUserIds] = useState('');
+  const [quorum, setQuorum] = useState(1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const ruleConfig: Record<string, unknown> = {};
-    if (ruleType === 'SPECIFIC_PERSON') ruleConfig.userId = userId;
+    if (ruleType === 'SPECIFIC_PERSON') {
+      ruleConfig.userId = userId;
+    } else if (ruleType === 'ROLE_BASED') {
+      ruleConfig.role = role;
+    } else if (ruleType === 'COMMITTEE') {
+      const userIds = committeeUserIds.split(',').map((s) => s.trim()).filter(Boolean);
+      ruleConfig.userIds = userIds;
+      ruleConfig.quorum = Math.min(quorum, userIds.length);
+    }
 
     createPolicy.mutate(
-      { nodeId, scope, level, ruleType, ruleConfig },
+      { nodeId, scope, level, ruleType, ruleConfig, enforcement },
       { onSuccess: onClose },
     );
   };
@@ -240,43 +283,63 @@ function AddPolicyModal({ nodeId, onClose }: { nodeId: string; onClose: () => vo
   return (
     <Modal isOpen title="Add Approval Policy" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-surface-700 mb-1">Scope</label>
-          <select
-            className="w-full border rounded px-3 py-2 text-sm"
-            value={scope}
-            onChange={(e) => setScope(e.target.value as ApprovalScope)}
-          >
-            <option value="RESOURCE_ALLOCATION">Resource Allocation</option>
-            <option value="INITIATIVE">Initiative</option>
-            <option value="SCENARIO">Scenario</option>
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Scope</label>
+            <select
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={scope}
+              onChange={(e) => setScope(e.target.value as ApprovalScope)}
+            >
+              <option value="RESOURCE_ALLOCATION">Resource Allocation</option>
+              <option value="INITIATIVE">Initiative</option>
+              <option value="SCENARIO">Scenario</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Enforcement</label>
+            <select
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={enforcement}
+              onChange={(e) => setEnforcement(e.target.value as PolicyEnforcement)}
+            >
+              <option value="BLOCKING">Blocking</option>
+              <option value="ADVISORY">Advisory</option>
+            </select>
+            <p className="text-xs text-surface-400 mt-1">
+              {enforcement === 'BLOCKING' ? 'Operations blocked until approved' : 'Warnings shown but operations allowed'}
+            </p>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-surface-700 mb-1">Level</label>
-          <input
-            type="number"
-            min={1}
-            className="w-full border rounded px-3 py-2 text-sm"
-            value={level}
-            onChange={(e) => setLevel(Number(e.target.value))}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Level</label>
+            <input
+              type="number"
+              min={1}
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={level}
+              onChange={(e) => setLevel(Number(e.target.value))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Rule Type</label>
+            <select
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={ruleType}
+              onChange={(e) => setRuleType(e.target.value as ApprovalRuleType)}
+            >
+              <option value="NODE_MANAGER">Node Manager</option>
+              <option value="SPECIFIC_PERSON">Specific Person</option>
+              <option value="ROLE_BASED">Role Based</option>
+              <option value="ANCESTOR_MANAGER">Ancestor Manager</option>
+              <option value="COMMITTEE">Committee</option>
+              <option value="FALLBACK_ADMIN">Fallback Admin</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-surface-700 mb-1">Rule Type</label>
-          <select
-            className="w-full border rounded px-3 py-2 text-sm"
-            value={ruleType}
-            onChange={(e) => setRuleType(e.target.value as ApprovalRuleType)}
-          >
-            <option value="NODE_MANAGER">Node Manager</option>
-            <option value="SPECIFIC_PERSON">Specific Person</option>
-            <option value="ROLE_BASED">Role Based</option>
-            <option value="ANCESTOR_MANAGER">Ancestor Manager</option>
-            <option value="COMMITTEE">Committee</option>
-            <option value="FALLBACK_ADMIN">Fallback Admin</option>
-          </select>
-        </div>
+
+        {/* Rule-specific config fields */}
         {ruleType === 'SPECIFIC_PERSON' && (
           <div>
             <label className="block text-sm font-medium text-surface-700 mb-1">User ID</label>
@@ -286,9 +349,64 @@ function AddPolicyModal({ nodeId, onClose }: { nodeId: string; onClose: () => vo
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
               placeholder="Enter user UUID"
+              required
             />
           </div>
         )}
+
+        {ruleType === 'ROLE_BASED' && (
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1">Required Role</label>
+            <select
+              className="w-full border rounded px-3 py-2 text-sm"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
+              <option value="ADMIN">Admin</option>
+              <option value="PRODUCT_OWNER">Product Owner</option>
+              <option value="BUSINESS_OWNER">Business Owner</option>
+              <option value="RESOURCE_MANAGER">Resource Manager</option>
+              <option value="VIEWER">Viewer</option>
+            </select>
+            <p className="text-xs text-surface-400 mt-1">
+              Any user with this role can approve
+            </p>
+          </div>
+        )}
+
+        {ruleType === 'COMMITTEE' && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-surface-700 mb-1">Committee Member IDs</label>
+              <textarea
+                className="w-full border rounded px-3 py-2 text-sm"
+                rows={3}
+                value={committeeUserIds}
+                onChange={(e) => setCommitteeUserIds(e.target.value)}
+                placeholder="Enter comma-separated user UUIDs"
+                required
+              />
+              <p className="text-xs text-surface-400 mt-1">
+                {committeeUserIds.split(',').filter((s) => s.trim()).length} member(s) entered
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-surface-700 mb-1">Quorum</label>
+              <input
+                type="number"
+                min={1}
+                max={committeeUserIds.split(',').filter((s) => s.trim()).length || 1}
+                className="w-full border rounded px-3 py-2 text-sm"
+                value={quorum}
+                onChange={(e) => setQuorum(Number(e.target.value))}
+              />
+              <p className="text-xs text-surface-400 mt-1">
+                Number of approvals required
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel

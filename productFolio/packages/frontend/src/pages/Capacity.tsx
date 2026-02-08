@@ -5,7 +5,21 @@ import { useEmployees, useCreateEmployee, useUpdateEmployee, useEmployeeAllocati
 import type { EmployeeAllocation, QuarterAllocationSummary, PtoHoursResponse } from '../hooks/useEmployees';
 import { useQuarterPeriods } from '../hooks/usePeriods';
 import type { Period } from '../hooks/usePeriods';
+import { useOrgTree, useMemberships } from '../hooks/useOrgTree';
+import type { OrgNode } from '../types';
 import { api } from '../api/client';
+
+// Flatten org tree into a list for the filter dropdown
+function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
+  const result: Array<{ id: string; name: string; depth: number }> = [];
+  for (const node of nodes) {
+    result.push({ id: node.id, name: node.name, depth });
+    if (node.children?.length) {
+      result.push(...flattenOrgTree(node.children, depth + 1));
+    }
+  }
+  return result;
+}
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -997,6 +1011,18 @@ const DEFAULT_HOLIDAYS: Holiday[] = [
 
 // Main Component
 export function Capacity() {
+  // Org node filter
+  const { data: orgTree } = useOrgTree();
+  const [orgNodeFilter, setOrgNodeFilter] = useState<string>('');
+  const flatNodes = useMemo(() => flattenOrgTree(orgTree ?? []), [orgTree]);
+  const { data: membershipsData } = useMemberships(
+    orgNodeFilter ? { orgNodeId: orgNodeFilter, activeOnly: true, limit: 500 } : undefined
+  );
+  const orgMemberEmployeeIds = useMemo(() => {
+    if (!orgNodeFilter || !membershipsData?.data) return null;
+    return new Set(membershipsData.data.map((m) => m.employeeId));
+  }, [orgNodeFilter, membershipsData]);
+
   // Fetch employees from API
   const { data: employeesData, isLoading } = useEmployees({ limit: 100 });
   const createEmployee = useCreateEmployee();
@@ -1102,16 +1128,24 @@ export function Capacity() {
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
-    if (!search) return employees;
-    const lower = search.toLowerCase();
-    return employees.filter(e =>
-      e.name.toLowerCase().includes(lower) ||
-      e.role.toLowerCase().includes(lower) ||
-      e.department.toLowerCase().includes(lower) ||
-      e.skills.some(s => s.name.toLowerCase().includes(lower)) ||
-      e.domains.some(d => d.name.toLowerCase().includes(lower))
-    );
-  }, [employees, search]);
+    let result = employees;
+    // Filter by org membership
+    if (orgMemberEmployeeIds) {
+      result = result.filter((e) => orgMemberEmployeeIds.has(e.id));
+    }
+    // Filter by search
+    if (search) {
+      const lower = search.toLowerCase();
+      result = result.filter(e =>
+        e.name.toLowerCase().includes(lower) ||
+        e.role.toLowerCase().includes(lower) ||
+        e.department.toLowerCase().includes(lower) ||
+        e.skills.some(s => s.name.toLowerCase().includes(lower)) ||
+        e.domains.some(d => d.name.toLowerCase().includes(lower))
+      );
+    }
+    return result;
+  }, [employees, search, orgMemberEmployeeIds]);
 
   // Handlers
   const handleSelectAll = useCallback((checked: boolean) => {
@@ -1260,6 +1294,18 @@ export function Capacity() {
           <p className="page-subtitle">Manage team members, skills, and capacity settings</p>
         </div>
         <div className="flex items-center gap-3">
+          <select
+            value={orgNodeFilter}
+            onChange={(e) => setOrgNodeFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+          >
+            <option value="">All Org Units</option>
+            {flatNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {'\u00A0\u00A0'.repeat(node.depth)}{node.name}
+              </option>
+            ))}
+          </select>
           <button className="btn-secondary">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />

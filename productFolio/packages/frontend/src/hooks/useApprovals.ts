@@ -51,6 +51,7 @@ export function useCreatePolicy() {
       ruleType: string;
       ruleConfig?: Record<string, unknown>;
       crossBuStrategy?: string;
+      enforcement?: 'BLOCKING' | 'ADVISORY';
     }) => api.post<ApprovalPolicy>(`/org/nodes/${nodeId}/policies`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: approvalKeys.all });
@@ -70,6 +71,7 @@ export function useUpdatePolicy() {
       ruleType?: string;
       ruleConfig?: Record<string, unknown>;
       crossBuStrategy?: string;
+      enforcement?: 'BLOCKING' | 'ADVISORY';
       isActive?: boolean;
     }) => api.put<ApprovalPolicy>(`/approval-policies/${id}`, data),
     onSuccess: () => {

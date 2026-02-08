@@ -50,7 +50,10 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         }
       }
 
-      const result = await scenariosService.list(pagination, periodIds);
+      // Optional orgNodeId filter
+      const orgNodeId = request.query.orgNodeId as string | undefined;
+
+      const result = await scenariosService.list(pagination, periodIds, orgNodeId);
       return reply.code(200).send(result);
     }
   );

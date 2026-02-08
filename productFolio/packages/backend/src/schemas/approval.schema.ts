@@ -5,7 +5,7 @@ import { z } from 'zod';
 // ============================================================================
 
 export const CreatePolicySchema = z.object({
-  orgNodeId: z.string().uuid('Invalid org node ID'),
+  orgNodeId: z.string().uuid('Invalid org node ID').optional(),
   scope: z.enum(['RESOURCE_ALLOCATION', 'INITIATIVE', 'SCENARIO']),
   level: z.number().int().min(1, 'Level must be >= 1'),
   ruleType: z.enum([
@@ -18,6 +18,7 @@ export const CreatePolicySchema = z.object({
   ]),
   ruleConfig: z.record(z.string(), z.unknown()).optional().default({}),
   crossBuStrategy: z.enum(['COMMON_ANCESTOR', 'ALL_BRANCHES']).optional(),
+  enforcement: z.enum(['BLOCKING', 'ADVISORY']).optional(),
 });
 
 export type CreatePolicyInput = z.infer<typeof CreatePolicySchema>;
@@ -33,6 +34,7 @@ export const UpdatePolicySchema = z.object({
   ]).optional(),
   ruleConfig: z.record(z.string(), z.unknown()).optional(),
   crossBuStrategy: z.enum(['COMMON_ANCESTOR', 'ALL_BRANCHES']).optional(),
+  enforcement: z.enum(['BLOCKING', 'ADVISORY']).optional(),
   isActive: z.boolean().optional(),
 });
 

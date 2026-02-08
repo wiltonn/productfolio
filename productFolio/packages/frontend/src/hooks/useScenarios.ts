@@ -21,6 +21,8 @@ export interface Scenario {
   updatedAt: string;
   allocationsCount?: number;
   planningMode?: 'LEGACY' | 'TOKEN';
+  orgNodeId?: string;
+  orgNode?: { id: string; name: string; code: string; type: string };
 }
 
 export type AllocationType = 'PROJECT' | 'RUN' | 'SUPPORT';
@@ -100,15 +102,18 @@ export const scenarioKeys = {
   compare: (ids: string[]) => [...scenarioKeys.all, 'compare', ids] as const,
 };
 
-export function useScenarios(options?: { periodIds?: string[] }) {
+export function useScenarios(options?: { periodIds?: string[]; orgNodeId?: string }) {
   const params = new URLSearchParams();
   params.set('limit', '100');
   if (options?.periodIds && options.periodIds.length > 0) {
     params.set('periodIds', options.periodIds.join(','));
   }
+  if (options?.orgNodeId) {
+    params.set('orgNodeId', options.orgNodeId);
+  }
 
   return useQuery({
-    queryKey: [...scenarioKeys.list(), options?.periodIds] as const,
+    queryKey: [...scenarioKeys.list(), options?.periodIds, options?.orgNodeId] as const,
     queryFn: () => api.get<PaginatedResponse<Scenario>>(`/scenarios?${params}`),
   });
 }

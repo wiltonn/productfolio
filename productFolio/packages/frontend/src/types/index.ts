@@ -195,6 +195,8 @@ export interface OrgMembership {
   orgNode?: { id: string; name: string; code: string; type: OrgNodeType };
 }
 
+export type PolicyEnforcement = 'BLOCKING' | 'ADVISORY';
+
 export interface ApprovalPolicy {
   id: string;
   orgNodeId: string;
@@ -203,6 +205,7 @@ export interface ApprovalPolicy {
   ruleType: ApprovalRuleType;
   ruleConfig: Record<string, unknown>;
   crossBuStrategy: CrossBuStrategy;
+  enforcement: PolicyEnforcement;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

@@ -4,8 +4,21 @@ import { useScenarios, useCreateScenario, useCloneScenario, useSetPrimary } from
 import type { Scenario } from '../hooks/useScenarios';
 import { useAdjacentQuarters, useQuarterPeriods } from '../hooks/usePeriods';
 import type { Period } from '../hooks/usePeriods';
+import { useOrgTree } from '../hooks/useOrgTree';
 import { Modal } from '../components/ui';
-import type { ScenarioStatus } from '../types';
+import type { ScenarioStatus, OrgNode } from '../types';
+
+// Flatten org tree into a list for the filter dropdown
+function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
+  const result: Array<{ id: string; name: string; depth: number }> = [];
+  for (const node of nodes) {
+    result.push({ id: node.id, name: node.name, depth });
+    if (node.children?.length) {
+      result.push(...flattenOrgTree(node.children, depth + 1));
+    }
+  }
+  return result;
+}
 
 // Helper to get current quarter
 function getCurrentQuarter(): string {
@@ -190,6 +203,11 @@ function QuarterSection({
                     <div className="mt-2 flex items-center gap-2 flex-wrap">
                       <ScenarioStatusBadge status={scenario.status} />
                       {scenario.isPrimary && <PrimaryBadge />}
+                      {scenario.orgNode && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-surface-100 text-surface-600">
+                          {scenario.orgNode.name}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <svg
@@ -260,6 +278,9 @@ export function ScenariosList() {
   const { data: adjacentQ } = useAdjacentQuarters();
   const { data: periodsData } = useQuarterPeriods();
   const quarterPeriods = periodsData?.data ?? [];
+  const { data: orgTree } = useOrgTree();
+  const [orgNodeFilter, setOrgNodeFilter] = useState<string>('');
+  const flatNodes = useMemo(() => flattenOrgTree(orgTree ?? []), [orgTree]);
 
   // Collect period IDs for the three adjacent quarters
   const periodIds = useMemo(() => {
@@ -271,7 +292,7 @@ export function ScenariosList() {
   }, [adjacentQ]);
 
   const { data: scenariosData, isLoading } = useScenarios(
-    periodIds.length > 0 ? { periodIds } : undefined
+    periodIds.length > 0 ? { periodIds, ...(orgNodeFilter ? { orgNodeId: orgNodeFilter } : {}) } : undefined
   );
   const allScenarios = (scenariosData?.data ?? []) as Scenario[];
 
@@ -367,12 +388,26 @@ export function ScenariosList() {
           <h1 className="page-title">Scenarios</h1>
           <p className="page-subtitle">Compare different resource allocation strategies</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          New Scenario
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={orgNodeFilter}
+            onChange={(e) => setOrgNodeFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-surface-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent bg-white"
+          >
+            <option value="">All Org Units</option>
+            {flatNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {'  '.repeat(node.depth)}{node.name}
+              </option>
+            ))}
+          </select>
+          <button onClick={() => openModal()} className="btn-primary">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New Scenario
+          </button>
+        </div>
       </div>
 
       {/* Countdown Bar */}
@@ -436,6 +471,7 @@ export function ScenariosList() {
                     <tr>
                       <th>Primary</th>
                       <th>Scenario</th>
+                      <th className="text-center">Org Unit</th>
                       <th className="text-center">Status</th>
                       <th className="text-center">Allocations</th>
                       <th className="text-center">Last Updated</th>
@@ -457,6 +493,9 @@ export function ScenariosList() {
                           <Link to={`/scenarios/${scenario.id}`} className="font-medium text-surface-900 hover:text-accent-600">
                             {scenario.name}
                           </Link>
+                        </td>
+                        <td className="text-center text-sm text-surface-600">
+                          {scenario.orgNode?.name ?? '-'}
                         </td>
                         <td className="text-center">
                           <ScenarioStatusBadge status={scenario.status} />

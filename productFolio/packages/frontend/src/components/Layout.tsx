@@ -120,12 +120,6 @@ const ShieldIcon = () => (
   </svg>
 );
 
-const TicketIcon = () => (
-  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
-  </svg>
-);
-
 const ChartPieIcon = () => (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" />
@@ -215,16 +209,10 @@ export function Layout() {
       });
     }
 
-    // Insert Entitlements + RevOps admin before Jira Settings (admin-gated)
+    // Insert RevOps admin before Jira Settings (admin-gated)
     if (canManageAuthorities) {
       const jiraIdx = nav.findIndex((item) => item.href === '/admin/jira-settings');
       nav.splice(jiraIdx, 0, {
-        name: 'Entitlements',
-        href: '/admin/entitlements',
-        icon: TicketIcon,
-      });
-      const jiraIdx2 = nav.findIndex((item) => item.href === '/admin/jira-settings');
-      nav.splice(jiraIdx2, 0, {
         name: 'RevOps',
         href: '/admin/revops',
         icon: ChartPieIcon,
@@ -420,7 +408,6 @@ function Breadcrumb() {
     'job-profiles': 'Job Profiles',
     'feature-flags': 'Feature Flags',
     authorities: 'Authorities',
-    entitlements: 'Entitlements',
     revops: 'RevOps',
     users: 'Users',
     'jira-settings': 'Jira Settings',

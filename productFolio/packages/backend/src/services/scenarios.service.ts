@@ -9,6 +9,7 @@ import { enqueueScenarioRecompute, enqueueViewRefresh } from '../jobs/index.js';
 import type { CreateScenario, UpdateScenario, UpdatePriorities, Pagination, PriorityRanking, CloneScenario } from '../schemas/scenarios.schema.js';
 import type { CreateRevision } from '../schemas/baseline.schema.js';
 import type { PaginatedResponse } from '../types/index.js';
+import { approvalEnforcementService } from './approval-enforcement.service.js';
 
 interface ScenarioWithMetadata {
   id: string;
@@ -44,7 +45,7 @@ const VALID_TRANSITIONS: Record<ScenarioStatus, ScenarioStatus[]> = {
 const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
 
 export class ScenariosService {
-  async list(pagination: Pagination, periodIds?: string[]): Promise<PaginatedResponse<ScenarioWithMetadata>> {
+  async list(pagination: Pagination, periodIds?: string[], orgNodeId?: string): Promise<PaginatedResponse<ScenarioWithMetadata>> {
     const page = pagination.page || 1;
     const limit = pagination.limit || 10;
     const skip = (page - 1) * limit;
@@ -52,6 +53,9 @@ export class ScenariosService {
     const where: Prisma.ScenarioWhereInput = {};
     if (periodIds && periodIds.length > 0) {
       where.periodId = { in: periodIds };
+    }
+    if (orgNodeId) {
+      where.orgNodeId = orgNodeId;
     }
 
     const [scenarios, total] = await Promise.all([
@@ -66,6 +70,7 @@ export class ScenariosService {
             },
           },
           period: true,
+          orgNode: { select: { id: true, name: true, code: true, type: true } },
         },
         orderBy: {
           createdAt: 'desc',
@@ -111,6 +116,7 @@ export class ScenariosService {
           },
         },
         period: true,
+        orgNode: { select: { id: true, name: true, code: true, type: true } },
       },
     });
 
@@ -149,12 +155,20 @@ export class ScenariosService {
       throw new ValidationError(`Period must be of type QUARTER, got ${period.type}`);
     }
 
+    // Validate orgNodeId if provided
+    if (data.orgNodeId) {
+      const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+      if (!orgNode) throw new ValidationError(`OrgNode not found: ${data.orgNodeId}`);
+      if (!orgNode.isActive) throw new ValidationError('Cannot assign scenario to an inactive org node');
+    }
+
     const scenarioType = (data.scenarioType as ScenarioType) ?? ScenarioType.WHAT_IF;
 
     const created = await prisma.scenario.create({
       data: {
         name: data.name,
         periodId: data.periodId,
+        orgNodeId: data.orgNodeId ?? null,
         status: ScenarioStatus.DRAFT,
         assumptions: (data.assumptions ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         priorityRankings: (data.priorityRankings ?? Prisma.JsonNull) as Prisma.InputJsonValue,
@@ -187,8 +201,16 @@ export class ScenariosService {
       }
     }
 
+    // Validate orgNodeId if provided
+    if (data.orgNodeId !== undefined && data.orgNodeId !== null) {
+      const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+      if (!orgNode) throw new ValidationError(`OrgNode not found: ${data.orgNodeId}`);
+      if (!orgNode.isActive) throw new ValidationError('Cannot assign scenario to an inactive org node');
+    }
+
     const updateData: Record<string, unknown> = {};
     if (data.name !== undefined) updateData.name = data.name;
+    if (data.orgNodeId !== undefined) updateData.orgNodeId = data.orgNodeId;
     if (data.assumptions !== undefined) updateData.assumptions = data.assumptions;
     if (data.priorityRankings !== undefined) updateData.priorityRankings = data.priorityRankings;
 
@@ -224,10 +246,26 @@ export class ScenariosService {
   async transitionStatus(
     id: string,
     newStatus: ScenarioStatus,
-    userRole: UserRole
+    userRole: UserRole,
+    actorId?: string
   ): Promise<ScenarioWithMetadata> {
     const scenario = await this.getById(id);
     const currentStatus = scenario.status;
+
+    // Check approval enforcement
+    const approvalResult = await approvalEnforcementService.checkApproval({
+      scope: 'SCENARIO',
+      subjectType: 'scenario',
+      subjectId: id,
+      actorId: actorId || 'system',
+    });
+    if (!approvalResult.allowed) {
+      throw new WorkflowError(
+        `Approval required: pending request created (${approvalResult.pendingRequestId})`,
+        currentStatus,
+        newStatus
+      );
+    }
 
     this.validateTransition(currentStatus, newStatus, userRole);
 

@@ -87,10 +87,6 @@ const AuthoritiesAdmin = lazy(() =>
   import('./pages/AuthoritiesAdmin').then((m) => ({ default: m.AuthoritiesAdmin }))
 );
 
-const EntitlementsAdmin = lazy(() =>
-  import('./pages/EntitlementsAdmin').then((m) => ({ default: m.EntitlementsAdmin }))
-);
-
 const RevOpsAdmin = lazy(() =>
   import('./pages/RevOpsAdmin').then((m) => ({ default: m.RevOpsAdmin }))
 );
@@ -355,16 +351,6 @@ export const router = createBrowserRouter([
           <ErrorBoundary>
             <LazyPage>
               <JiraSettings />
-            </LazyPage>
-          </ErrorBoundary>
-        ),
-      },
-      {
-        path: 'admin/entitlements',
-        element: (
-          <ErrorBoundary>
-            <LazyPage>
-              <EntitlementsAdmin />
             </LazyPage>
           </ErrorBoundary>
         ),

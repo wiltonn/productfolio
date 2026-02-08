@@ -247,6 +247,17 @@ export {
   type SeatType as AdminSeatType,
 } from './useUsers';
 
+// Approval status hooks
+export {
+  useApprovalStatus,
+  useRequestApproval,
+  approvalStatusKeys,
+  type ApprovalStatusResult,
+} from './useApprovalStatus';
+
+// Auth0 admin hooks
+export { useSyncRoles, useSyncAllUsers, useSyncUser } from './useAuth0Admin';
+
 // Types from central types file
 export type {
   Initiative,

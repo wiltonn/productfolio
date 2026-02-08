@@ -6,6 +6,14 @@ import {
   useDeactivateUser,
 } from '../hooks/useUsers';
 import type { User, UserRole, CreateUserInput, UpdateUserInput } from '../hooks/useUsers';
+import {
+  useEntitlementSummary,
+  useEntitlements,
+  type EntitlementUser,
+} from '../hooks/useEntitlements';
+import { useSyncRoles, useSyncAllUsers, useSyncUser } from '../hooks/useAuth0Admin';
+import { api } from '../api/client';
+import { toast } from '../stores/toast';
 import { Modal, SearchInput } from '../components/ui';
 
 const ROLES: { value: UserRole; label: string }[] = [
@@ -20,7 +28,59 @@ function formatRole(role: string): string {
   return role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type TabId = 'users' | 'licensing' | 'auth0';
+
 export function UsersAdmin() {
+  const [activeTab, setActiveTab] = useState<TabId>('users');
+
+  const tabs: { id: TabId; label: string }[] = [
+    { id: 'users', label: 'Users' },
+    { id: 'licensing', label: 'Licensing' },
+    { id: 'auth0', label: 'Auth0 Sync' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-surface-900">User Management</h1>
+        <p className="text-sm text-surface-500 mt-1">
+          Manage user accounts, roles, and seat licensing.
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-surface-200">
+        <nav className="flex gap-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.id
+                  ? 'border-accent-500 text-accent-700'
+                  : 'border-transparent text-surface-500 hover:text-surface-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'users' && <UsersTab />}
+      {activeTab === 'licensing' && <LicensingTab />}
+      {activeTab === 'auth0' && <Auth0SyncTab />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Users Tab — original UsersAdmin content
+// ---------------------------------------------------------------------------
+
+function UsersTab() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -45,7 +105,6 @@ export function UsersAdmin() {
   const totalPages = data?.totalPages ?? 1;
   const total = data?.total ?? 0;
 
-  // Stat counts
   const stats = useMemo(() => {
     const active = users.filter((u) => u.isActive).length;
     const decision = users.filter((u) => u.seatType === 'decision').length;
@@ -55,14 +114,8 @@ export function UsersAdmin() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-surface-900">User Management</h1>
-          <p className="text-sm text-surface-500 mt-1">
-            Create, edit, and manage user accounts and roles.
-          </p>
-        </div>
+      {/* Action button */}
+      <div className="flex justify-end">
         <button
           onClick={() => setShowCreateModal(true)}
           className="px-4 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-700 transition-colors"
@@ -182,6 +235,7 @@ export function UsersAdmin() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <SyncUserButton userId={user.id} />
                       <button
                         onClick={() => setEditingUser(user)}
                         className="text-xs text-accent-600 hover:text-accent-800 font-medium"
@@ -248,6 +302,253 @@ export function UsersAdmin() {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Licensing Tab — migrated from EntitlementsAdmin
+// ---------------------------------------------------------------------------
+
+const tierColors: Record<string, string> = {
+  starter: 'bg-blue-100 text-blue-800',
+  growth: 'bg-purple-100 text-purple-800',
+  enterprise: 'bg-amber-100 text-amber-800',
+};
+
+function LicensingTab() {
+  const [licenseTab, setLicenseTab] = useState<'overview' | 'licensed' | 'observers'>('overview');
+  const { data: summary, isLoading: summaryLoading } = useEntitlementSummary();
+  const { data: lists, isLoading: listsLoading } = useEntitlements();
+
+  const handleExportCsv = async () => {
+    try {
+      const csv = await api.get<string>('/api/admin/entitlements/export');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'licensed-users.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('CSV exported');
+    } catch {
+      toast.error('Failed to export CSV');
+    }
+  };
+
+  const subtabs = [
+    { id: 'overview' as const, label: 'Overview' },
+    { id: 'licensed' as const, label: `Licensed Users${summary ? ` (${summary.licensed})` : ''}` },
+    { id: 'observers' as const, label: `Observers${summary ? ` (${summary.observers})` : ''}` },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Tier badge + Export button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {summary && (
+            <span
+              className={`px-2.5 py-0.5 text-xs font-semibold rounded-full uppercase ${
+                tierColors[summary.tier] ?? 'bg-surface-100 text-surface-700'
+              }`}
+            >
+              {summary.tier}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={handleExportCsv}
+          className="px-4 py-2 text-sm font-medium text-white bg-accent-600 rounded-lg hover:bg-accent-700 transition-colors"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      {/* Stat Cards */}
+      {!summaryLoading && summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            label="Licensed Users"
+            value={summary.licensed}
+            detail={`of ${summary.seatLimit} seats`}
+          />
+          <StatCard
+            label="Seat Utilization"
+            value={`${summary.utilizationPct}%`}
+            detail={summary.utilizationPct >= 90 ? 'Near limit!' : 'Healthy'}
+            alert={summary.utilizationPct >= 90}
+          />
+          <StatCard label="Observers" value={summary.observers} detail="Free, unlimited" />
+          <StatCard
+            label="Tier"
+            value={summary.tier.charAt(0).toUpperCase() + summary.tier.slice(1)}
+            detail={`${summary.seatLimit} seat limit`}
+          />
+        </div>
+      )}
+
+      {/* Sub-tabs */}
+      <div className="flex gap-4">
+        {subtabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setLicenseTab(tab.id)}
+            className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              licenseTab === tab.id
+                ? 'bg-accent-50 text-accent-700'
+                : 'text-surface-500 hover:text-surface-700 hover:bg-surface-100'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub-tab Content */}
+      {licenseTab === 'overview' && summary && (
+        <div className="bg-white rounded-lg border border-surface-200 p-6">
+          <h3 className="text-lg font-semibold text-surface-900 mb-4">Licensing Overview</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-surface-600">Seat usage</span>
+                <span className="font-medium text-surface-900">
+                  {summary.licensed} / {summary.seatLimit}
+                </span>
+              </div>
+              <div className="w-full bg-surface-100 rounded-full h-3">
+                <div
+                  className={`h-3 rounded-full transition-all ${
+                    summary.utilizationPct >= 90
+                      ? 'bg-red-500'
+                      : summary.utilizationPct >= 70
+                        ? 'bg-amber-500'
+                        : 'bg-accent-500'
+                  }`}
+                  style={{ width: `${Math.min(summary.utilizationPct, 100)}%` }}
+                />
+              </div>
+            </div>
+            <p className="text-sm text-surface-500">
+              Decision-makers (users with write or admin permissions) consume licensed seats.
+              Observers and modeled resources are always free.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {licenseTab === 'licensed' && (
+        <EntitlementUserTable
+          users={lists?.licensed.users ?? []}
+          loading={listsLoading}
+          seatType="decision"
+        />
+      )}
+
+      {licenseTab === 'observers' && (
+        <EntitlementUserTable
+          users={lists?.observers.users ?? []}
+          loading={listsLoading}
+          seatType="observer"
+        />
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+  alert,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  alert?: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-surface-200 p-4">
+      <p className="text-sm text-surface-500">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${alert ? 'text-red-600' : 'text-surface-900'}`}>
+        {value}
+      </p>
+      <p className={`text-xs mt-1 ${alert ? 'text-red-500' : 'text-surface-400'}`}>{detail}</p>
+    </div>
+  );
+}
+
+function EntitlementUserTable({
+  users,
+  loading,
+  seatType,
+}: {
+  users: EntitlementUser[];
+  loading: boolean;
+  seatType: string;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-32 text-surface-400">Loading...</div>
+    );
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-32 text-surface-400">
+        No users found
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
+      <table className="min-w-full divide-y divide-surface-200">
+        <thead className="bg-surface-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
+              Name
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
+              Email
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
+              Role
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
+              Seat Type
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-surface-100">
+          {users.map((user) => (
+            <tr key={user.id} className="hover:bg-surface-50">
+              <td className="px-4 py-3 text-sm font-medium text-surface-900">{user.name}</td>
+              <td className="px-4 py-3 text-sm text-surface-500">{user.email}</td>
+              <td className="px-4 py-3 text-sm text-surface-500">
+                {user.role.replace(/_/g, ' ')}
+              </td>
+              <td className="px-4 py-3 text-sm">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                    seatType === 'decision'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-surface-100 text-surface-600'
+                  }`}
+                >
+                  {seatType}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper components (unchanged from original)
+// ---------------------------------------------------------------------------
 
 function ReactivateButton({ user }: { user: User }) {
   const updateUser = useUpdateUser();
@@ -455,5 +756,117 @@ function DeactivateConfirmModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Auth0 Sync Tab
+// ---------------------------------------------------------------------------
+
+function Auth0SyncTab() {
+  const syncRoles = useSyncRoles();
+  const syncAllUsers = useSyncAllUsers();
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg border border-surface-200 p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-surface-900">Auth0 Integration</h3>
+        <p className="text-sm text-surface-500">
+          Synchronize ProductFolio roles and users with Auth0 for single sign-on and role-based access control.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          {/* Sync Roles */}
+          <div className="border border-surface-200 rounded-lg p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-medium text-surface-900">Sync Roles</h4>
+              <p className="text-xs text-surface-500 mt-1">
+                Push ProductFolio role definitions (ADMIN, PRODUCT_OWNER, etc.) to Auth0 as API permissions.
+              </p>
+            </div>
+            <button
+              onClick={() => syncRoles.mutate(undefined)}
+              disabled={syncRoles.isPending}
+              className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {syncRoles.isPending && (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                </svg>
+              )}
+              {syncRoles.isPending ? 'Syncing Roles...' : 'Sync Roles to Auth0'}
+            </button>
+            {syncRoles.isSuccess && (
+              <p className="text-xs text-green-600 font-medium">Roles synced successfully.</p>
+            )}
+            {syncRoles.isError && (
+              <p className="text-xs text-red-600 font-medium">
+                {syncRoles.error?.message || 'Failed to sync roles.'}
+              </p>
+            )}
+          </div>
+
+          {/* Sync All Users */}
+          <div className="border border-surface-200 rounded-lg p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-medium text-surface-900">Sync All Users</h4>
+              <p className="text-xs text-surface-500 mt-1">
+                Push all ProductFolio users and their role assignments to Auth0.
+              </p>
+            </div>
+            <button
+              onClick={() => syncAllUsers.mutate(undefined)}
+              disabled={syncAllUsers.isPending}
+              className="w-full px-4 py-2 bg-accent-600 text-white rounded-lg text-sm font-medium hover:bg-accent-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {syncAllUsers.isPending && (
+                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                </svg>
+              )}
+              {syncAllUsers.isPending ? 'Syncing Users...' : 'Sync All Users to Auth0'}
+            </button>
+            {syncAllUsers.isSuccess && (
+              <p className="text-xs text-green-600 font-medium">All users synced successfully.</p>
+            )}
+            {syncAllUsers.isError && (
+              <p className="text-xs text-red-600 font-medium">
+                {syncAllUsers.error?.message || 'Failed to sync users.'}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-user Sync Button
+// ---------------------------------------------------------------------------
+
+function SyncUserButton({ userId }: { userId: string }) {
+  const syncUser = useSyncUser();
+
+  return (
+    <button
+      onClick={() => syncUser.mutate(userId)}
+      disabled={syncUser.isPending}
+      className="text-xs text-surface-400 hover:text-accent-600 transition-colors disabled:opacity-50"
+      title="Sync to Auth0"
+    >
+      {syncUser.isPending ? (
+        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
+        </svg>
+      )}
+    </button>
   );
 }
