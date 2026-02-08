@@ -5,6 +5,8 @@ import * as featureFlagService from '../services/feature-flag.service.js';
 export async function featureFlagsRoutes(fastify: FastifyInstance) {
   fastify.addHook('onRequest', fastify.authenticate);
 
+  const requireDecisionSeat = fastify.requireSeat('decision');
+
   /**
    * GET /api/feature-flags
    * List all feature flags (used by admin UI and frontend hook)
@@ -33,7 +35,7 @@ export async function featureFlagsRoutes(fastify: FastifyInstance) {
     Params: { key: string };
   }>(
     '/api/feature-flags/:key',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('feature-flag:admin'), requireDecisionSeat] },
     async (request, reply) => {
       const data = UpdateFeatureFlagSchema.parse(request.body);
       const flag = await featureFlagService.setFlag(request.params.key, data);

@@ -21,7 +21,8 @@ import * as auditService from '../services/audit.service.js';
 export async function approvalRoutes(fastify: FastifyInstance) {
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const adminOnly = fastify.authorize(['ADMIN']);
+  const adminOnly = fastify.requirePermission('approval:write');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // =========================================================================
   // Approval Policies (ADMIN)
@@ -40,7 +41,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/org/nodes/:id/policies — Create policy (ADMIN)
   fastify.post<{ Params: { id: string } }>(
     '/api/org/nodes/:id/policies',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const body = CreatePolicySchema.parse(request.body);
@@ -55,7 +56,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // PUT /api/approval-policies/:id — Update policy (ADMIN)
   fastify.put<{ Params: { id: string } }>(
     '/api/approval-policies/:id',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = UpdatePolicySchema.parse(request.body);
@@ -67,7 +68,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // DELETE /api/approval-policies/:id — Deactivate policy (ADMIN)
   fastify.delete<{ Params: { id: string } }>(
     '/api/approval-policies/:id',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await policyService.deletePolicy(id, request.user.sub);
@@ -78,6 +79,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/approval-policies/preview — Preview approval chain
   fastify.post(
     '/api/approval-policies/preview',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = PreviewChainSchema.parse(request.body);
       const chain = await policyService.previewChain(data);
@@ -138,6 +140,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/approval-requests — Create request
   fastify.post(
     '/api/approval-requests',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = CreateRequestSchema.parse(request.body);
       const req = await workflowService.createApprovalRequest(
@@ -151,6 +154,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/approval-requests/:id/decide — Submit decision
   fastify.post<{ Params: { id: string } }>(
     '/api/approval-requests/:id/decide',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = DecisionSchema.parse(request.body);
@@ -165,6 +169,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/approval-requests/:id/cancel — Cancel request
   fastify.post<{ Params: { id: string } }>(
     '/api/approval-requests/:id/cancel',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await workflowService.cancelRequest(id, request.user.sub);
@@ -190,10 +195,11 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // POST /api/delegations — Create delegation
   fastify.post(
     '/api/delegations',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = CreateDelegationSchema.parse(request.body);
-      // Non-admins can only create delegations for themselves
-      if (request.user.role !== 'ADMIN' && data.delegatorId !== request.user.sub) {
+      // Users without approval:write can only create delegations for themselves
+      if (!request.user.permissions.includes('approval:write') && data.delegatorId !== request.user.sub) {
         return reply.status(403).send({
           error: 'Forbidden',
           message: 'You can only create delegations for yourself',
@@ -211,6 +217,7 @@ export async function approvalRoutes(fastify: FastifyInstance) {
   // DELETE /api/delegations/:id — Revoke delegation
   fastify.delete<{ Params: { id: string } }>(
     '/api/delegations/:id',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await workflowService.revokeDelegation(id, request.user.sub);

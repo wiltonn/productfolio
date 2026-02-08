@@ -26,6 +26,9 @@ import { jobProfilesRoutes } from './routes/job-profiles.js';
 import { forecastRoutes } from './routes/forecast.js';
 import { planningRoutes } from './routes/planning.js';
 import { skillPoolsRoutes } from './routes/skill-pools.js';
+import { authorityRoutes } from './routes/authorities.js';
+import { entitlementRoutes } from './routes/entitlements.js';
+import { pricingRoutes } from './routes/pricing.js';
 import { getWorkerStatus } from './jobs/index.js';
 import { validateJiraConfig } from './lib/config/jira.js';
 
@@ -41,6 +44,9 @@ await fastify.register(cors, {
 
 // Cookie support
 await fastify.register(cookie);
+
+// Public routes (no auth required)
+await fastify.register(pricingRoutes);
 
 // Auth plugin (Auth0 JWKS + decorators)
 await fastify.register(authPlugin);
@@ -91,6 +97,8 @@ await fastify.register(jobProfilesRoutes);
 await fastify.register(forecastRoutes);
 await fastify.register(planningRoutes);
 await fastify.register(skillPoolsRoutes);
+await fastify.register(authorityRoutes);
+await fastify.register(entitlementRoutes);
 
 const start = async () => {
   try {

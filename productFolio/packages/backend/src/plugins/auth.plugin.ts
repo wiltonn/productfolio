@@ -4,11 +4,16 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { UserRole } from '@prisma/client';
 import { UnauthorizedError, ForbiddenError } from '../lib/errors.js';
 import { findOrProvisionUser } from '../services/auth.service.js';
+import { permissionsForRole, deriveSeatType, SeatType } from '../lib/permissions.js';
+
+const PERMISSIONS_CLAIM = 'https://productfolio.local/permissions';
 
 export interface JwtPayload {
   sub: string; // local user id
   email: string;
   role: UserRole;
+  permissions: string[];
+  seatType: SeatType;
 }
 
 declare module 'fastify' {
@@ -19,6 +24,15 @@ declare module 'fastify' {
     ) => Promise<void>;
     authorize: (
       roles: UserRole[]
+    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requirePermission: (
+      permission: string
+    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireAnyPermission: (
+      permissions: string[]
+    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    requireSeat: (
+      seatType: SeatType
     ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
   interface FastifyRequest {
@@ -46,6 +60,8 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
   /**
    * Decorator to authenticate requests.
    * Verifies Auth0 RS256 JWT from Authorization: Bearer header.
+   * Extracts permissions from the namespaced claim, falling back to
+   * role-derived permissions when the claim is absent.
    */
   fastify.decorate(
     'authenticate',
@@ -86,10 +102,23 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
           token
         );
 
+        // Extract permissions: prefer JWT claim, fallback to role-based
+        const claimPermissions = payload[PERMISSIONS_CLAIM];
+        let permissions: string[];
+        if (Array.isArray(claimPermissions) && claimPermissions.length > 0) {
+          permissions = claimPermissions as string[];
+        } else {
+          permissions = permissionsForRole(localUser.role);
+        }
+
+        const seatType = deriveSeatType(permissions);
+
         request.user = {
           sub: localUser.id,
           email: localUser.email,
           role: localUser.role,
+          permissions,
+          seatType,
         };
       } catch (err) {
         if (err instanceof UnauthorizedError) {
@@ -101,7 +130,7 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
   );
 
   /**
-   * Decorator factory to authorize specific roles
+   * Decorator factory to authorize specific roles (legacy — kept for backward compat)
    */
   fastify.decorate('authorize', function (roles: UserRole[]) {
     return async function (request: FastifyRequest, _reply: FastifyReply) {
@@ -113,6 +142,65 @@ async function authPlugin(fastify: FastifyInstance): Promise<void> {
         throw new ForbiddenError(
           `Access denied. Required roles: ${roles.join(', ')}`
         );
+      }
+    };
+  });
+
+  /**
+   * Decorator factory that requires a single permission string.
+   * Checks request.user.permissions (populated by authenticate).
+   */
+  fastify.decorate('requirePermission', function (permission: string) {
+    return async function (request: FastifyRequest, _reply: FastifyReply) {
+      if (!request.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      if (!request.user.permissions.includes(permission)) {
+        throw new ForbiddenError(
+          `Access denied. Required permission: ${permission}`
+        );
+      }
+    };
+  });
+
+  /**
+   * Decorator factory that requires at least one of the given permissions.
+   */
+  fastify.decorate('requireAnyPermission', function (permissions: string[]) {
+    return async function (request: FastifyRequest, _reply: FastifyReply) {
+      if (!request.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      if (!permissions.some((p) => request.user.permissions.includes(p))) {
+        throw new ForbiddenError(
+          `Access denied. Required one of: ${permissions.join(', ')}`
+        );
+      }
+    };
+  });
+
+  /**
+   * Decorator factory that requires a specific seat type (entitlement check).
+   * Records a RevOps event on blocked attempts for expansion signal tracking.
+   */
+  fastify.decorate('requireSeat', function (requiredSeat: SeatType) {
+    return async function (request: FastifyRequest, _reply: FastifyReply) {
+      if (!request.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+      if (request.user.seatType !== requiredSeat) {
+        // Fire-and-forget RevOps telemetry for expansion signal tracking
+        import('../services/entitlement.service.js').then(({ entitlementService }) => {
+          entitlementService.recordEvent({
+            eventName: 'decision_seat_blocked',
+            userId: request.user.sub,
+            seatType: request.user.seatType,
+            metadata: { requiredSeat, route: request.url, method: request.method },
+          }).catch(() => {}); // non-blocking
+        });
+        throw new ForbiddenError('Decision seat license required for this action');
       }
     };
   });

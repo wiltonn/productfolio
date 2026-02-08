@@ -1272,3 +1272,61 @@ model TokenCalibration {
   @@index([skillPoolId])
   @@map("token_calibrations")
 }
+
+// ============================================================================
+// Authority Registry & Audit
+// ============================================================================
+
+model Authority {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  description String   @db.Text
+  category    String
+  deprecated  Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("authorities")
+}
+
+model AuthorityAuditLog {
+  id            String   @id @default(uuid()) @db.Uuid
+  action        String
+  authorityCode String   @map("authority_code")
+  changedBy     String   @map("changed_by") @db.Uuid
+  details       Json?    @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([authorityCode])
+  @@index([changedBy])
+  @@map("authority_audit_logs")
+}
+
+// ============================================================================
+// Entitlement / Seat Licensing
+// ============================================================================
+
+model TenantConfig {
+  id        String   @id @default(uuid()) @db.Uuid
+  tier      String   @default("starter")
+  seatLimit Int      @default(5) @map("seat_limit")
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("tenant_config")
+}
+
+model EntitlementEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventName String   @map("event_name")
+  userId    String?  @map("user_id") @db.Uuid
+  seatType  String   @map("seat_type")
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventName])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("entitlement_events")
+}

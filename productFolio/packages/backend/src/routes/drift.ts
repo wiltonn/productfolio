@@ -1,5 +1,4 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@prisma/client';
 import {
   acknowledgeDriftAlertSchema,
   resolveDriftAlertSchema,
@@ -12,7 +11,8 @@ import { enqueueDriftCheck } from '../jobs/index.js';
 export async function driftRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const authorizeAdmin = fastify.authorize([UserRole.ADMIN, UserRole.PRODUCT_OWNER]);
+  const authorizeAdmin = fastify.requirePermission('drift:write');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // GET /api/drift/alerts - List drift alerts
   fastify.get<{ Querystring: Record<string, unknown> }>(
@@ -31,7 +31,7 @@ export async function driftRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/drift/alerts/acknowledge - Acknowledge alerts
   fastify.put<{ Body: unknown }>(
     '/api/drift/alerts/acknowledge',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       const data = acknowledgeDriftAlertSchema.parse(request.body);
       const result = await driftAlertService.acknowledgeAlerts(data.alertIds);
@@ -42,7 +42,7 @@ export async function driftRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/drift/alerts/resolve - Resolve alerts
   fastify.put<{ Body: unknown }>(
     '/api/drift/alerts/resolve',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       const data = resolveDriftAlertSchema.parse(request.body);
       const result = await driftAlertService.resolveAlerts(data.alertIds);
@@ -53,7 +53,7 @@ export async function driftRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/drift/check - Manual drift check trigger
   fastify.post<{ Body: unknown }>(
     '/api/drift/check',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       const data = driftCheckSchema.parse(request.body || {});
       if (data.scenarioId) {
@@ -79,7 +79,7 @@ export async function driftRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/drift/thresholds - Update thresholds
   fastify.put<{ Body: unknown; Querystring: Record<string, unknown> }>(
     '/api/drift/thresholds',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       const data = driftThresholdSchema.parse(request.body);
       const periodId = request.query.periodId as string | undefined;

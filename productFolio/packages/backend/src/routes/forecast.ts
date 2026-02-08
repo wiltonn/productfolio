@@ -13,20 +13,31 @@ import {
   runEmpiricalForecast,
   assessDataQuality,
 } from '../services/forecast.service.js';
+import { entitlementService } from '../services/entitlement.service.js';
 
 export async function forecastRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('onRequest', fastify.authenticate);
 
   const requireForecast = fastify.requireFeature('flow_forecast_v1');
   const requireModeB = fastify.requireFeature('forecast_mode_b');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // POST /api/forecast/scope-based — Run Mode A forecast
   fastify.post<{ Body: unknown }>(
     '/api/forecast/scope-based',
-    { preHandler: [requireForecast] },
+    { preHandler: [requireForecast, requireDecisionSeat] },
     async (request, reply) => {
       const data = ScopeBasedForecastSchema.parse(request.body);
       const result = await runScopeBasedForecast(data);
+
+      // RevOps telemetry: forecast run
+      entitlementService.recordEvent({
+        eventName: 'forecast_run',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { mode: 'SCOPE_BASED', scenarioId: data.scenarioId },
+      }).catch(() => {});
+
       return reply.code(200).send(result);
     }
   );
@@ -34,10 +45,19 @@ export async function forecastRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/forecast/empirical — Run Mode B forecast
   fastify.post<{ Body: unknown }>(
     '/api/forecast/empirical',
-    { preHandler: [requireForecast, requireModeB] },
+    { preHandler: [requireForecast, requireModeB, requireDecisionSeat] },
     async (request, reply) => {
       const data = EmpiricalForecastSchema.parse(request.body);
       const result = await runEmpiricalForecast(data);
+
+      // RevOps telemetry: forecast run
+      entitlementService.recordEvent({
+        eventName: 'forecast_run',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { mode: 'EMPIRICAL' },
+      }).catch(() => {});
+
       return reply.code(200).send(result);
     }
   );

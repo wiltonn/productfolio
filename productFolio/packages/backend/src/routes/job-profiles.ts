@@ -12,6 +12,8 @@ export async function jobProfilesRoutes(fastify: FastifyInstance) {
   fastify.addHook('onRequest', fastify.requireFeature('job_profiles'));
   fastify.addHook('onRequest', fastify.authenticate);
 
+  const requireDecisionSeat = fastify.requireSeat('decision');
+
   /**
    * GET /api/job-profiles
    * List job profiles (paginated, filterable)
@@ -41,7 +43,7 @@ export async function jobProfilesRoutes(fastify: FastifyInstance) {
    */
   fastify.post(
     '/api/job-profiles',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       const data = CreateJobProfileSchema.parse(request.body);
       const profile = await jobProfileService.create(data);
@@ -51,13 +53,13 @@ export async function jobProfilesRoutes(fastify: FastifyInstance) {
 
   /**
    * PUT /api/job-profiles/:id
-   * Update a job profile (ADMIN only)
+   * Update a job profile (requires job-profile:write)
    */
   fastify.put<{
     Params: { id: string };
   }>(
     '/api/job-profiles/:id',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       const data = UpdateJobProfileSchema.parse(request.body);
       const profile = await jobProfileService.update(request.params.id, data);
@@ -67,13 +69,13 @@ export async function jobProfilesRoutes(fastify: FastifyInstance) {
 
   /**
    * DELETE /api/job-profiles/:id
-   * Soft delete a job profile (ADMIN only)
+   * Soft delete a job profile (requires job-profile:write)
    */
   fastify.delete<{
     Params: { id: string };
   }>(
     '/api/job-profiles/:id',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       const result = await jobProfileService.deleteProfile(request.params.id);
       return reply.send(result);

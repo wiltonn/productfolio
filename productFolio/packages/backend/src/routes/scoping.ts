@@ -12,6 +12,8 @@ import type { PaginationParams } from '../types/index.js';
 export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
+
+  const requireDecisionSeat = fastify.requireSeat('decision');
   /**
    * GET /api/initiatives/:initiativeId/scope-items
    * List scope items for an initiative
@@ -48,7 +50,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Params: { initiativeId: string };
     Body: unknown;
-  }>('/api/initiatives/:initiativeId/scope-items', async (request, reply) => {
+  }>('/api/initiatives/:initiativeId/scope-items', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { initiativeId } = request.params;
     const data = CreateScopeItemSchema.parse(request.body);
 
@@ -64,7 +66,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.put<{
     Params: { id: string };
     Body: unknown;
-  }>('/api/scope-items/:id', async (request, reply) => {
+  }>('/api/scope-items/:id', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = request.params;
     const data = UpdateScopeItemSchema.parse(request.body);
 
@@ -77,7 +79,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
    * DELETE /api/scope-items/:id
    * Delete a scope item
    */
-  fastify.delete<{ Params: { id: string } }>('/api/scope-items/:id', async (request, reply) => {
+  fastify.delete<{ Params: { id: string } }>('/api/scope-items/:id', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = request.params;
 
     await scopingService.delete(id);
@@ -92,7 +94,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Params: { id: string };
     Body: unknown;
-  }>('/api/initiatives/:id/submit-approval', async (request, reply) => {
+  }>('/api/initiatives/:id/submit-approval', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = request.params;
     const data = SubmitApprovalSchema.parse(request.body);
 
@@ -108,7 +110,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Params: { id: string };
     Body: unknown;
-  }>('/api/initiatives/:id/approve', async (request, reply) => {
+  }>('/api/initiatives/:id/approve', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = request.params;
     const data = ApproveWithApproverSchema.parse(request.body);
 
@@ -124,7 +126,7 @@ export async function scopingRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Params: { id: string };
     Body: unknown;
-  }>('/api/initiatives/:id/reject', async (request, reply) => {
+  }>('/api/initiatives/:id/reject', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = request.params;
     const data = ApproveRejectSchema.parse(request.body);
 

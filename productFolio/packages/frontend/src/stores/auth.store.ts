@@ -3,11 +3,17 @@ import { devtools } from 'zustand/middleware';
 
 export type UserRole = 'ADMIN' | 'PRODUCT_OWNER' | 'BUSINESS_OWNER' | 'RESOURCE_MANAGER' | 'VIEWER';
 
+export type SeatType = 'decision' | 'observer' | 'resource';
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions: string[];
+  seatType: SeatType;
+  licensed: boolean;
+  tier: string;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;

@@ -5,9 +5,10 @@ import { useAuthStore, UserRole } from '../../stores/auth.store';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: UserRole[];
+  requiredPermissions?: string[];
 }
 
-export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles, requiredPermissions }: ProtectedRouteProps) {
   const location = useLocation();
   const { isAuthenticated: auth0Authenticated, isLoading: auth0Loading } = useAuth0();
   const { isLoading: storeLoading, user } = useAuthStore();
@@ -47,7 +48,16 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check role-based access (user comes from Zustand, populated by /auth/me)
+  // Check permission-based access (preferred over role checks)
+  if (requiredPermissions && user) {
+    const userPerms = user.permissions ?? [];
+    const hasRequired = requiredPermissions.some((p) => userPerms.includes(p));
+    if (!hasRequired) {
+      return <Navigate to="/unauthorized" replace />;
+    }
+  }
+
+  // Check role-based access (legacy fallback)
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return <Navigate to="/unauthorized" replace />;
   }

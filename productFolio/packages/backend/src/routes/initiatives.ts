@@ -18,6 +18,8 @@ import { enqueueCsvImport } from '../jobs/index.js';
 export async function initiativesRoutes(fastify: FastifyInstance) {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
+
+  const requireDecisionSeat = fastify.requireSeat('decision');
   /**
    * GET /api/initiatives
    * List initiatives with filters and pagination
@@ -127,7 +129,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{
     Body: typeof CreateInitiativeSchema;
-  }>('/api/initiatives', async (request, reply) => {
+  }>('/api/initiatives', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = CreateInitiativeSchema.parse(request.body);
     const initiative = await initiativesService.create(validatedData);
     return reply.status(201).send(initiative);
@@ -140,7 +142,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string };
     Body: typeof UpdateInitiativeSchema;
-  }>('/api/initiatives/:id', async (request, reply) => {
+  }>('/api/initiatives/:id', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = UpdateInitiativeSchema.parse(request.body);
     const initiative = await initiativesService.update(
       request.params.id,
@@ -155,7 +157,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{
     Params: { id: string };
-  }>('/api/initiatives/:id', async (request, reply) => {
+  }>('/api/initiatives/:id', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const result = await initiativesService.deleteInitiative(request.params.id);
     return reply.send(result);
   });
@@ -167,7 +169,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { id: string };
     Body: typeof StatusTransitionSchema;
-  }>('/api/initiatives/:id/status', async (request, reply) => {
+  }>('/api/initiatives/:id/status', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = StatusTransitionSchema.parse(request.body);
     const initiative = await initiativesService.transitionStatus(
       request.params.id,
@@ -194,7 +196,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.patch<{
     Body: typeof BulkUpdateSchema;
-  }>('/api/initiatives/bulk', async (request, reply) => {
+  }>('/api/initiatives/bulk', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = BulkUpdateSchema.parse(request.body);
     const result = await initiativesService.bulkUpdate(validatedData);
     return reply.send(result);
@@ -206,7 +208,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{
     Body: { ids: string[] };
-  }>('/api/initiatives/bulk-delete', async (request, reply) => {
+  }>('/api/initiatives/bulk-delete', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = BulkDeleteSchema.parse(request.body);
     const result = await initiativesService.bulkDelete(validatedData);
     return reply.send(result);
@@ -218,7 +220,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{
     Body: { ids: string[] };
-  }>('/api/initiatives/bulk', async (request, reply) => {
+  }>('/api/initiatives/bulk', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     // For DELETE with body, manually parse if body is a string
     let body = request.body;
     if (typeof body === 'string') {
@@ -243,7 +245,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{
     Body: { data: Array<Record<string, string>>; async?: boolean; fileName?: string };
-  }>('/api/initiatives/import', async (request, reply) => {
+  }>('/api/initiatives/import', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = CsvImportSchema.parse(request.body);
     const rows = validatedData.data as Array<Record<string, string>>;
 

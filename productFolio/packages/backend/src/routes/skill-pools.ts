@@ -10,6 +10,8 @@ export async function skillPoolsRoutes(fastify: FastifyInstance): Promise<void> 
   fastify.addHook('onRequest', fastify.requireFeature('token_planning_v1'));
   fastify.addHook('onRequest', fastify.authenticate);
 
+  const requireDecisionSeat = fastify.requireSeat('decision');
+
   // GET /api/skill-pools — list skill pools
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/skill-pools',
@@ -29,10 +31,10 @@ export async function skillPoolsRoutes(fastify: FastifyInstance): Promise<void> 
     }
   );
 
-  // POST /api/skill-pools — create pool (ADMIN only)
+  // POST /api/skill-pools — create pool (requires job-profile:write)
   fastify.post<{ Body: unknown }>(
     '/api/skill-pools',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       const data = createSkillPoolSchema.parse(request.body);
       const pool = await skillPoolService.create(data);
@@ -40,10 +42,10 @@ export async function skillPoolsRoutes(fastify: FastifyInstance): Promise<void> 
     }
   );
 
-  // PUT /api/skill-pools/:id — update pool (ADMIN only)
+  // PUT /api/skill-pools/:id — update pool (requires job-profile:write)
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/skill-pools/:id',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       const data = updateSkillPoolSchema.parse(request.body);
       const pool = await skillPoolService.update(request.params.id, data);
@@ -51,10 +53,10 @@ export async function skillPoolsRoutes(fastify: FastifyInstance): Promise<void> 
     }
   );
 
-  // DELETE /api/skill-pools/:id — soft delete (ADMIN only)
+  // DELETE /api/skill-pools/:id — soft delete (requires job-profile:write)
   fastify.delete<{ Params: { id: string } }>(
     '/api/skill-pools/:id',
-    { preHandler: [fastify.authorize(['ADMIN'])] },
+    { preHandler: [fastify.requirePermission('job-profile:write'), requireDecisionSeat] },
     async (request, reply) => {
       await skillPoolService.delete(request.params.id);
       return reply.code(204).send();

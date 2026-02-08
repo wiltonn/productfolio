@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { UserRole } from '@prisma/client';
 import { NotFoundError } from '../lib/errors.js';
 import type { UserResponse } from '../schemas/auth.schema.js';
+import { permissionsForRole } from '../lib/permissions.js';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
 
@@ -173,4 +174,23 @@ export async function getUserById(userId: string): Promise<UserResponse> {
   }
 
   return toUserResponse(user);
+}
+
+/**
+ * Get user by ID with permissions derived from role.
+ * Used by /api/auth/me to return the full user profile including permissions.
+ */
+export async function getUserWithPermissions(userId: string): Promise<UserResponse & { permissions: string[] }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new NotFoundError('User', userId);
+  }
+
+  return {
+    ...toUserResponse(user),
+    permissions: permissionsForRole(user.role),
+  };
 }

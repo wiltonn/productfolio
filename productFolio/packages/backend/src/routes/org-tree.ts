@@ -22,7 +22,8 @@ import { prisma } from '../lib/prisma.js';
 export async function orgTreeRoutes(fastify: FastifyInstance) {
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const adminOnly = fastify.authorize(['ADMIN']);
+  const adminOnly = fastify.requirePermission('org:write');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // =========================================================================
   // Portfolio Area Nodes
@@ -73,7 +74,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // POST /api/org/nodes — Create node (ADMIN)
   fastify.post(
     '/api/org/nodes',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = CreateNodeSchema.parse(request.body);
       const node = await orgTreeService.createNode(data, request.user.sub);
@@ -84,7 +85,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // PUT /api/org/nodes/:id — Update node (ADMIN)
   fastify.put<{ Params: { id: string } }>(
     '/api/org/nodes/:id',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = UpdateNodeSchema.parse(request.body);
@@ -96,7 +97,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // POST /api/org/nodes/:id/move — Move node to new parent (ADMIN)
   fastify.post<{ Params: { id: string } }>(
     '/api/org/nodes/:id/move',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { newParentId } = MoveNodeSchema.parse(request.body);
@@ -108,7 +109,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // DELETE /api/org/nodes/:id — Soft-delete node (ADMIN)
   fastify.delete<{ Params: { id: string } }>(
     '/api/org/nodes/:id',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await orgTreeService.deleteNode(id, request.user.sub);
@@ -163,7 +164,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // POST /api/org/memberships — Assign employee to node (ADMIN)
   fastify.post(
     '/api/org/memberships',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = AssignMembershipSchema.parse(request.body);
       const membership = await orgMembershipService.assignEmployeeToNode(
@@ -177,7 +178,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // POST /api/org/memberships/bulk — Bulk assign (ADMIN)
   fastify.post(
     '/api/org/memberships/bulk',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = BulkAssignSchema.parse(request.body);
       const result = await orgMembershipService.bulkAssignEmployees(
@@ -191,7 +192,7 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   // DELETE /api/org/memberships/:id — End membership (ADMIN)
   fastify.delete<{ Params: { id: string } }>(
     '/api/org/memberships/:id',
-    { preHandler: adminOnly },
+    { preHandler: [adminOnly, requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await orgMembershipService.endMembership(id, request.user.sub);

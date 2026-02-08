@@ -28,7 +28,8 @@ export async function jiraIntegrationRoutes(fastify: FastifyInstance) {
   });
 
   // Admin-only authorization hook
-  const adminOnly = fastify.authorize(['ADMIN']);
+  const adminOnly = fastify.requirePermission('jira:admin');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // ---- Health Check ----
 
@@ -163,7 +164,7 @@ export async function jiraIntegrationRoutes(fastify: FastifyInstance) {
   fastify.delete<{
     Params: { connectionId: string };
   }>('/api/integrations/jira/connections/:connectionId', {
-    preHandler: adminOnly,
+    preHandler: [adminOnly, requireDecisionSeat],
   }, async (request, reply) => {
     const { connectionId } = connectionIdSchema.parse(request.params);
     return jiraAuthService.deleteConnection(connectionId);
@@ -192,7 +193,7 @@ export async function jiraIntegrationRoutes(fastify: FastifyInstance) {
     Params: { connectionId: string };
     Body: { siteIds: string[] };
   }>('/api/integrations/jira/connections/:connectionId/sites', {
-    preHandler: adminOnly,
+    preHandler: [adminOnly, requireDecisionSeat],
   }, async (request, reply) => {
     const { connectionId } = connectionIdSchema.parse(request.params);
     const { siteIds } = selectSitesSchema.parse(request.body);
@@ -253,7 +254,7 @@ export async function jiraIntegrationRoutes(fastify: FastifyInstance) {
     Params: { siteId: string };
     Body: { projects: Array<{ projectId: string; projectKey: string; projectName: string }> };
   }>('/api/integrations/jira/sites/:siteId/projects', {
-    preHandler: adminOnly,
+    preHandler: [adminOnly, requireDecisionSeat],
   }, async (request, reply) => {
     const { siteId } = siteIdSchema.parse(request.params);
     const { projects } = selectProjectsSchema.parse(request.body);
@@ -269,7 +270,7 @@ export async function jiraIntegrationRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: { connectionId?: string; siteId?: string; fullResync?: boolean };
   }>('/api/integrations/jira/sync', {
-    preHandler: adminOnly,
+    preHandler: [adminOnly, requireDecisionSeat],
   }, async (request, reply) => {
     const input = triggerSyncSchema.parse(request.body || {});
 

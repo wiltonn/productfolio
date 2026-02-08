@@ -14,6 +14,8 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
   // All routes require authentication
   fastify.addHook('onRequest', fastify.authenticate);
 
+  const requireDecisionSeat = fastify.requireSeat('decision');
+
   /**
    * GET /api/intake-requests
    * List intake requests with filters and pagination.
@@ -60,7 +62,7 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
    */
   fastify.post<{
     Body: Record<string, unknown>;
-  }>('/api/intake-requests', async (request, reply) => {
+  }>('/api/intake-requests', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const data = CreateIntakeRequestSchema.parse(request.body);
     const userId = (request.user as any)?.id;
     const result = await intakeRequestService.create(data, userId);
@@ -75,7 +77,7 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string };
     Body: Record<string, unknown>;
-  }>('/api/intake-requests/:id', async (request) => {
+  }>('/api/intake-requests/:id', { preHandler: [requireDecisionSeat] }, async (request) => {
     const { id } = IntakeRequestIdSchema.parse(request.params);
     const data = UpdateIntakeRequestSchema.parse(request.body);
     const userId = (request.user as any)?.id;
@@ -88,7 +90,7 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
    */
   fastify.delete<{
     Params: { id: string };
-  }>('/api/intake-requests/:id', async (request) => {
+  }>('/api/intake-requests/:id', { preHandler: [requireDecisionSeat] }, async (request) => {
     const { id } = IntakeRequestIdSchema.parse(request.params);
     return intakeRequestService.remove(id);
   });
@@ -100,7 +102,7 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { id: string };
     Body: Record<string, unknown>;
-  }>('/api/intake-requests/:id/status', async (request) => {
+  }>('/api/intake-requests/:id/status', { preHandler: [requireDecisionSeat] }, async (request) => {
     const { id } = IntakeRequestIdSchema.parse(request.params);
     const input = IntakeRequestStatusTransitionSchema.parse(request.body);
     const userId = (request.user as any)?.id;
@@ -114,7 +116,7 @@ export async function intakeRequestRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Params: { id: string };
     Body: Record<string, unknown>;
-  }>('/api/intake-requests/:id/convert', async (request, reply) => {
+  }>('/api/intake-requests/:id/convert', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const { id } = IntakeRequestIdSchema.parse(request.params);
     const input = ConvertToInitiativeSchema.parse(request.body);
     const userId = (request.user as any)?.id;

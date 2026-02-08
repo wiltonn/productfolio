@@ -1,5 +1,4 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ConflictError } from '../lib/errors.js';
 import { updatePlanningModeSchema } from '../schemas/planning.schema.js';
@@ -11,18 +10,14 @@ import {
 import { planningService } from '../planning/planning.service.js';
 import { tokenSupplyService } from '../services/token-supply.service.js';
 import { tokenDemandService } from '../services/token-demand.service.js';
-
-const MUTATION_ROLES: UserRole[] = [
-  UserRole.ADMIN,
-  UserRole.PRODUCT_OWNER,
-  UserRole.BUSINESS_OWNER,
-];
+import { entitlementService } from '../services/entitlement.service.js';
 
 export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const authorizeMutation = fastify.authorize(MUTATION_ROLES);
+  const authorizeMutation = fastify.requirePermission('planning:write');
   const requireTokenPlanning = fastify.requireFeature('token_planning_v1');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // ──────────────────────────────────────────────
   // Phase 1: Planning mode toggle
@@ -31,7 +26,7 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/planning-mode — toggle planning mode
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/planning-mode',
-    { preHandler: [authorizeMutation] },
+    { preHandler: [authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       const { mode } = updatePlanningModeSchema.parse(request.body);
       const scenario = await prisma.scenario.findUnique({
@@ -45,6 +40,15 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
         where: { id: request.params.id },
         data: { planningMode: mode },
       });
+
+      // RevOps telemetry: capacity modeled
+      entitlementService.recordEvent({
+        eventName: 'capacity_modeled',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { scenarioId: request.params.id, action: 'planning_mode_toggle', mode },
+      }).catch(() => {});
+
       return reply.code(200).send({ planningMode: mode });
     }
   );
@@ -66,10 +70,19 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/token-supply — upsert supply
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/token-supply',
-    { preHandler: [requireTokenPlanning, authorizeMutation] },
+    { preHandler: [requireTokenPlanning, authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = upsertTokenSupplySchema.parse(request.body);
       const supply = await tokenSupplyService.upsert(request.params.id, data);
+
+      // RevOps telemetry: capacity modeled
+      entitlementService.recordEvent({
+        eventName: 'capacity_modeled',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { scenarioId: request.params.id, action: 'token_supply_upsert' },
+      }).catch(() => {});
+
       return reply.code(200).send(supply);
     }
   );
@@ -77,7 +90,7 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/scenarios/:id/token-supply/:skillPoolId — remove supply
   fastify.delete<{ Params: { id: string; skillPoolId: string } }>(
     '/api/scenarios/:id/token-supply/:skillPoolId',
-    { preHandler: [requireTokenPlanning, authorizeMutation] },
+    { preHandler: [requireTokenPlanning, authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       await tokenSupplyService.delete(request.params.id, request.params.skillPoolId);
       return reply.code(204).send();
@@ -101,10 +114,19 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/token-demand — upsert single demand
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/token-demand',
-    { preHandler: [requireTokenPlanning, authorizeMutation] },
+    { preHandler: [requireTokenPlanning, authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = upsertTokenDemandSchema.parse(request.body);
       const demand = await tokenDemandService.upsert(request.params.id, data);
+
+      // RevOps telemetry: capacity modeled
+      entitlementService.recordEvent({
+        eventName: 'capacity_modeled',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { scenarioId: request.params.id, action: 'token_demand_upsert' },
+      }).catch(() => {});
+
       return reply.code(200).send(demand);
     }
   );
@@ -112,7 +134,7 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/token-demand/bulk — bulk upsert demands
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/token-demand/bulk',
-    { preHandler: [requireTokenPlanning, authorizeMutation] },
+    { preHandler: [requireTokenPlanning, authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       const { items } = bulkUpsertTokenDemandSchema.parse(request.body);
       const demands = await tokenDemandService.bulkUpsert(request.params.id, items);
@@ -123,7 +145,7 @@ export async function planningRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/scenarios/:id/token-demand/:demandId — remove demand
   fastify.delete<{ Params: { id: string; demandId: string } }>(
     '/api/scenarios/:id/token-demand/:demandId',
-    { preHandler: [requireTokenPlanning, authorizeMutation] },
+    { preHandler: [requireTokenPlanning, authorizeMutation, requireDecisionSeat] },
     async (request, reply) => {
       await tokenDemandService.delete(request.params.demandId);
       return reply.code(204).send();

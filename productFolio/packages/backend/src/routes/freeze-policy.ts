@@ -1,12 +1,12 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@prisma/client';
 import { updateFreezePolicySchema } from '../schemas/baseline.schema.js';
 import { freezePolicyService } from '../services/freeze-policy.service.js';
 
 export async function freezePolicyRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const authorizeAdmin = fastify.authorize([UserRole.ADMIN, UserRole.PRODUCT_OWNER]);
+  const authorizeAdmin = fastify.requirePermission('drift:write');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // GET /api/freeze-policies/:periodId - Get freeze policy for a period
   fastify.get<{ Params: { periodId: string } }>(
@@ -23,7 +23,7 @@ export async function freezePolicyRoutes(fastify: FastifyInstance): Promise<void
   // PUT /api/freeze-policies/:periodId - Create or update freeze policy
   fastify.put<{ Params: { periodId: string }; Body: unknown }>(
     '/api/freeze-policies/:periodId',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       const data = updateFreezePolicySchema.parse(request.body);
       const policy = await freezePolicyService.upsert(
@@ -37,7 +37,7 @@ export async function freezePolicyRoutes(fastify: FastifyInstance): Promise<void
   // DELETE /api/freeze-policies/:periodId - Remove freeze policy
   fastify.delete<{ Params: { periodId: string } }>(
     '/api/freeze-policies/:periodId',
-    { preHandler: authorizeAdmin },
+    { preHandler: [authorizeAdmin, requireDecisionSeat] },
     async (request, reply) => {
       await freezePolicyService.delete(request.params.periodId);
       return reply.code(204).send();

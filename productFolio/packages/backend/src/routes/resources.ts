@@ -28,6 +28,8 @@ import { NotFoundError } from '../lib/errors.js';
 export async function resourcesRoutes(fastify: FastifyInstance) {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
+
+  const requireDecisionSeat = fastify.requireSeat('decision');
   // GET /api/employees - List employees
   fastify.get<{ Querystring: Record<string, unknown> }>(
     '/api/employees',
@@ -90,6 +92,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // POST /api/employees - Create employee
   fastify.post(
     '/api/employees',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const data = CreateEmployeeSchema.parse(request.body);
       const employee = await resourcesService.createEmployee(data);
@@ -100,6 +103,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // PUT /api/employees/:id - Update employee
   fastify.put<{ Params: { id: string } }>(
     '/api/employees/:id',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = UpdateEmployeeSchema.parse(request.body);
@@ -111,6 +115,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // DELETE /api/employees/:id - Delete employee
   fastify.delete<{ Params: { id: string } }>(
     '/api/employees/:id',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const result = await resourcesService.deleteEmployee(id);
@@ -145,6 +150,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // POST /api/employees/:id/skills - Add skill
   fastify.post<{ Params: { id: string } }>(
     '/api/employees/:id/skills',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = CreateSkillSchema.parse(request.body);
@@ -158,6 +164,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
     Params: { id: string; skillId: string };
   }>(
     '/api/employees/:id/skills/:skillId',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, skillId } = request.params as { id: string; skillId: string };
       const data = UpdateSkillSchema.parse(request.body);
@@ -169,6 +176,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // DELETE /api/employees/:id/skills/:skillId - Remove skill
   fastify.delete<{ Params: { id: string; skillId: string } }>(
     '/api/employees/:id/skills/:skillId',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, skillId } = request.params as { id: string; skillId: string };
       const result = await resourcesService.removeSkill(id, skillId);
@@ -193,6 +201,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // POST /api/employees/:id/domains - Add domain
   fastify.post<{ Params: { id: string } }>(
     '/api/employees/:id/domains',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = CreateDomainSchema.parse(request.body);
@@ -206,6 +215,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
     Params: { id: string; domainId: string };
   }>(
     '/api/employees/:id/domains/:domainId',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, domainId } = request.params as { id: string; domainId: string };
       const data = UpdateDomainSchema.parse(request.body);
@@ -217,6 +227,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // DELETE /api/employees/:id/domains/:domainId - Remove domain
   fastify.delete<{ Params: { id: string; domainId: string } }>(
     '/api/employees/:id/domains/:domainId',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, domainId } = request.params as { id: string; domainId: string };
       const result = await resourcesService.removeDomain(id, domainId);
@@ -241,6 +252,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // PUT /api/employees/:id/capacity - Update capacity
   fastify.put<{ Params: { id: string } }>(
     '/api/employees/:id/capacity',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const data = UpdateCapacitySchema.parse(request.body);
@@ -287,6 +299,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // PUT /api/employees/:id/domain-familiarity/:initiativeId - Upsert familiarity
   fastify.put<{ Params: { id: string; initiativeId: string } }>(
     '/api/employees/:id/domain-familiarity/:initiativeId',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id, initiativeId } = request.params as { id: string; initiativeId: string };
       const data = upsertFamiliaritySchema.parse(request.body);
@@ -336,6 +349,7 @@ export async function resourcesRoutes(fastify: FastifyInstance) {
   // PUT /api/employees/:id/job-profile - Assign or remove job profile
   fastify.put<{ Params: { id: string } }>(
     '/api/employees/:id/job-profile',
+    { preHandler: [requireDecisionSeat] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const enabled = await isEnabled('job_profiles');
       if (!enabled) {

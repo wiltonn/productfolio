@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole, ScenarioStatus } from '@prisma/client';
+import { ScenarioStatus } from '@prisma/client';
 import {
   createScenarioSchema,
   updateScenarioSchema,
@@ -21,14 +21,14 @@ import { baselineService } from '../services/baseline.service.js';
 import { deltaEngineService } from '../services/delta-engine.service.js';
 import { rampService } from '../services/ramp.service.js';
 import { planningService } from '../planning/planning.service.js';
-
-const MUTATION_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.PRODUCT_OWNER, UserRole.BUSINESS_OWNER];
+import { entitlementService } from '../services/entitlement.service.js';
 
 export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // Apply authentication to all routes in this plugin
   fastify.addHook('onRequest', fastify.authenticate);
 
-  const authorizeScenarioMutation = fastify.authorize(MUTATION_ROLES);
+  const authorizeScenarioMutation = fastify.requirePermission('scenario:write');
+  const requireDecisionSeat = fastify.requireSeat('decision');
 
   // GET /api/scenarios - List scenarios (optionally filtered by periodIds)
   fastify.get<{ Querystring: Record<string, unknown> }>(
@@ -67,10 +67,19 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios - Create scenario
   fastify.post<{ Body: unknown }>(
     '/api/scenarios',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = createScenarioSchema.parse(request.body);
       const scenario = await scenariosService.create(data);
+
+      // RevOps telemetry: scenario created
+      entitlementService.recordEvent({
+        eventName: 'scenario_created',
+        userId: request.user.sub,
+        seatType: request.user.seatType,
+        metadata: { scenarioId: scenario.id, scenarioName: scenario.name },
+      }).catch(() => {});
+
       return reply.code(201).send(scenario);
     }
   );
@@ -78,7 +87,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id - Update scenario
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = updateScenarioSchema.parse(request.body);
       const scenario = await scenariosService.update(request.params.id, data);
@@ -89,7 +98,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/scenarios/:id - Delete scenario
   fastify.delete<{ Params: { id: string } }>(
     '/api/scenarios/:id',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       await scenariosService.delete(request.params.id);
       return reply.code(204).send();
@@ -99,7 +108,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/status - Transition scenario status
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/status',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const { status } = transitionStatusSchema.parse(request.body);
       const scenario = await scenariosService.transitionStatus(
@@ -107,6 +116,18 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
         status as ScenarioStatus,
         request.user.role
       );
+
+      // RevOps telemetry: scenario status transitions
+      if (status === 'APPROVED' || status === 'LOCKED') {
+        const eventName = status === 'APPROVED' ? 'scenario_approved' : 'scenario_locked';
+        entitlementService.recordEvent({
+          eventName,
+          userId: request.user.sub,
+          seatType: request.user.seatType,
+          metadata: { scenarioId: request.params.id, newStatus: status },
+        }).catch(() => {});
+      }
+
       return reply.code(200).send(scenario);
     }
   );
@@ -114,7 +135,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/primary - Set scenario as primary for its quarter
   fastify.put<{ Params: { id: string } }>(
     '/api/scenarios/:id/primary',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const scenario = await scenariosService.setPrimary(request.params.id);
       return reply.code(200).send(scenario);
@@ -124,7 +145,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/clone - Clone scenario to target quarter
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/clone',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = cloneScenarioSchema.parse(request.body);
       const scenario = await scenariosService.cloneScenario(request.params.id, data);
@@ -135,7 +156,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/priorities - Update priority rankings
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/priorities',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = updatePrioritiesSchema.parse(request.body);
       const scenario = await scenariosService.updatePriorities(request.params.id, data);
@@ -167,7 +188,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/allocations - Create allocation
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/allocations',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = createAllocationSchema.parse(request.body);
       const allocation = await allocationService.create(request.params.id, data);
@@ -178,7 +199,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/allocations/:id - Update allocation
   fastify.put<{ Params: { id: string }; Body: unknown }>(
     '/api/allocations/:id',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = updateAllocationSchema.parse(request.body);
       const allocation = await allocationService.update(request.params.id, data);
@@ -189,7 +210,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // DELETE /api/allocations/:id - Delete allocation
   fastify.delete<{ Params: { id: string } }>(
     '/api/allocations/:id',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       await allocationService.delete(request.params.id);
       return reply.code(204).send();
@@ -237,7 +258,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/calculator/invalidate - Invalidate cache
   fastify.post<{ Params: { id: string } }>(
     '/api/scenarios/:id/calculator/invalidate',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       await scenarioCalculatorService.invalidateCache(request.params.id);
       return reply.code(204).send();
@@ -247,7 +268,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/recompute-ramp - Recompute ramp modifiers for all allocations
   fastify.post<{ Params: { id: string } }>(
     '/api/scenarios/:id/recompute-ramp',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       await rampService.recomputeScenarioRamp(request.params.id);
       await scenarioCalculatorService.invalidateCache(request.params.id);
@@ -258,7 +279,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/auto-allocate - Preview auto-allocations (no side effects)
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/auto-allocate',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const options = autoAllocateOptionsSchema.parse(request.body || {});
       const result = await allocationService.autoAllocate(request.params.id, options);
@@ -269,7 +290,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/auto-allocate/apply - Apply auto-allocations
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/auto-allocate/apply',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const { proposedAllocations } = request.body as {
         proposedAllocations: Array<{
@@ -326,7 +347,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // POST /api/scenarios/:id/revision - Create a revision from a locked baseline
   fastify.post<{ Params: { id: string }; Body: unknown }>(
     '/api/scenarios/:id/revision',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const data = createRevisionSchema.parse(request.body);
       const scenario = await scenariosService.createRevision(
@@ -341,7 +362,7 @@ export async function scenariosRoutes(fastify: FastifyInstance): Promise<void> {
   // PUT /api/scenarios/:id/reconcile - Mark revision as reconciled
   fastify.put<{ Params: { id: string } }>(
     '/api/scenarios/:id/reconcile',
-    { preHandler: authorizeScenarioMutation },
+    { preHandler: [authorizeScenarioMutation, requireDecisionSeat] },
     async (request, reply) => {
       const scenario = await scenariosService.markReconciled(request.params.id);
       return reply.code(200).send(scenario);

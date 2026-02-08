@@ -897,6 +897,59 @@ async function main() {
     console.log(`Job profiles already exist (${existingProfiles}), skipping...`);
   }
 
+  // ============================================================================
+  // AUTHORITIES (Permission Registry)
+  // ============================================================================
+
+  const authorities = [
+    { code: 'initiative:read', description: 'View initiatives and their details', category: 'initiative' },
+    { code: 'initiative:write', description: 'Create, update, and delete initiatives', category: 'initiative' },
+    { code: 'scenario:read', description: 'View scenarios and allocations', category: 'scenario' },
+    { code: 'scenario:write', description: 'Create, update, and delete scenarios and allocations', category: 'scenario' },
+    { code: 'employee:read', description: 'View employees and capacity', category: 'employee' },
+    { code: 'employee:write', description: 'Create, update, and delete employees', category: 'employee' },
+    { code: 'planning:read', description: 'View planning data (token ledger, supply, demand)', category: 'planning' },
+    { code: 'planning:write', description: 'Modify planning mode, token supply, and demand', category: 'planning' },
+    { code: 'forecast:read', description: 'View forecast runs and data quality', category: 'forecast' },
+    { code: 'forecast:write', description: 'Run forecasts (scope-based and empirical)', category: 'forecast' },
+    { code: 'org:read', description: 'View org tree and memberships', category: 'org' },
+    { code: 'org:write', description: 'Manage org tree nodes and memberships', category: 'org' },
+    { code: 'approval:read', description: 'View approval policies and requests', category: 'approval' },
+    { code: 'approval:write', description: 'Manage approval policies and delegations', category: 'approval' },
+    { code: 'drift:read', description: 'View drift alerts and thresholds', category: 'drift' },
+    { code: 'drift:write', description: 'Acknowledge/resolve drift alerts, update thresholds', category: 'drift' },
+    { code: 'job-profile:read', description: 'View job profiles and cost bands', category: 'job-profile' },
+    { code: 'job-profile:write', description: 'Create, update, and delete job profiles', category: 'job-profile' },
+    { code: 'feature-flag:admin', description: 'Manage feature flags', category: 'admin' },
+    { code: 'jira:admin', description: 'Manage Jira integration settings', category: 'admin' },
+    { code: 'authority:admin', description: 'Manage authority registry and view audit logs', category: 'admin' },
+  ];
+
+  for (const auth of authorities) {
+    const existing = await prisma.authority.findUnique({ where: { code: auth.code } });
+    if (!existing) {
+      await prisma.authority.create({ data: auth });
+      console.log(`Created authority: ${auth.code}`);
+    }
+  }
+
+  // ============================================================================
+  // TENANT CONFIG (Entitlement / Seat Licensing)
+  // ============================================================================
+
+  const existingTenantConfig = await prisma.tenantConfig.findFirst();
+  if (!existingTenantConfig) {
+    await prisma.tenantConfig.create({
+      data: {
+        tier: 'starter',
+        seatLimit: 5,
+      },
+    });
+    console.log('Created default tenant config (starter tier, 5 seat limit)');
+  } else {
+    console.log('Tenant config already exists, skipping...');
+  }
+
   console.log('Seeding complete!');
 }
 
