@@ -5,6 +5,9 @@ export {
   authKeys,
 } from './useAuth';
 
+// Authorization hooks
+export { useAuthz } from './useAuthz';
+
 // Initiative hooks
 export {
   useInitiatives,
@@ -208,6 +211,41 @@ export {
   useForecastRun,
   forecastKeys,
 } from './useForecast';
+
+// Entitlement hooks
+export {
+  useEntitlementSummary,
+  useEntitlements,
+  useUpdateTenantConfig,
+  useRevOpsSummary,
+  useRevOpsEvents,
+  entitlementKeys,
+  type EntitlementSummary,
+  type EntitlementUser,
+  type EntitlementLists,
+  type TenantConfigUpdate,
+  type RevOpsSignals,
+  type EntitlementEvent,
+  type EntitlementEventFilters,
+} from './useEntitlements';
+
+// User hooks
+export {
+  useUsers,
+  useUser,
+  useCreateUser,
+  useUpdateUser,
+  useDeactivateUser,
+  userKeys,
+  type User as AdminUser,
+  type UserDetail,
+  type UsersResponse as AdminUsersResponse,
+  type UserFilters as AdminUserFilters,
+  type CreateUserInput,
+  type UpdateUserInput,
+  type UserRole as AdminUserRole,
+  type SeatType as AdminSeatType,
+} from './useUsers';
 
 // Types from central types file
 export type {

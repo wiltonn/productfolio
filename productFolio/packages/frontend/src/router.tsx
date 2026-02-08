@@ -83,6 +83,22 @@ const TokenLedger = lazy(() =>
   import('./pages/TokenLedger').then((m) => ({ default: m.TokenLedger }))
 );
 
+const AuthoritiesAdmin = lazy(() =>
+  import('./pages/AuthoritiesAdmin').then((m) => ({ default: m.AuthoritiesAdmin }))
+);
+
+const EntitlementsAdmin = lazy(() =>
+  import('./pages/EntitlementsAdmin').then((m) => ({ default: m.EntitlementsAdmin }))
+);
+
+const RevOpsAdmin = lazy(() =>
+  import('./pages/RevOpsAdmin').then((m) => ({ default: m.RevOpsAdmin }))
+);
+
+const UsersAdmin = lazy(() =>
+  import('./pages/UsersAdmin').then((m) => ({ default: m.UsersAdmin }))
+);
+
 const Unauthorized = lazy(() =>
   import('./pages/Unauthorized').then((m) => ({ default: m.Unauthorized }))
 );
@@ -324,11 +340,51 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'admin/authorities',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <AuthoritiesAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
         path: 'admin/jira-settings',
         element: (
           <ErrorBoundary>
             <LazyPage>
               <JiraSettings />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/entitlements',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <EntitlementsAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/revops',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <RevOpsAdmin />
+            </LazyPage>
+          </ErrorBoundary>
+        ),
+      },
+      {
+        path: 'admin/users',
+        element: (
+          <ErrorBoundary>
+            <LazyPage>
+              <UsersAdmin />
             </LazyPage>
           </ErrorBoundary>
         ),
