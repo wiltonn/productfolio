@@ -278,6 +278,14 @@ async function main() {
       },
     ];
 
+    // Build a mapping from portfolioAreaId → orgNodeId
+    const paIdToOrgNodeId: Record<string, string> = {};
+    for (const [paName, paRecord] of Object.entries(portfolioAreas)) {
+      if (portfolioAreaOrgNodes[paName]) {
+        paIdToOrgNodeId[paRecord.id] = portfolioAreaOrgNodes[paName].id;
+      }
+    }
+
     for (const initData of initiativesData) {
       const initiative = await prisma.initiative.create({
         data: {
@@ -290,6 +298,7 @@ async function main() {
           businessOwnerId: businessOwner.id,
           productOwnerId: productOwner.id,
           portfolioAreaId: initData.portfolioAreaId,
+          orgNodeId: paIdToOrgNodeId[initData.portfolioAreaId] || null,
           productLeaderId: initData.productLeaderId,
           domainComplexity: initData.domainComplexity,
         },
@@ -650,87 +659,78 @@ async function main() {
   }
 
   // ============================================================================
-  // ORG TREE
+  // ORG TREE + MEMBERSHIPS
   // ============================================================================
 
-  const existingOrgNodes = await prisma.orgNode.count();
-  if (existingOrgNodes === 0) {
+  // Look up or create the Engineering division (the main node we need for capacity)
+  let engNode = await prisma.orgNode.findFirst({ where: { code: 'ENG' } });
+  if (!engNode) {
+    // No org tree at all — create one
     console.log('Creating org tree...');
-
     const root = await prisma.orgNode.create({
-      data: {
-        name: 'ProductFolio Corp',
-        code: 'PF',
-        type: OrgNodeType.ROOT,
-        path: '/PF',
-        depth: 0,
-        sortOrder: 0,
-      },
+      data: { name: 'ProductFolio Corp', code: 'PF', type: OrgNodeType.ROOT, path: '/PF', depth: 0, sortOrder: 0 },
     });
-
-    const engineering = await prisma.orgNode.create({
-      data: {
-        name: 'Engineering',
-        code: 'ENG',
-        type: OrgNodeType.DIVISION,
-        parentId: root.id,
-        path: '/PF/ENG',
-        depth: 1,
-        sortOrder: 0,
-      },
+    engNode = await prisma.orgNode.create({
+      data: { name: 'Engineering', code: 'ENG', type: OrgNodeType.DIVISION, parentId: root.id, path: '/PF/ENG', depth: 1, sortOrder: 0 },
     });
-
-    const product = await prisma.orgNode.create({
-      data: {
-        name: 'Product',
-        code: 'PROD',
-        type: OrgNodeType.DIVISION,
-        parentId: root.id,
-        path: '/PF/PROD',
-        depth: 1,
-        sortOrder: 1,
-      },
+    await prisma.orgNode.create({
+      data: { name: 'Product', code: 'PROD', type: OrgNodeType.DIVISION, parentId: root.id, path: '/PF/PROD', depth: 1, sortOrder: 1 },
     });
+    console.log('Created root org tree');
+  }
 
-    const platformTeam = await prisma.orgNode.create({
-      data: {
-        name: 'Platform Team',
-        code: 'PLAT',
-        type: OrgNodeType.TEAM,
-        parentId: engineering.id,
-        path: '/PF/ENG/PLAT',
-        depth: 2,
-        sortOrder: 0,
-      },
-    });
+  // Ensure sub-teams exist under Engineering
+  const ensureTeam = async (name: string, code: string, sortOrder: number) => {
+    let node = await prisma.orgNode.findFirst({ where: { code } });
+    if (!node) {
+      node = await prisma.orgNode.create({
+        data: { name, code, type: OrgNodeType.TEAM, parentId: engNode!.id, path: `${engNode!.path}/${code}`, depth: engNode!.depth + 1, sortOrder },
+      });
+      console.log(`Created team: ${name}`);
+    }
+    return node;
+  };
 
-    const frontendTeam = await prisma.orgNode.create({
-      data: {
-        name: 'Frontend Team',
-        code: 'FE',
-        type: OrgNodeType.TEAM,
-        parentId: engineering.id,
-        path: '/PF/ENG/FE',
-        depth: 2,
-        sortOrder: 1,
-      },
-    });
+  // Create portfolio-area OrgNodes under ROOT (mirrors the PortfolioArea records)
+  const rootNode = await prisma.orgNode.findFirst({ where: { type: OrgNodeType.ROOT } });
+  const portfolioAreaOrgNodes: Record<string, Awaited<ReturnType<typeof prisma.orgNode.create>>> = {};
+  const paNodeDefs = [
+    { name: 'Customer Experience', code: 'PA-CUST-EXP', sortOrder: 10 },
+    { name: 'Platform Engineering', code: 'PA-PLAT-ENG', sortOrder: 11 },
+    { name: 'Data & Analytics', code: 'PA-DATA-ANLY', sortOrder: 12 },
+    { name: 'Security & Compliance', code: 'PA-SEC-COMP', sortOrder: 13 },
+  ];
+  for (const pa of paNodeDefs) {
+    let node = await prisma.orgNode.findFirst({ where: { code: pa.code } });
+    if (!node && rootNode) {
+      node = await prisma.orgNode.create({
+        data: {
+          name: pa.name,
+          code: pa.code,
+          type: OrgNodeType.VIRTUAL,
+          parentId: rootNode.id,
+          path: `${rootNode.path}/${pa.code}`,
+          depth: 1,
+          sortOrder: pa.sortOrder,
+          isPortfolioArea: true,
+        },
+      });
+      console.log(`Created portfolio area org node: ${pa.name}`);
+    }
+    if (node) portfolioAreaOrgNodes[pa.name] = node;
+  }
 
-    const dataTeam = await prisma.orgNode.create({
-      data: {
-        name: 'Data Team',
-        code: 'DATA',
-        type: OrgNodeType.TEAM,
-        parentId: engineering.id,
-        path: '/PF/ENG/DATA',
-        depth: 2,
-        sortOrder: 2,
-      },
-    });
+  const platformTeam = await ensureTeam('Platform Team', 'PLAT', 0);
+  const frontendTeam = await ensureTeam('Frontend Team', 'FE', 1);
+  const dataTeam = await ensureTeam('Data Team', 'DATA', 2);
+  const prodNode = await prisma.orgNode.findFirst({ where: { code: 'PRD' } })
+    ?? await prisma.orgNode.findFirst({ where: { code: 'PROD' } });
 
-    console.log('Created org tree: PF → ENG (PLAT, FE, DATA), PROD');
+  // Seed memberships if none exist
+  const existingMemberships = await prisma.orgMembership.count();
+  if (existingMemberships === 0) {
+    console.log('Creating org memberships...');
 
-    // Assign employees to teams via OrgMembership
     const teamAssignments: { employeeName: string; teamId: string }[] = [
       { employeeName: 'Mike Johnson', teamId: platformTeam.id },
       { employeeName: 'James Lee', teamId: platformTeam.id },
@@ -741,7 +741,7 @@ async function main() {
       { employeeName: 'Alex Rivera', teamId: frontendTeam.id },
       { employeeName: 'Maria Garcia', teamId: frontendTeam.id },
       { employeeName: 'Emily Watson', teamId: dataTeam.id },
-      { employeeName: 'Lisa Thompson', teamId: product.id },
+      ...(prodNode ? [{ employeeName: 'Lisa Thompson', teamId: prodNode.id }] : []),
     ];
 
     let membershipCount = 0;
@@ -749,17 +749,14 @@ async function main() {
       const emp = employees.find(e => e.name === ta.employeeName);
       if (emp) {
         await prisma.orgMembership.create({
-          data: {
-            employeeId: emp.id,
-            orgNodeId: ta.teamId,
-          },
+          data: { employeeId: emp.id, orgNodeId: ta.teamId },
         });
         membershipCount++;
       }
     }
     console.log(`Created ${membershipCount} org memberships`);
   } else {
-    console.log(`Org nodes already exist (${existingOrgNodes}), skipping...`);
+    console.log(`Org memberships already exist (${existingMemberships}), skipping...`);
   }
 
   // ============================================================================

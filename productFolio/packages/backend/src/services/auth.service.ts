@@ -1,25 +1,16 @@
 import { prisma } from '../lib/prisma.js';
-import {
-  hashPassword,
-  verifyPassword,
-  generateRefreshToken,
-  getTokenExpiry,
-} from '../lib/auth.js';
-import {
-  UnauthorizedError,
-  ForbiddenError,
-  NotFoundError,
-  ConflictError,
-  ValidationError,
-} from '../lib/errors.js';
-import type {
-  LoginInput,
-  RegisterInput,
-  ChangePasswordInput,
-  UserResponse,
-} from '../schemas/auth.schema.js';
+import { UserRole } from '@prisma/client';
+import { NotFoundError } from '../lib/errors.js';
+import type { UserResponse } from '../schemas/auth.schema.js';
 
-const REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN;
+
+// In-memory cache for Auth0 userinfo (keyed by auth0Sub)
+const userinfoCache = new Map<
+  string,
+  { email: string; name: string; fetchedAt: number }
+>();
+const USERINFO_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Transform user from database to response (exclude sensitive fields)
@@ -40,149 +31,133 @@ function toUserResponse(
 }
 
 /**
- * Login user and create refresh token
+ * Fetch email/name from Auth0 /userinfo endpoint.
+ * Results are cached in memory to avoid repeated calls.
  */
-export async function login(
-  input: LoginInput
-): Promise<{ user: UserResponse; refreshToken: string }> {
-  const user = await prisma.user.findUnique({
-    where: { email: input.email },
-  });
-
-  if (!user) {
-    throw new UnauthorizedError('Invalid email or password');
+async function fetchAuth0UserInfo(
+  auth0Sub: string,
+  accessToken: string
+): Promise<{ email?: string; name?: string }> {
+  // Check cache first
+  const cached = userinfoCache.get(auth0Sub);
+  if (cached && Date.now() - cached.fetchedAt < USERINFO_CACHE_TTL) {
+    return { email: cached.email, name: cached.name };
   }
 
-  if (!user.isActive) {
-    throw new ForbiddenError('Account is disabled');
+  if (!AUTH0_DOMAIN) {
+    return {};
   }
 
-  const isValidPassword = await verifyPassword(input.password, user.passwordHash);
-  if (!isValidPassword) {
-    throw new UnauthorizedError('Invalid email or password');
-  }
-
-  // Generate refresh token
-  const token = generateRefreshToken();
-  const expiresAt = getTokenExpiry(REFRESH_TOKEN_EXPIRY);
-
-  // Store refresh token in database
-  await prisma.refreshToken.create({
-    data: {
-      token,
-      userId: user.id,
-      expiresAt,
-    },
-  });
-
-  // Update last login time
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  });
-
-  return {
-    user: toUserResponse(user),
-    refreshToken: token,
-  };
-}
-
-/**
- * Register a new user (admin only)
- */
-export async function register(input: RegisterInput): Promise<UserResponse> {
-  // Check if user already exists
-  const existing = await prisma.user.findUnique({
-    where: { email: input.email },
-  });
-
-  if (existing) {
-    throw new ConflictError('User with this email already exists');
-  }
-
-  // Hash password
-  const passwordHash = await hashPassword(input.password);
-
-  // Create user
-  const user = await prisma.user.create({
-    data: {
-      email: input.email,
-      name: input.name,
-      passwordHash,
-      role: input.role,
-    },
-  });
-
-  return toUserResponse(user);
-}
-
-/**
- * Refresh access token using refresh token
- * Also rotates the refresh token for security
- */
-export async function refresh(
-  token: string
-): Promise<{ user: UserResponse; refreshToken: string }> {
-  // Find the refresh token
-  const refreshToken = await prisma.refreshToken.findUnique({
-    where: { token },
-    include: { user: true },
-  });
-
-  if (!refreshToken) {
-    throw new UnauthorizedError('Invalid refresh token');
-  }
-
-  if (refreshToken.revokedAt) {
-    throw new UnauthorizedError('Refresh token has been revoked');
-  }
-
-  if (refreshToken.expiresAt < new Date()) {
-    throw new UnauthorizedError('Refresh token has expired');
-  }
-
-  if (!refreshToken.user.isActive) {
-    throw new ForbiddenError('Account is disabled');
-  }
-
-  // Revoke old refresh token (token rotation)
-  await prisma.refreshToken.update({
-    where: { id: refreshToken.id },
-    data: { revokedAt: new Date() },
-  });
-
-  // Generate new refresh token
-  const newToken = generateRefreshToken();
-  const expiresAt = getTokenExpiry(REFRESH_TOKEN_EXPIRY);
-
-  await prisma.refreshToken.create({
-    data: {
-      token: newToken,
-      userId: refreshToken.userId,
-      expiresAt,
-    },
-  });
-
-  return {
-    user: toUserResponse(refreshToken.user),
-    refreshToken: newToken,
-  };
-}
-
-/**
- * Logout user by revoking refresh token
- */
-export async function logout(token: string): Promise<void> {
-  const refreshToken = await prisma.refreshToken.findUnique({
-    where: { token },
-  });
-
-  if (refreshToken && !refreshToken.revokedAt) {
-    await prisma.refreshToken.update({
-      where: { id: refreshToken.id },
-      data: { revokedAt: new Date() },
+  try {
+    const response = await fetch(`https://${AUTH0_DOMAIN}/userinfo`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
+
+    if (!response.ok) {
+      return {};
+    }
+
+    const data = (await response.json()) as {
+      email?: string;
+      name?: string;
+      nickname?: string;
+    };
+
+    const email = data.email;
+    const name = data.name || data.nickname;
+
+    if (email && name) {
+      userinfoCache.set(auth0Sub, {
+        email,
+        name,
+        fetchedAt: Date.now(),
+      });
+    }
+
+    return { email, name };
+  } catch {
+    return {};
   }
+}
+
+/**
+ * Find or provision a local user from Auth0 identity.
+ *
+ * 1. Look up by auth0Sub → return if found
+ * 2. Look up by email → if found, link by setting auth0Sub (migration path)
+ * 3. If neither → create new user with VIEWER role
+ * 4. Update lastLoginAt
+ */
+export async function findOrProvisionUser(
+  auth0Sub: string,
+  email?: string,
+  name?: string,
+  accessToken?: string
+): Promise<{
+  id: string;
+  email: string;
+  role: UserRole;
+}> {
+  // 1. Look up by auth0Sub
+  const existingByAuth0 = await prisma.user.findUnique({
+    where: { auth0Sub },
+  });
+
+  if (existingByAuth0) {
+    // Update lastLoginAt
+    await prisma.user.update({
+      where: { id: existingByAuth0.id },
+      data: { lastLoginAt: new Date() },
+    });
+    return {
+      id: existingByAuth0.id,
+      email: existingByAuth0.email,
+      role: existingByAuth0.role,
+    };
+  }
+
+  // If no email from token claims, fetch from Auth0 userinfo
+  let resolvedEmail = email;
+  let resolvedName = name;
+  if ((!resolvedEmail || !resolvedName) && accessToken) {
+    const userInfo = await fetchAuth0UserInfo(auth0Sub, accessToken);
+    resolvedEmail = resolvedEmail || userInfo.email;
+    resolvedName = resolvedName || userInfo.name;
+  }
+
+  // 2. Look up by email → link existing user
+  if (resolvedEmail) {
+    const existingByEmail = await prisma.user.findUnique({
+      where: { email: resolvedEmail },
+    });
+
+    if (existingByEmail) {
+      const updated = await prisma.user.update({
+        where: { id: existingByEmail.id },
+        data: {
+          auth0Sub,
+          lastLoginAt: new Date(),
+          ...(resolvedName && !existingByEmail.name
+            ? { name: resolvedName }
+            : {}),
+        },
+      });
+      return { id: updated.id, email: updated.email, role: updated.role };
+    }
+  }
+
+  // 3. Create new user
+  const newUser = await prisma.user.create({
+    data: {
+      email: resolvedEmail || `${auth0Sub}@auth0.placeholder`,
+      name: resolvedName || 'Auth0 User',
+      auth0Sub,
+      role: UserRole.VIEWER,
+      lastLoginAt: new Date(),
+    },
+  });
+
+  return { id: newUser.id, email: newUser.email, role: newUser.role };
 }
 
 /**
@@ -198,60 +173,4 @@ export async function getUserById(userId: string): Promise<UserResponse> {
   }
 
   return toUserResponse(user);
-}
-
-/**
- * Change user password
- */
-export async function changePassword(
-  userId: string,
-  input: ChangePasswordInput
-): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    throw new NotFoundError('User', userId);
-  }
-
-  // Verify current password
-  const isValidPassword = await verifyPassword(
-    input.currentPassword,
-    user.passwordHash
-  );
-  if (!isValidPassword) {
-    throw new ValidationError('Current password is incorrect');
-  }
-
-  // Hash new password
-  const passwordHash = await hashPassword(input.newPassword);
-
-  // Update password and revoke all refresh tokens
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash },
-    }),
-    prisma.refreshToken.updateMany({
-      where: {
-        userId,
-        revokedAt: null,
-      },
-      data: { revokedAt: new Date() },
-    }),
-  ]);
-}
-
-/**
- * Revoke all refresh tokens for a user (useful for security)
- */
-export async function revokeAllTokens(userId: string): Promise<void> {
-  await prisma.refreshToken.updateMany({
-    where: {
-      userId,
-      revokedAt: null,
-    },
-    data: { revokedAt: new Date() },
-  });
 }

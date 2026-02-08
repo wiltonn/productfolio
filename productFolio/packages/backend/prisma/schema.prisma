@@ -168,7 +168,8 @@ model User {
   email        String    @unique
   name         String
   role         UserRole  @default(VIEWER)
-  passwordHash String    @map("password_hash")
+  passwordHash String?   @map("password_hash")
+  auth0Sub     String?   @unique @map("auth0_sub")
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
 
@@ -286,6 +287,7 @@ model Initiative {
   targetPeriodId   String?          @map("target_period_id") @db.Uuid
   customFields     Json?            @db.JsonB
   domainComplexity DomainComplexity @default(MEDIUM) @map("domain_complexity")
+  orgNodeId        String?          @map("org_node_id") @db.Uuid
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -296,6 +298,7 @@ model Initiative {
   portfolioArea     PortfolioArea?              @relation(fields: [portfolioAreaId], references: [id])
   productLeader     User?                       @relation("ProductLeader", fields: [productLeaderId], references: [id])
   targetPeriod      Period?                     @relation(fields: [targetPeriodId], references: [id])
+  orgNode           OrgNode?                    @relation("OrgNodeInitiatives", fields: [orgNodeId], references: [id])
   scopeItems        ScopeItem[]
   approvals         Approval[]
   allocations       Allocation[]
@@ -312,6 +315,7 @@ model Initiative {
   @@index([origin])
   @@index([targetQuarter])
   @@index([targetPeriodId])
+  @@index([orgNodeId])
 }
 
 model ScopeItem {
@@ -850,6 +854,8 @@ model IntakeRequest {
   // Classification
   portfolioAreaId String?        @map("portfolio_area_id") @db.Uuid
   portfolioArea   PortfolioArea? @relation(fields: [portfolioAreaId], references: [id])
+  orgNodeId       String?        @map("org_node_id") @db.Uuid
+  orgNode         OrgNode?       @relation("OrgNodeIntakeRequests", fields: [orgNodeId], references: [id])
   targetQuarter   String?        @db.VarChar(10)
   valueScore      Int?           @map("value_score")
   effortEstimate  String?        @map("effort_estimate") @db.VarChar(10)
@@ -880,6 +886,7 @@ model IntakeRequest {
 
   @@index([status])
   @@index([portfolioAreaId])
+  @@index([orgNodeId])
   @@index([targetQuarter])
   @@index([initiativeId])
   @@index([intakeItemId])
@@ -893,17 +900,18 @@ model IntakeRequest {
 // ============================================================================
 
 model OrgNode {
-  id        String      @id @default(uuid()) @db.Uuid
-  name      String
-  code      String      @unique
-  type      OrgNodeType
-  parentId  String?     @db.Uuid
-  path      String
-  depth     Int         @default(0)
-  managerId String?     @db.Uuid
-  sortOrder Int         @default(0)
-  isActive  Boolean     @default(true)
-  metadata  Json?       @db.JsonB
+  id               String      @id @default(uuid()) @db.Uuid
+  name             String
+  code             String      @unique
+  type             OrgNodeType
+  parentId         String?     @db.Uuid
+  path             String
+  depth            Int         @default(0)
+  managerId        String?     @db.Uuid
+  sortOrder        Int         @default(0)
+  isActive         Boolean     @default(true)
+  isPortfolioArea  Boolean     @default(false) @map("is_portfolio_area")
+  metadata         Json?       @db.JsonB
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -915,11 +923,14 @@ model OrgNode {
   memberships         OrgMembership[]
   approvalPolicies    ApprovalPolicy[]
   approvalDelegations ApprovalDelegation[]
+  initiatives         Initiative[]         @relation("OrgNodeInitiatives")
+  intakeRequests      IntakeRequest[]      @relation("OrgNodeIntakeRequests")
 
   @@index([parentId])
   @@index([type])
   @@index([managerId])
   @@index([isActive])
+  @@index([isPortfolioArea])
 }
 
 model OrgMembership {

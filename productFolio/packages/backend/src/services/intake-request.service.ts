@@ -31,6 +31,7 @@ const INCLUDE_RELATIONS = {
   requestedBy: { select: { id: true, name: true, email: true } },
   sponsor: { select: { id: true, name: true, email: true } },
   portfolioArea: { select: { id: true, name: true } },
+  orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
   initiative: { select: { id: true, title: true, status: true } },
   intakeItem: {
     select: {
@@ -59,6 +60,10 @@ export async function list(filters: Partial<IntakeRequestFiltersInput> = {}) {
 
   if (filters.portfolioAreaId) {
     where.portfolioAreaId = filters.portfolioAreaId;
+  }
+
+  if (filters.orgNodeId) {
+    where.orgNodeId = filters.orgNodeId;
   }
 
   if (filters.targetQuarter) {
@@ -174,6 +179,14 @@ export async function create(data: CreateIntakeRequestInput, createdBy?: string)
     }
   }
 
+  if (data.orgNodeId) {
+    const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+    if (!orgNode) throw new NotFoundError('OrgNode', data.orgNodeId);
+    if (!orgNode.isPortfolioArea || !orgNode.isActive) {
+      throw new ValidationError('orgNodeId must reference an active portfolio area node');
+    }
+  }
+
   const item = await prisma.intakeRequest.create({
     data: {
       title: data.title,
@@ -181,6 +194,7 @@ export async function create(data: CreateIntakeRequestInput, createdBy?: string)
       requestedById: data.requestedById || null,
       sponsorId: data.sponsorId || null,
       portfolioAreaId: data.portfolioAreaId || null,
+      orgNodeId: data.orgNodeId || null,
       targetQuarter: data.targetQuarter || null,
       valueScore: data.valueScore ?? null,
       effortEstimate: data.effortEstimate || null,
@@ -244,6 +258,14 @@ export async function update(
     });
     if (!area) {
       throw new NotFoundError('PortfolioArea', data.portfolioAreaId);
+    }
+  }
+
+  if (data.orgNodeId) {
+    const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+    if (!orgNode) throw new NotFoundError('OrgNode', data.orgNodeId);
+    if (!orgNode.isPortfolioArea || !orgNode.isActive) {
+      throw new ValidationError('orgNodeId must reference an active portfolio area node');
     }
   }
 

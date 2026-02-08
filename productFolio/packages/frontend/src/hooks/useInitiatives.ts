@@ -33,6 +33,7 @@ export function useInitiatives(filters: InitiativeFilters = {}) {
   if (filters.businessOwnerId) params.set('businessOwnerId', filters.businessOwnerId);
   if (filters.productOwnerId) params.set('productOwnerId', filters.productOwnerId);
   if (filters.portfolioAreaId) params.set('portfolioAreaId', filters.portfolioAreaId);
+  if (filters.orgNodeId) params.set('orgNodeId', filters.orgNodeId);
 
   const queryString = params.toString();
   const endpoint = `/initiatives${queryString ? `?${queryString}` : ''}`;

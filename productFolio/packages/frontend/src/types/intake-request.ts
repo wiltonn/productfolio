@@ -18,6 +18,7 @@ export interface IntakeRequest {
   requestedById: string | null;
   sponsorId: string | null;
   portfolioAreaId: string | null;
+  orgNodeId: string | null;
   targetQuarter: string | null;
   valueScore: number | null;
   effortEstimate: string | null;
@@ -39,6 +40,7 @@ export interface IntakeRequest {
   requestedBy?: { id: string; name: string; email: string } | null;
   sponsor?: { id: string; name: string; email: string } | null;
   portfolioArea?: { id: string; name: string } | null;
+  orgNode?: { id: string; name: string; code: string; type: string; isPortfolioArea: boolean } | null;
   initiative?: { id: string; title: string; status: string } | null;
   intakeItem?: {
     id: string;
@@ -55,6 +57,7 @@ export interface IntakeRequestFilters {
   limit?: number;
   status?: IntakeRequestStatus;
   portfolioAreaId?: string;
+  orgNodeId?: string;
   targetQuarter?: string;
   requestedById?: string;
   sponsorId?: string;
@@ -93,6 +96,7 @@ export interface CreateIntakeRequestInput {
   requestedById?: string | null;
   sponsorId?: string | null;
   portfolioAreaId?: string | null;
+  orgNodeId?: string | null;
   targetQuarter?: string | null;
   valueScore?: number | null;
   effortEstimate?: string | null;

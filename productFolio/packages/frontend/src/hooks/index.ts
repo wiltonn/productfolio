@@ -1,10 +1,7 @@
 // Auth hooks
 export {
   useCurrentUser,
-  useLogin,
   useLogout,
-  useChangePassword,
-  useRegisterUser,
   authKeys,
 } from './useAuth';
 
@@ -164,6 +161,12 @@ export {
   type CostBand,
   type JobProfileFilters,
 } from './useJobProfiles';
+
+// Portfolio area node hooks
+export {
+  usePortfolioAreaNodes,
+  portfolioAreaNodeKeys,
+} from './usePortfolioAreaNodes';
 
 // Org capacity hooks
 export {

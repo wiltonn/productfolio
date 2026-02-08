@@ -79,6 +79,7 @@ export const CreateInitiativeSchema = z.object({
   deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
   domainComplexity: z.nativeEnum(DomainComplexity).default(DomainComplexity.MEDIUM).optional(),
+  orgNodeId: uuidSchema.optional().nullable(),
 });
 
 export type CreateInitiativeInput = z.infer<typeof CreateInitiativeSchema>;
@@ -105,6 +106,7 @@ export const UpdateInitiativeSchema = z.object({
   deliveryHealth: z.nativeEnum(DeliveryHealth).nullable().optional(),
   customFields: customFieldsSchema,
   domainComplexity: z.nativeEnum(DomainComplexity).optional(),
+  orgNodeId: uuidSchema.optional().nullable(),
 });
 
 export type UpdateInitiativeInput = z.infer<typeof UpdateInitiativeSchema>;
@@ -118,6 +120,7 @@ export const InitiativeFiltersSchema = z.object({
   businessOwnerId: uuidSchema.optional(),
   productOwnerId: uuidSchema.optional(),
   portfolioAreaId: uuidSchema.optional(),
+  orgNodeId: uuidSchema.optional(),
   targetQuarter: z.string().optional(),
   deliveryHealth: z.nativeEnum(DeliveryHealth).optional(),
   search: z

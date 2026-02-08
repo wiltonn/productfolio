@@ -68,6 +68,9 @@ function TreeNodeItem({
           {node.type.slice(0, 3)}
         </span>
         <span className="text-sm font-medium text-surface-800 truncate">{node.name}</span>
+        {node.isPortfolioArea && (
+          <span className="text-xs font-medium px-1.5 py-0.5 rounded text-indigo-600 bg-indigo-50">PA</span>
+        )}
         <span className="text-xs text-surface-400 ml-auto">
           {node._count?.memberships ?? 0}
         </span>
@@ -125,6 +128,11 @@ function NodeDetailPanel({ nodeId }: { nodeId: string }) {
           {node.code} &middot; {node.type}
           {node.parent && <> &middot; under {node.parent.name}</>}
         </p>
+        {node.isPortfolioArea && (
+          <span className="inline-flex items-center mt-1 text-xs font-medium px-2 py-0.5 rounded bg-indigo-50 text-indigo-700">
+            Portfolio Area
+          </span>
+        )}
       </div>
 
       {/* Manager */}
@@ -344,11 +352,12 @@ function CreateNodeModal({
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [type, setType] = useState<OrgNodeType>(parentId ? 'TEAM' : 'ROOT');
+  const [isPortfolioArea, setIsPortfolioArea] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createNode.mutate(
-      { name, code, type, parentId },
+      { name, code, type, parentId, isPortfolioArea },
       { onSuccess: onClose },
     );
   };
@@ -389,6 +398,18 @@ function CreateNodeModal({
             <option value="TEAM">Team</option>
             <option value="VIRTUAL">Virtual</option>
           </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="isPortfolioArea"
+            checked={isPortfolioArea}
+            onChange={(e) => setIsPortfolioArea(e.target.checked)}
+            className="h-4 w-4 rounded border-surface-300 text-accent-600 focus:ring-accent-500"
+          />
+          <label htmlFor="isPortfolioArea" className="text-sm font-medium text-surface-700">
+            Designate as Portfolio Area
+          </label>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>

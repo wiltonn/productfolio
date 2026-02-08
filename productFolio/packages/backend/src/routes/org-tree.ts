@@ -25,6 +25,19 @@ export async function orgTreeRoutes(fastify: FastifyInstance) {
   const adminOnly = fastify.authorize(['ADMIN']);
 
   // =========================================================================
+  // Portfolio Area Nodes
+  // =========================================================================
+
+  // GET /api/org/portfolio-areas — List org nodes flagged as portfolio areas
+  fastify.get(
+    '/api/org/portfolio-areas',
+    async (_request: FastifyRequest, reply: FastifyReply) => {
+      const nodes = await orgTreeService.listPortfolioAreaNodes();
+      return reply.status(200).send(nodes);
+    },
+  );
+
+  // =========================================================================
   // Node CRUD
   // =========================================================================
 

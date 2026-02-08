@@ -35,6 +35,8 @@ export function useIntakeRequests(filters: IntakeRequestFilters = {}) {
       if (filters.status) params.set('status', filters.status);
       if (filters.portfolioAreaId)
         params.set('portfolioAreaId', filters.portfolioAreaId);
+      if (filters.orgNodeId)
+        params.set('orgNodeId', filters.orgNodeId);
       if (filters.targetQuarter)
         params.set('targetQuarter', filters.targetQuarter);
       if (filters.requestedById)

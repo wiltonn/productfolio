@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth0 } from '@auth0/auth0-react';
 import { useAuthStore, UserRole } from '../../stores/auth.store';
 
 interface ProtectedRouteProps {
@@ -8,10 +9,11 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const location = useLocation();
-  const { isAuthenticated, isLoading, user } = useAuthStore();
+  const { isAuthenticated: auth0Authenticated, isLoading: auth0Loading } = useAuth0();
+  const { isLoading: storeLoading, user } = useAuthStore();
 
-  // Show loading spinner while checking auth status
-  if (isLoading) {
+  // Show loading spinner while Auth0 is loading OR while /auth/me hasn't resolved
+  if (auth0Loading || (auth0Authenticated && storeLoading)) {
     return (
       <div className="min-h-screen bg-surface-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -40,12 +42,12 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
+  // Redirect to login if not authenticated via Auth0
+  if (!auth0Authenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Check role-based access
+  // Check role-based access (user comes from Zustand, populated by /auth/me)
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return <Navigate to="/unauthorized" replace />;
   }

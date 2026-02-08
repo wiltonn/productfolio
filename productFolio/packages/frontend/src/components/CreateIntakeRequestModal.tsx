@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCreateIntakeRequest } from '../hooks/useIntakeRequests';
 import { useUsers } from '../hooks/useUsers';
-import { usePortfolioAreas } from '../hooks/usePortfolioAreas';
+import { usePortfolioAreaNodes } from '../hooks/usePortfolioAreaNodes';
 
 interface CreateIntakeRequestModalProps {
   onClose: () => void;
@@ -21,7 +21,7 @@ export function CreateIntakeRequestModal({
   const [description, setDescription] = useState(prefill?.description || '');
   const [requestedById, setRequestedById] = useState('');
   const [sponsorId, setSponsorId] = useState('');
-  const [portfolioAreaId, setPortfolioAreaId] = useState('');
+  const [orgNodeId, setOrgNodeId] = useState('');
   const [targetQuarter, setTargetQuarter] = useState('');
   const [valueScore, setValueScore] = useState<string>('');
   const [effortEstimate, setEffortEstimate] = useState('');
@@ -30,7 +30,7 @@ export function CreateIntakeRequestModal({
 
   const createMutation = useCreateIntakeRequest();
   const { data: users } = useUsers();
-  const { data: areas } = usePortfolioAreas();
+  const { data: areas } = usePortfolioAreaNodes();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +42,7 @@ export function CreateIntakeRequestModal({
         description: description.trim() || null,
         requestedById: requestedById || null,
         sponsorId: sponsorId || null,
-        portfolioAreaId: portfolioAreaId || null,
+        orgNodeId: orgNodeId || null,
         targetQuarter: targetQuarter || null,
         valueScore: valueScore ? parseInt(valueScore, 10) : null,
         effortEstimate: effortEstimate || null,
@@ -58,7 +58,7 @@ export function CreateIntakeRequestModal({
   };
 
   const userList = Array.isArray(users) ? users : users?.data ?? [];
-  const areaList = Array.isArray(areas) ? areas : areas?.data ?? [];
+  const areaList = Array.isArray(areas) ? areas : (areas ?? []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -144,8 +144,8 @@ export function CreateIntakeRequestModal({
                 Portfolio Area
               </label>
               <select
-                value={portfolioAreaId}
-                onChange={(e) => setPortfolioAreaId(e.target.value)}
+                value={orgNodeId}
+                onChange={(e) => setOrgNodeId(e.target.value)}
                 className="w-full px-3 py-2 border border-surface-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-accent-500"
               >
                 <option value="">Select...</option>

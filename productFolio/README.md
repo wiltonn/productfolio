@@ -13,7 +13,7 @@ Portfolio management and resource allocation platform for planning initiatives, 
 - **Org Hierarchy** - Org tree with capacity rollups and coverage reporting
 - **Intake Pipeline** - Intake request workflow with Jira integration
 - **Background Jobs** - Async processing for imports and calculations
-- **JWT Authentication** - Secure API with refresh token rotation
+- **Auth0 Authentication** - Auth0 Universal Login with RS256 JWT verification
 - **Feature Flags** - Gradual rollout of new features via feature flag system
 
 ## Tech Stack
@@ -24,7 +24,7 @@ Portfolio management and resource allocation platform for planning initiatives, 
 | **Frontend** | React 18.2, Vite 5.1, TanStack Query, Zustand, Tailwind CSS |
 | **Database** | PostgreSQL 16 |
 | **Cache/Queue** | Redis 7 |
-| **Auth** | @fastify/jwt, argon2, httpOnly cookies |
+| **Auth** | Auth0 SPA (PKCE), jose (JWKS RS256), @auth0/auth0-react |
 
 ## Quick Start
 
@@ -61,15 +61,48 @@ The application will be available at:
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000
 
-### Default Users
+### Auth0 Setup
 
-After seeding, these accounts are available:
+Authentication is handled by Auth0. You need an Auth0 tenant configured:
 
-| Email | Password | Role |
-|-------|----------|------|
-| admin@example.com | AdminPassword123 | Admin |
-| product.owner@example.com | ProductOwner123 | Product Owner |
-| business.owner@example.com | BusinessOwner123 | Business Owner |
+1. **Create an Auth0 Application** (type: Single Page Application)
+   - Allowed Callback URLs: `http://localhost:5173`
+   - Allowed Logout URLs: `http://localhost:5173`
+   - Allowed Web Origins: `http://localhost:5173`
+
+2. **Create an Auth0 API** with identifier matching `AUTH0_AUDIENCE`
+
+3. **Set environment variables**:
+
+   Backend (`.env`):
+   ```env
+   AUTH0_DOMAIN=your-tenant.auth0.com
+   AUTH0_AUDIENCE=https://api.productfolio.local
+   ```
+
+   Frontend (`packages/frontend/.env`):
+   ```env
+   VITE_AUTH0_DOMAIN=your-tenant.auth0.com
+   VITE_AUTH0_CLIENT_ID=your-client-id
+   VITE_AUTH0_AUDIENCE=https://api.productfolio.local
+   ```
+
+### User Provisioning
+
+Users are automatically provisioned on first login via Auth0:
+- New Auth0 users get the **VIEWER** role by default
+- Existing users are matched by email and linked to their Auth0 identity
+- An admin can promote users via the database or Prisma Studio (`npm run db:studio`)
+
+### Seeded Users
+
+After seeding, these users exist in the local database (link them by signing into Auth0 with the same email):
+
+| Email | Role |
+|-------|------|
+| admin@example.com | Admin |
+| product.owner@example.com | Product Owner |
+| business.owner@example.com | Business Owner |
 
 ## Project Structure
 
@@ -126,12 +159,9 @@ productfolio/
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/auth/login` | No | Login with email/password |
-| POST | `/api/auth/register` | Admin | Create new user |
-| POST | `/api/auth/refresh` | No | Refresh access token |
-| POST | `/api/auth/logout` | Yes | Logout and revoke token |
-| GET | `/api/auth/me` | Yes | Get current user |
-| PUT | `/api/auth/password` | Yes | Change password |
+| GET | `/api/auth/me` | Yes | Get current user profile |
+
+All other auth operations (login, signup, logout, password reset) are handled by Auth0.
 
 ### Initiatives
 
@@ -218,10 +248,9 @@ PORT=3000
 HOST=0.0.0.0
 NODE_ENV=development
 
-# Authentication
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=7d
+# Authentication (Auth0)
+AUTH0_DOMAIN=your-tenant.auth0.com
+AUTH0_AUDIENCE=https://api.productfolio.local
 FRONTEND_URL=http://localhost:5173
 
 # Redis
@@ -245,15 +274,15 @@ REDIS_DB=0
 - **TokenSupply/TokenDemand** - Token-based supply and demand per skill pool per scenario
 - **ForecastRun** - Monte Carlo simulation results with data quality assessments
 
-### Authentication Flow
+### Authentication Flow (Auth0)
 
-1. User logs in with email/password
-2. Server validates credentials and returns:
-   - Access token (JWT, 15min expiry) in httpOnly cookie
-   - Refresh token (random, 7d expiry) in httpOnly cookie
-3. Frontend includes cookies automatically with `credentials: 'include'`
-4. On 401, frontend automatically attempts token refresh
-5. Refresh tokens are rotated on each use for security
+1. User navigates to the app → redirected to Auth0 Universal Login
+2. User signs up or logs in via Auth0 (email/password, social, etc.)
+3. Auth0 returns an RS256 access token to the SPA via PKCE flow
+4. Frontend attaches the token as `Authorization: Bearer` on all API requests
+5. Backend verifies the token against Auth0's JWKS endpoint using `jose`
+6. On first login, the user is auto-provisioned in the local database (matched by email or created with VIEWER role)
+7. `GET /auth/me` returns the local user profile (role, name) to the frontend
 
 ### Background Jobs
 

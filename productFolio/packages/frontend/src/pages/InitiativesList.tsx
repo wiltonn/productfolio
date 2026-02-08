@@ -193,8 +193,8 @@ export function InitiativesList() {
     const groups = new Map<string, { id: string; name: string; initiatives: Initiative[] }>();
 
     for (const init of initiatives) {
-      const areaId = init.portfolioArea?.id ?? 'unassigned';
-      const areaName = init.portfolioArea?.name ?? 'Unassigned';
+      const areaId = init.orgNode?.id ?? init.portfolioArea?.id ?? 'unassigned';
+      const areaName = init.orgNode?.name ?? init.portfolioArea?.name ?? 'Unassigned';
       if (!groups.has(areaId)) {
         groups.set(areaId, { id: areaId, name: areaName, initiatives: [] });
       }

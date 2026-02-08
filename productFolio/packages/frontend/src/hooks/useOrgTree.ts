@@ -101,6 +101,7 @@ export function useCreateNode() {
       managerId?: string | null;
       sortOrder?: number;
       metadata?: Record<string, unknown>;
+      isPortfolioArea?: boolean;
     }) => api.post<OrgNode>('/org/nodes', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orgTreeKeys.all });

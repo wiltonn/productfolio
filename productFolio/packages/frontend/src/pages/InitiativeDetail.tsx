@@ -161,6 +161,7 @@ export function InitiativeDetail() {
     businessOwnerId: 'bo-1',
     productOwnerId: 'po-1',
     portfolioAreaId: null,
+    orgNodeId: null,
     productLeaderId: null,
     customFields: {
       priority: 'High',
@@ -173,6 +174,7 @@ export function InitiativeDetail() {
     businessOwner: { id: 'bo-1', name: 'James Wilson', email: 'james@company.com', role: 'BUSINESS_OWNER' as const, createdAt: '', updatedAt: '' },
     productOwner: { id: 'po-1', name: 'Sarah Chen', email: 'sarah@company.com', role: 'PRODUCT_OWNER' as const, createdAt: '', updatedAt: '' },
     portfolioArea: undefined,
+    orgNode: undefined,
     productLeader: undefined,
   };
 
@@ -418,12 +420,12 @@ export function InitiativeDetail() {
                   </div>
                 </>
               )}
-              {currentInitiative.portfolioArea && (
+              {(currentInitiative.orgNode || currentInitiative.portfolioArea) && (
                 <>
                   <span className="text-surface-300">|</span>
                   <div className="flex items-center gap-2">
                     <span className="text-surface-400">Portfolio Area:</span>
-                    <span className="font-medium text-surface-700">{currentInitiative.portfolioArea.name}</span>
+                    <span className="font-medium text-surface-700">{currentInitiative.orgNode?.name ?? currentInitiative.portfolioArea?.name}</span>
                   </div>
                 </>
               )}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, Select } from './ui';
 import { useCreateInitiative } from '../hooks/useInitiatives';
 import { useUsers } from '../hooks/useUsers';
-import { usePortfolioAreas } from '../hooks/usePortfolioAreas';
+import { usePortfolioAreaNodes } from '../hooks/usePortfolioAreaNodes';
 import { getQuarterOptions } from '../types';
 
 interface CreateInitiativeModalProps {
@@ -15,13 +15,13 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
   const [description, setDescription] = useState('');
   const [businessOwnerId, setBusinessOwnerId] = useState('');
   const [productOwnerId, setProductOwnerId] = useState('');
-  const [portfolioAreaId, setPortfolioAreaId] = useState('');
+  const [orgNodeId, setOrgNodeId] = useState('');
   const [productLeaderId, setProductLeaderId] = useState('');
   const [targetQuarter, setTargetQuarter] = useState('');
 
   const createInitiative = useCreateInitiative();
   const { data: usersData } = useUsers();
-  const { data: portfolioAreasData } = usePortfolioAreas();
+  const { data: portfolioAreaNodes } = usePortfolioAreaNodes();
 
   const users = usersData?.data ?? [];
   const userOptions = users.map((user) => ({
@@ -29,9 +29,9 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
     label: user.name,
   }));
 
-  const portfolioAreaOptions = (portfolioAreasData?.data ?? []).map((area) => ({
-    value: area.id,
-    label: area.name,
+  const portfolioAreaOptions = (portfolioAreaNodes ?? []).map((node) => ({
+    value: node.id,
+    label: node.name,
   }));
 
   const quarterOptions = getQuarterOptions();
@@ -41,7 +41,7 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
     setDescription('');
     setBusinessOwnerId('');
     setProductOwnerId('');
-    setPortfolioAreaId('');
+    setOrgNodeId('');
     setProductLeaderId('');
     setTargetQuarter('');
   };
@@ -64,7 +64,7 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
         description: description.trim() || null,
         businessOwnerId,
         productOwnerId,
-        portfolioAreaId: portfolioAreaId || null,
+        orgNodeId: orgNodeId || null,
         productLeaderId: productLeaderId || null,
         targetQuarter: targetQuarter || null,
       },
@@ -151,8 +151,8 @@ export function CreateInitiativeModal({ isOpen, onClose }: CreateInitiativeModal
             </label>
             <Select
               options={portfolioAreaOptions}
-              value={portfolioAreaId}
-              onChange={setPortfolioAreaId}
+              value={orgNodeId}
+              onChange={setOrgNodeId}
               placeholder="Select portfolio area (optional)"
             />
           </div>

@@ -39,10 +39,10 @@ await fastify.register(cors, {
   credentials: true,
 });
 
-// Cookie support (required for auth)
+// Cookie support
 await fastify.register(cookie);
 
-// Auth plugin (JWT + decorators)
+// Auth plugin (Auth0 JWKS + decorators)
 await fastify.register(authPlugin);
 
 // Feature flag plugin (requireFeature decorator)

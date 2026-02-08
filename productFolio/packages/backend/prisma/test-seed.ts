@@ -5,7 +5,7 @@
  * Run with: npm run db:seed:test
  */
 
-import { PrismaClient, UserRole, InitiativeStatus, EmploymentType, PeriodType, ScenarioStatus, ScenarioType, AllocationType } from '@prisma/client';
+import { PrismaClient, UserRole, InitiativeStatus, EmploymentType, PeriodType, ScenarioStatus, ScenarioType, AllocationType, OrgNodeType } from '@prisma/client';
 import argon2 from 'argon2';
 
 const prisma = new PrismaClient();
@@ -106,6 +106,52 @@ async function main() {
     portfolioAreas[name] = area;
   }
   console.log(`Created ${portfolioAreaNames.length} portfolio areas`);
+
+  // ============================================================================
+  // ORG TREE + PORTFOLIO AREA NODES
+  // ============================================================================
+
+  let rootNode = await prisma.orgNode.findFirst({ where: { type: OrgNodeType.ROOT } });
+  if (!rootNode) {
+    rootNode = await prisma.orgNode.create({
+      data: { name: 'Test Corp', code: 'TC', type: OrgNodeType.ROOT, path: '/TC', depth: 0, sortOrder: 0 },
+    });
+  }
+
+  const portfolioAreaOrgNodes: Record<string, Awaited<ReturnType<typeof prisma.orgNode.create>>> = {};
+  const paNodeDefs = [
+    { name: 'Customer Experience', code: 'PA-CUST-EXP', sortOrder: 10 },
+    { name: 'Platform Engineering', code: 'PA-PLAT-ENG', sortOrder: 11 },
+    { name: 'Data & Analytics', code: 'PA-DATA-ANLY', sortOrder: 12 },
+    { name: 'Security & Compliance', code: 'PA-SEC-COMP', sortOrder: 13 },
+  ];
+  for (const pa of paNodeDefs) {
+    let node = await prisma.orgNode.findFirst({ where: { code: pa.code } });
+    if (!node) {
+      node = await prisma.orgNode.create({
+        data: {
+          name: pa.name,
+          code: pa.code,
+          type: OrgNodeType.VIRTUAL,
+          parentId: rootNode.id,
+          path: `${rootNode.path}/${pa.code}`,
+          depth: 1,
+          sortOrder: pa.sortOrder,
+          isPortfolioArea: true,
+        },
+      });
+    }
+    portfolioAreaOrgNodes[pa.name] = node;
+  }
+  console.log('Created portfolio area org nodes');
+
+  // Build portfolioAreaId → orgNodeId mapping
+  const paIdToOrgNodeId: Record<string, string> = {};
+  for (const [paName, paRecord] of Object.entries(portfolioAreas)) {
+    if (portfolioAreaOrgNodes[paName]) {
+      paIdToOrgNodeId[paRecord.id] = portfolioAreaOrgNodes[paName].id;
+    }
+  }
 
   // ============================================================================
   // EMPLOYEES
@@ -239,6 +285,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Customer Experience'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Customer Experience'].id] || null,
         customFields: {
           tags: ['frontend', 'ux', 'high-priority'],
           budget: 150000,
@@ -260,6 +307,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Platform Engineering'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Platform Engineering'].id] || null,
         customFields: {
           tags: ['backend', 'infrastructure'],
           budget: 200000,
@@ -281,6 +329,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Customer Experience'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Customer Experience'].id] || null,
         customFields: {
           tags: ['mobile', 'ios', 'android'],
           budget: 300000,
@@ -301,6 +350,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Data & Analytics'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Data & Analytics'].id] || null,
         customFields: {
           tags: ['analytics', 'data'],
           budget: 100000,
@@ -322,6 +372,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Security & Compliance'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Security & Compliance'].id] || null,
         customFields: {
           tags: ['security', 'compliance', 'urgent'],
           budget: 75000,
@@ -342,6 +393,7 @@ async function main() {
         businessOwnerId: adminUser.id,
         productOwnerId: plannerUser.id,
         portfolioAreaId: portfolioAreas['Platform Engineering'].id,
+        orgNodeId: paIdToOrgNodeId[portfolioAreas['Platform Engineering'].id] || null,
         customFields: {
           tags: ['performance', 'optimization'],
           budget: 50000,

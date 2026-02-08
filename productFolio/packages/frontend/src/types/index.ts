@@ -56,6 +56,7 @@ export interface Initiative {
   businessOwnerId: string;
   productOwnerId: string;
   portfolioAreaId: string | null;
+  orgNodeId: string | null;
   productLeaderId: string | null;
   status: InitiativeStatus;
   origin: InitiativeOrigin;
@@ -69,6 +70,7 @@ export interface Initiative {
   businessOwner?: User;
   productOwner?: User;
   portfolioArea?: PortfolioArea;
+  orgNode?: { id: string; name: string; code: string; type: OrgNodeType; isPortfolioArea: boolean } | null;
   productLeader?: User;
   scopeItems?: ScopeItem[];
   intakeRequest?: {
@@ -137,6 +139,7 @@ export interface InitiativeFilters {
   businessOwnerId?: string;
   productOwnerId?: string;
   portfolioAreaId?: string;
+  orgNodeId?: string;
 }
 
 // Bulk operation types
@@ -170,13 +173,14 @@ export interface OrgNode {
   managerId: string | null;
   sortOrder: number;
   isActive: boolean;
+  isPortfolioArea: boolean;
   metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   manager?: { id: string; name: string } | null;
   children?: OrgNode[];
   parent?: { id: string; name: string; code: string } | null;
-  _count?: { memberships: number; approvalPolicies: number };
+  _count?: { memberships: number; approvalPolicies: number; initiatives?: number; intakeRequests?: number };
 }
 
 export interface OrgMembership {

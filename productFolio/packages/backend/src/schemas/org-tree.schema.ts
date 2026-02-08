@@ -11,6 +11,7 @@ export const CreateNodeSchema = z.object({
   parentId: z.string().uuid('Invalid parent ID').optional().nullable(),
   managerId: z.string().uuid('Invalid manager ID').optional().nullable(),
   sortOrder: z.number().int().nonnegative().optional().default(0),
+  isPortfolioArea: z.boolean().optional().default(false),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -21,6 +22,7 @@ export const UpdateNodeSchema = z.object({
   code: z.string().min(1).max(50).optional(),
   managerId: z.string().uuid('Invalid manager ID').optional().nullable(),
   sortOrder: z.number().int().nonnegative().optional(),
+  isPortfolioArea: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -36,6 +38,7 @@ export const NodeListFiltersSchema = z.object({
   parentId: z.string().uuid().optional(),
   type: z.enum(['ROOT', 'DIVISION', 'DEPARTMENT', 'TEAM', 'VIRTUAL']).optional(),
   isActive: z.coerce.boolean().optional(),
+  isPortfolioArea: z.coerce.boolean().optional(),
   search: z.string().optional(),
 });
 

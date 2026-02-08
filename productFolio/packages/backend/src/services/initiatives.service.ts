@@ -54,6 +54,10 @@ export async function list(
     where.portfolioAreaId = filters.portfolioAreaId;
   }
 
+  if (filters.orgNodeId) {
+    where.orgNodeId = filters.orgNodeId;
+  }
+
   if (filters.targetQuarter) {
     where.targetQuarter = filters.targetQuarter;
   }
@@ -93,6 +97,7 @@ export async function list(
         portfolioArea: true,
         productLeader: true,
         scopeItems: true,
+        orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
       },
     }),
     prisma.initiative.count({ where }),
@@ -123,6 +128,7 @@ export async function getById(id: string) {
       portfolioArea: true,
       productLeader: true,
       scopeItems: true,
+      orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
       approvals: {
         include: { approver: true },
         orderBy: { approvedAt: 'desc' },
@@ -188,6 +194,15 @@ export async function create(data: CreateInitiativeInput) {
     throw new NotFoundError('User', data.productLeaderId);
   }
 
+  // Validate orgNodeId if provided — must be an active portfolio area node
+  if (data.orgNodeId) {
+    const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+    if (!orgNode) throw new NotFoundError('OrgNode', data.orgNodeId);
+    if (!orgNode.isPortfolioArea || !orgNode.isActive) {
+      throw new ValidationError('orgNodeId must reference an active portfolio area node');
+    }
+  }
+
   const initiative = await prisma.initiative.create({
     data: {
       title: data.title,
@@ -196,6 +211,7 @@ export async function create(data: CreateInitiativeInput) {
       productOwnerId: data.productOwnerId,
       portfolioAreaId: data.portfolioAreaId || null,
       productLeaderId: data.productLeaderId || null,
+      orgNodeId: data.orgNodeId || null,
       status: data.status || InitiativeStatus.PROPOSED,
       origin: InitiativeOrigin.DIRECT_PM,
       targetQuarter: data.targetQuarter || null,
@@ -207,6 +223,7 @@ export async function create(data: CreateInitiativeInput) {
       productOwner: true,
       portfolioArea: true,
       productLeader: true,
+      orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
     },
   });
 
@@ -262,6 +279,15 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     }
   }
 
+  // Validate orgNodeId if provided — must be an active portfolio area node
+  if (data.orgNodeId) {
+    const orgNode = await prisma.orgNode.findUnique({ where: { id: data.orgNodeId } });
+    if (!orgNode) throw new NotFoundError('OrgNode', data.orgNodeId);
+    if (!orgNode.isPortfolioArea || !orgNode.isActive) {
+      throw new ValidationError('orgNodeId must reference an active portfolio area node');
+    }
+  }
+
   const updateData: any = {};
 
   if (data.title !== undefined) {
@@ -300,6 +326,10 @@ export async function update(id: string, data: UpdateInitiativeInput) {
     updateData.customFields = data.customFields;
   }
 
+  if (data.orgNodeId !== undefined) {
+    updateData.orgNodeId = data.orgNodeId;
+  }
+
   const updated = await prisma.initiative.update({
     where: { id },
     data: updateData,
@@ -308,6 +338,7 @@ export async function update(id: string, data: UpdateInitiativeInput) {
       productOwner: true,
       portfolioArea: true,
       productLeader: true,
+      orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
     },
   });
 
@@ -363,6 +394,7 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus, 
       productOwner: true,
       portfolioArea: true,
       productLeader: true,
+      orgNode: { select: { id: true, name: true, code: true, type: true, isPortfolioArea: true } },
     },
   });
 

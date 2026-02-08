@@ -14,6 +14,7 @@ export interface CreateNodeInput {
   parentId?: string | null;
   managerId?: string | null;
   sortOrder?: number;
+  isPortfolioArea?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -22,6 +23,7 @@ export interface UpdateNodeInput {
   code?: string;
   managerId?: string | null;
   sortOrder?: number;
+  isPortfolioArea?: boolean;
   metadata?: Record<string, unknown>;
 }
 
@@ -36,10 +38,11 @@ export interface OrgTreeNode {
   managerId: string | null;
   sortOrder: number;
   isActive: boolean;
+  isPortfolioArea: boolean;
   metadata: unknown;
   manager?: { id: string; name: string } | null;
   children?: OrgTreeNode[];
-  _count?: { memberships: number; approvalPolicies: number };
+  _count?: { memberships: number; approvalPolicies: number; initiatives?: number };
 }
 
 // ============================================================================
@@ -105,6 +108,7 @@ export async function createNode(
       depth: parentDepth + 1,
       managerId: input.managerId ?? null,
       sortOrder: input.sortOrder ?? 0,
+      isPortfolioArea: input.isPortfolioArea ?? false,
       metadata: (input.metadata as Prisma.InputJsonValue) ?? undefined,
     },
   });
@@ -157,6 +161,7 @@ export async function updateNode(
   if (input.code !== undefined) data.code = input.code;
   if (input.managerId !== undefined) data.managerId = input.managerId;
   if (input.sortOrder !== undefined) data.sortOrder = input.sortOrder;
+  if (input.isPortfolioArea !== undefined) data.isPortfolioArea = input.isPortfolioArea;
   if (input.metadata !== undefined) data.metadata = input.metadata;
 
   const updated = await prisma.orgNode.update({
@@ -261,9 +266,6 @@ export async function moveNode(
 export async function deleteNode(nodeId: string, actorId?: string) {
   const node = await prisma.orgNode.findUnique({
     where: { id: nodeId },
-    include: {
-      _count: { select: { children: true, memberships: true } },
-    },
   });
 
   if (!node) throw new NotFoundError('OrgNode', nodeId);
@@ -287,6 +289,17 @@ export async function deleteNode(nodeId: string, actorId?: string) {
     throw new ValidationError(
       `Cannot delete node with ${activeMemberships} active employee membership(s). Reassign employees first.`,
     );
+  }
+
+  // If portfolio area node, check for linked initiatives/intakeRequests
+  if (node.isPortfolioArea) {
+    const linkedInitiatives = await prisma.initiative.count({ where: { orgNodeId: nodeId } });
+    const linkedIntakeRequests = await prisma.intakeRequest.count({ where: { orgNodeId: nodeId } });
+    if (linkedInitiatives > 0 || linkedIntakeRequests > 0) {
+      throw new ValidationError(
+        `Cannot delete portfolio area node with ${linkedInitiatives} initiative(s) and ${linkedIntakeRequests} intake request(s) linked. Reassign them first.`,
+      );
+    }
   }
 
   // Soft delete: deactivate node and its policies
@@ -341,6 +354,7 @@ export async function listNodes(filters?: {
   parentId?: string;
   type?: OrgNodeType;
   isActive?: boolean;
+  isPortfolioArea?: boolean;
   search?: string;
 }) {
   const where: Record<string, unknown> = {};
@@ -349,6 +363,7 @@ export async function listNodes(filters?: {
   if (filters?.type) where.type = filters.type;
   if (filters?.isActive !== undefined) where.isActive = filters.isActive;
   else where.isActive = true; // default to active only
+  if (filters?.isPortfolioArea !== undefined) where.isPortfolioArea = filters.isPortfolioArea;
 
   if (filters?.search) {
     where.OR = [
@@ -393,6 +408,7 @@ export async function getFullTree() {
       managerId: n.managerId,
       sortOrder: n.sortOrder,
       isActive: n.isActive,
+      isPortfolioArea: n.isPortfolioArea,
       metadata: n.metadata,
       manager: n.manager,
       children: [],
@@ -537,4 +553,22 @@ export async function getEmployeesInSubtree(nodeId: string): Promise<string[]> {
   // Deduplicate (an employee could be in multiple nodes)
   const employeeIds = [...new Set(memberships.map((m) => m.employeeId))];
   return employeeIds;
+}
+
+// ============================================================================
+// Portfolio Area Nodes
+// ============================================================================
+
+/**
+ * List active org nodes flagged as portfolio areas, with initiative/intake counts.
+ */
+export async function listPortfolioAreaNodes() {
+  return prisma.orgNode.findMany({
+    where: { isPortfolioArea: true, isActive: true },
+    include: {
+      manager: { select: { id: true, name: true } },
+      _count: { select: { initiatives: true, intakeRequests: true, memberships: true } },
+    },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
 }

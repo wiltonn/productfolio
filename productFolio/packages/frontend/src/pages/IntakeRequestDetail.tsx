@@ -257,7 +257,7 @@ export function IntakeRequestDetail() {
               <div>
                 <dt className="text-xs text-surface-400">Portfolio Area</dt>
                 <dd className="text-sm text-surface-700">
-                  {item.portfolioArea?.name || '-'}
+                  {item.orgNode?.name ?? item.portfolioArea?.name ?? '-'}
                 </dd>
               </div>
               <div>

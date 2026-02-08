@@ -1,7 +1,10 @@
 const API_BASE = '/api';
 
-let isRefreshing = false;
-let refreshPromise: Promise<boolean> | null = null;
+let getToken: (() => Promise<string>) | null = null;
+
+export function setTokenProvider(fn: () => Promise<string>) {
+  getToken = fn;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -14,88 +17,32 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Attempt to refresh the access token
- */
-async function refreshAccessToken(): Promise<boolean> {
-  try {
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  // Attach Auth0 Bearer token if available
+  if (getToken) {
+    try {
+      const token = await getToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch {
+      // Token retrieval failed — let the request proceed without auth
+      // Auth0 SDK will handle re-auth if needed
+    }
+  }
+
   const response = await fetch(url, {
     ...options,
-    credentials: 'include', // Always include cookies
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
-
-  // Handle 401 - attempt token refresh (skip for auth endpoints)
-  if (response.status === 401) {
-    const isAuthEndpoint = endpoint.startsWith('/auth/');
-
-    if (!isAuthEndpoint) {
-      // Avoid multiple concurrent refresh attempts
-      if (!isRefreshing) {
-        isRefreshing = true;
-        refreshPromise = refreshAccessToken();
-      }
-
-      const refreshed = await refreshPromise;
-      isRefreshing = false;
-      refreshPromise = null;
-
-      if (refreshed) {
-        // Retry the original request
-        const retryResponse = await fetch(url, {
-          ...options,
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
-          },
-        });
-
-        if (retryResponse.ok) {
-          if (retryResponse.status === 204) {
-            return undefined as T;
-          }
-          return retryResponse.json();
-        }
-
-        // If retry also fails, throw the error
-        const errorBody = await retryResponse.text();
-        let message: string;
-        try {
-          const parsed = JSON.parse(errorBody);
-          message = parsed.message || parsed.error || retryResponse.statusText;
-        } catch {
-          message = errorBody || retryResponse.statusText;
-        }
-        throw new ApiError(retryResponse.status, retryResponse.statusText, message);
-      }
-
-      // Refresh failed - user needs to login again
-      // Don't redirect here, let the ProtectedRoute handle it
-      throw new ApiError(401, 'Unauthorized', 'Session expired. Please log in again.');
-    }
-
-    // For auth endpoints, fall through to the standard error handling below
-  }
 
   if (!response.ok) {
     const errorBody = await response.text();

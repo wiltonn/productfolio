@@ -186,8 +186,8 @@ export function IntakeRequestList() {
     const groups = new Map<string, { id: string; name: string; items: IntakeRequest[] }>();
 
     for (const item of items) {
-      const areaId = item.portfolioArea?.id ?? 'unassigned';
-      const areaName = item.portfolioArea?.name ?? 'Unassigned';
+      const areaId = item.orgNode?.id ?? item.portfolioArea?.id ?? 'unassigned';
+      const areaName = item.orgNode?.name ?? item.portfolioArea?.name ?? 'Unassigned';
       if (!groups.has(areaId)) {
         groups.set(areaId, { id: areaId, name: areaName, items: [] });
       }

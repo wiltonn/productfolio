@@ -13,7 +13,7 @@ export function UserMenu() {
     focusFirstElement: true,
   });
   const user = useAuthStore((state) => state.user);
-  const { mutate: logout, isPending } = useLogout();
+  const { logout, isPending } = useLogout();
   const menuId = useId();
 
   // Close menu when clicking outside

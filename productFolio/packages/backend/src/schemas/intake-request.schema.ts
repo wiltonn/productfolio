@@ -55,6 +55,7 @@ export const CreateIntakeRequestSchema = z.object({
   strategicThemes: z.array(z.string()).optional().nullable(),
   sourceType: z.literal('JIRA').optional().nullable(),
   intakeItemId: uuidSchema.optional().nullable(),
+  orgNodeId: uuidSchema.optional().nullable(),
   decisionNotes: z.string().max(10000).optional().nullable(),
 });
 
@@ -77,6 +78,7 @@ export const UpdateIntakeRequestSchema = z.object({
   customerName: z.string().max(255).optional().nullable(),
   tags: z.array(z.string()).optional().nullable(),
   strategicThemes: z.array(z.string()).optional().nullable(),
+  orgNodeId: uuidSchema.optional().nullable(),
   decisionNotes: z.string().max(10000).optional().nullable(),
 });
 
@@ -98,6 +100,7 @@ export type IntakeRequestStatusTransitionInput = z.infer<
 export const IntakeRequestFiltersSchema = z.object({
   status: z.nativeEnum(IntakeRequestStatus).optional(),
   portfolioAreaId: uuidSchema.optional(),
+  orgNodeId: uuidSchema.optional(),
   targetQuarter: z.string().optional(),
   requestedById: uuidSchema.optional(),
   sponsorId: uuidSchema.optional(),

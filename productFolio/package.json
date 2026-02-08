@@ -23,6 +23,8 @@
     "db:generate": "npm run db:generate --workspace=@productfolio/backend",
     "db:migrate": "npm run db:migrate --workspace=@productfolio/backend",
     "db:push": "npm run db:push --workspace=@productfolio/backend",
+    "dev:worker": "npm run dev:worker --workspace=@productfolio/backend",
+    "start:worker": "npm run start:worker --workspace=@productfolio/backend",
     "db:seed": "npm run db:seed --workspace=@productfolio/backend"
   },
   "devDependencies": {

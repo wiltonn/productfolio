@@ -23,8 +23,8 @@ npm run dev:frontend  # Frontend only (port 5173)
 
 ## Tech Stack
 
-- **Backend**: Fastify 4.26, TypeScript, Prisma 5.9, Zod 4.3, Vitest, BullMQ
-- **Frontend**: React 18.2, Vite 5.1
+- **Backend**: Fastify 4.26, TypeScript, Prisma 5.9, Zod 4.3, Vitest, BullMQ, jose (JWKS)
+- **Frontend**: React 18.2, Vite 5.1, @auth0/auth0-react
 - **Database**: PostgreSQL 16 (port 5433 local → 5432 container)
 - **Cache/Queue**: Redis 7 (port 6379)
 
@@ -136,6 +136,18 @@ npm run test:coverage     # Coverage report
 
 Test utilities in `tests/setup.ts`: `buildTestApp()`, mock data generators, `testUuid()`
 
+## Authentication (Auth0)
+
+Auth0 handles login/signup/logout. The backend verifies RS256 JWTs via Auth0's JWKS endpoint.
+
+- **Backend plugin**: `src/plugins/auth.plugin.ts` — uses `jose` to verify Bearer tokens against `https://{AUTH0_DOMAIN}/.well-known/jwks.json`
+- **Auto-provisioning**: `src/services/auth.service.ts` `findOrProvisionUser()` — matches by `auth0Sub`, then email, then creates new VIEWER user
+- **Frontend**: `Auth0Provider` in `App.tsx`, token injected via `setTokenProvider(getAccessTokenSilently)` in `AuthSyncProvider`
+- **API client**: `src/api/client.ts` — attaches `Authorization: Bearer` header on all requests
+- **Only auth endpoint**: `GET /api/auth/me` — returns local user profile (role, name)
+
+Decorators `fastify.authenticate` and `fastify.authorize(roles)` are unchanged — route files don't need auth-related modifications.
+
 ## Environment Variables
 
 ```env
@@ -144,11 +156,22 @@ PORT=3000
 HOST=0.0.0.0
 NODE_ENV=development
 
+# Auth0
+AUTH0_DOMAIN=your-tenant.auth0.com
+AUTH0_AUDIENCE=https://api.productfolio.local
+
 # Redis (for caching and job queues)
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
 REDIS_DB=0
+```
+
+Frontend env (`packages/frontend/.env`):
+```env
+VITE_AUTH0_DOMAIN=your-tenant.auth0.com
+VITE_AUTH0_CLIENT_ID=your-client-id
+VITE_AUTH0_AUDIENCE=https://api.productfolio.local
 ```
 
 ## Planning Modes (Strangler Pattern)

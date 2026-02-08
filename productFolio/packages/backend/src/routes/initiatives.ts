@@ -29,6 +29,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       businessOwnerId?: string;
       productOwnerId?: string;
       portfolioAreaId?: string;
+      orgNodeId?: string;
       targetQuarter?: string;
       deliveryHealth?: string;
       search?: string;
@@ -42,6 +43,7 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
       businessOwnerId: request.query.businessOwnerId,
       productOwnerId: request.query.productOwnerId,
       portfolioAreaId: request.query.portfolioAreaId,
+      orgNodeId: request.query.orgNodeId,
       targetQuarter: request.query.targetQuarter,
       deliveryHealth: request.query.deliveryHealth,
       search: request.query.search,
