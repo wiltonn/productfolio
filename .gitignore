@@ -29,3 +29,8 @@ coverage/
 
 # Vercel
 .vercel
+cohesion-L1-graph/
+cohesion-L2-projection/
+cohesion-L3-validator/
+cohesion-L4-governance/
+cohesion-types/
