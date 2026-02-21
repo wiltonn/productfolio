@@ -20,20 +20,9 @@ import {
   useExportInitiatives,
 } from '../hooks/useInitiatives';
 import { useOrgTree } from '../hooks/useOrgTree';
-import type { Initiative, InitiativeStatus, InitiativeFilters, OrgNode } from '../types';
+import { flattenOrgTree } from '../utils/org-tree';
+import type { Initiative, InitiativeStatus, InitiativeFilters } from '../types';
 import { getQuarterOptions } from '../types';
-
-// Flatten org tree into a list for the filter dropdown
-function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
-  const result: Array<{ id: string; name: string; depth: number }> = [];
-  for (const node of nodes) {
-    result.push({ id: node.id, name: node.name, depth });
-    if (node.children?.length) {
-      result.push(...flattenOrgTree(node.children, depth + 1));
-    }
-  }
-  return result;
-}
 
 // Status filter options
 const statusOptions = [

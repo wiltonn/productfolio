@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { logAuditEvent } from './audit.service.js';
 import { getActiveMembership } from './org-membership.service.js';
+import { parsePathToIds } from './org-node.helpers.js';
 import type { ApprovalScope, ApprovalRuleType, CrossBuStrategy, PolicyEnforcement, Prisma, UserRole } from '@prisma/client';
 
 // ============================================================================
@@ -187,9 +188,7 @@ export async function resolveChainFromNode(
   if (!node) throw new NotFoundError('OrgNode', nodeId);
 
   // Get ancestor IDs from the materialized path (includes self)
-  const pathSegments = node.path
-    .split('/')
-    .filter((s) => s.length > 0);
+  const pathSegments = parsePathToIds(node.path);
 
   // Fetch all policies for these nodes + scope, ordered by level
   const policies = await prisma.approvalPolicy.findMany({
@@ -404,10 +403,7 @@ async function resolveApprovers(
 
     case 'ANCESTOR_MANAGER': {
       // Walk up the path to find the first ancestor with a managerId
-      const ancestorIds = orgNode.path
-        .split('/')
-        .filter((s) => s.length > 0)
-        .reverse(); // start from deepest
+      const ancestorIds = parsePathToIds(orgNode.path).reverse(); // start from deepest
 
       for (const ancId of ancestorIds) {
         if (ancId === orgNode.id) continue;
@@ -454,9 +450,7 @@ async function findLowestCommonAncestor(nodeIds: string[]): Promise<string | nul
   if (nodes.length === 0) return null;
 
   // Parse paths into arrays of ancestor IDs
-  const pathArrays = nodes.map((n) =>
-    n.path.split('/').filter((s) => s.length > 0),
-  );
+  const pathArrays = nodes.map((n) => parsePathToIds(n.path));
 
   // Find the longest common prefix
   const shortest = Math.min(...pathArrays.map((p) => p.length));

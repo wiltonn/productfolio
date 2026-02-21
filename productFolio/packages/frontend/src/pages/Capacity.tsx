@@ -6,20 +6,10 @@ import type { EmployeeAllocation, QuarterAllocationSummary, PtoHoursResponse } f
 import { useQuarterPeriods } from '../hooks/usePeriods';
 import type { Period } from '../hooks/usePeriods';
 import { useOrgTree, useMemberships } from '../hooks/useOrgTree';
-import type { OrgNode } from '../types';
+import { useFeatureFlag } from '../hooks/useFeatureFlags';
+import { flattenOrgTree } from '../utils/org-tree';
 import { api } from '../api/client';
-
-// Flatten org tree into a list for the filter dropdown
-function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
-  const result: Array<{ id: string; name: string; depth: number }> = [];
-  for (const node of nodes) {
-    result.push({ id: node.id, name: node.name, depth });
-    if (node.children?.length) {
-      result.push(...flattenOrgTree(node.children, depth + 1));
-    }
-  }
-  return result;
-}
+import { EmployeeOrgRelationships } from './EmployeeOrgRelationships';
 
 const LOCKED_STATUSES = ['RESOURCING', 'IN_EXECUTION', 'COMPLETE'];
 
@@ -1011,6 +1001,9 @@ const DEFAULT_HOLIDAYS: Holiday[] = [
 
 // Main Component
 export function Capacity() {
+  // Feature flags
+  const { enabled: matrixOrgEnabled } = useFeatureFlag('matrix_org_v1');
+
   // Org node filter
   const { data: orgTree } = useOrgTree();
   const [orgNodeFilter, setOrgNodeFilter] = useState<string>('');
@@ -1122,7 +1115,7 @@ export function Capacity() {
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [slideOverEmployee, setSlideOverEmployee] = useState<CapacityEmployee | null | 'new'>(null);
-  const [slideOverTab, setSlideOverTab] = useState<'details' | 'assignments'>('details');
+  const [slideOverTab, setSlideOverTab] = useState<'details' | 'assignments' | 'org-relationships'>('details');
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
 
@@ -1610,6 +1603,18 @@ export function Capacity() {
             >
               Assignments
             </button>
+            {matrixOrgEnabled && (
+              <button
+                onClick={() => setSlideOverTab('org-relationships')}
+                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  slideOverTab === 'org-relationships'
+                    ? 'border-accent-500 text-accent-700'
+                    : 'border-transparent text-surface-500 hover:text-surface-700 hover:border-surface-300'
+                }`}
+              >
+                Org Relationships
+              </button>
+            )}
           </div>
         )}
 
@@ -1619,6 +1624,8 @@ export function Capacity() {
             onSave={handleSaveEmployee}
             onCancel={() => setSlideOverEmployee(null)}
           />
+        ) : slideOverTab === 'org-relationships' && slideOverEmployee && slideOverEmployee !== 'new' ? (
+          <EmployeeOrgRelationships employeeId={slideOverEmployee.id} />
         ) : slideOverEmployee && slideOverEmployee !== 'new' ? (
           <EmployeeAssignments
             employeeId={slideOverEmployee.id}

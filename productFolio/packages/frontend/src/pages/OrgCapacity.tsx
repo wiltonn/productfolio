@@ -3,90 +3,12 @@ import { useOrgTree } from '../hooks/useOrgTree';
 import { useScenarios } from '../hooks/useScenarios';
 import { useFeatureFlag } from '../hooks/useFeatureFlags';
 import { useOrgCapacity } from '../hooks/useOrgCapacity';
-import type { OrgNode } from '../types';
+import { TreeNodeItem } from '../components/OrgTreeSelector';
 import type {
   GapAnalysisEntry,
   Shortage,
   Overallocation,
 } from '../hooks/useOrgCapacity';
-
-// ============================================================================
-// Tree Node Component (mirrors OrgTreeAdmin pattern)
-// ============================================================================
-
-function TreeNodeItem({
-  node,
-  selectedId,
-  onSelect,
-  depth = 0,
-}: {
-  node: OrgNode;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  depth?: number;
-}) {
-  const [expanded, setExpanded] = useState(depth < 2);
-  const hasChildren = node.children && node.children.length > 0;
-  const isSelected = node.id === selectedId;
-
-  const typeColors: Record<string, string> = {
-    ROOT: 'text-purple-600 bg-purple-50',
-    DIVISION: 'text-blue-600 bg-blue-50',
-    DEPARTMENT: 'text-green-600 bg-green-50',
-    TEAM: 'text-orange-600 bg-orange-50',
-    VIRTUAL: 'text-gray-600 bg-gray-50',
-  };
-
-  return (
-    <div>
-      <div
-        className={`flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-surface-100 ${
-          isSelected ? 'bg-accent-50 border-l-2 border-accent-500' : ''
-        }`}
-        style={{ paddingLeft: `${depth * 20 + 12}px` }}
-        onClick={() => onSelect(node.id)}
-      >
-        {hasChildren ? (
-          <button
-            className="w-4 h-4 flex items-center justify-center text-surface-400"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded(!expanded);
-            }}
-          >
-            {expanded ? '▾' : '▸'}
-          </button>
-        ) : (
-          <span className="w-4" />
-        )}
-        <span
-          className={`text-xs font-medium px-1.5 py-0.5 rounded ${typeColors[node.type] ?? ''}`}
-        >
-          {node.type.slice(0, 3)}
-        </span>
-        <span className="text-sm font-medium text-surface-800 truncate">
-          {node.name}
-        </span>
-        <span className="text-xs text-surface-400 ml-auto">
-          {node._count?.memberships ?? 0}
-        </span>
-      </div>
-      {expanded && hasChildren && (
-        <div>
-          {node.children!.map((child) => (
-            <TreeNodeItem
-              key={child.id}
-              node={child}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              depth={depth + 1}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ============================================================================
 // Summary Card

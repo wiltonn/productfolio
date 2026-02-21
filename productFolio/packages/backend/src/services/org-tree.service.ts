@@ -1,31 +1,13 @@
 import { prisma } from '../lib/prisma.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
 import { logAuditEvent } from './audit.service.js';
+import { parsePathToIds } from './org-node.helpers.js';
+import type { CreateNodeInput, UpdateNodeInput } from '../schemas/org-tree.schema.js';
 import type { OrgNodeType, Prisma } from '@prisma/client';
 
 // ============================================================================
 // Types
 // ============================================================================
-
-export interface CreateNodeInput {
-  name: string;
-  code: string;
-  type: OrgNodeType;
-  parentId?: string | null;
-  managerId?: string | null;
-  sortOrder?: number;
-  isPortfolioArea?: boolean;
-  metadata?: Record<string, unknown>;
-}
-
-export interface UpdateNodeInput {
-  name?: string;
-  code?: string;
-  managerId?: string | null;
-  sortOrder?: number;
-  isPortfolioArea?: boolean;
-  metadata?: Record<string, unknown>;
-}
 
 export interface OrgTreeNode {
   id: string;
@@ -435,9 +417,7 @@ export async function getAncestors(nodeId: string) {
   if (!node) throw new NotFoundError('OrgNode', nodeId);
 
   // Parse the materialized path to get ancestor IDs
-  const ancestorIds = node.path
-    .split('/')
-    .filter((segment) => segment.length > 0 && segment !== nodeId);
+  const ancestorIds = parsePathToIds(node.path, nodeId);
 
   if (ancestorIds.length === 0) return [];
 

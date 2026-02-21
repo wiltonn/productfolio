@@ -33,6 +33,7 @@ export function useOrgTree() {
   return useQuery({
     queryKey: orgTreeKeys.tree(),
     queryFn: () => api.get<OrgNode[]>('/org/tree'),
+    staleTime: 60_000,
   });
 }
 
@@ -60,9 +61,11 @@ export function useOrgNode(id: string) {
     queryKey: orgTreeKeys.node(id),
     queryFn: () => api.get<OrgNode>(`/org/nodes/${id}`),
     enabled: !!id,
+    staleTime: 60_000,
   });
 }
 
+/** @internal Not currently used by any page */
 export function useOrgNodeAncestors(id: string) {
   return useQuery({
     queryKey: orgTreeKeys.ancestors(id),
@@ -71,6 +74,7 @@ export function useOrgNodeAncestors(id: string) {
   });
 }
 
+/** @internal Not currently used by any page */
 export function useOrgNodeDescendants(id: string) {
   return useQuery({
     queryKey: orgTreeKeys.descendants(id),
@@ -83,6 +87,7 @@ export function useCoverageReport() {
   return useQuery({
     queryKey: orgTreeKeys.coverage(),
     queryFn: () => api.get<CoverageReport>('/org/coverage'),
+    staleTime: 60_000,
   });
 }
 

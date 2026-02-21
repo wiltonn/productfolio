@@ -5,20 +5,9 @@ import type { Scenario } from '../hooks/useScenarios';
 import { useAdjacentQuarters, useQuarterPeriods } from '../hooks/usePeriods';
 import type { Period } from '../hooks/usePeriods';
 import { useOrgTree } from '../hooks/useOrgTree';
+import { flattenOrgTree } from '../utils/org-tree';
 import { Modal } from '../components/ui';
-import type { ScenarioStatus, OrgNode } from '../types';
-
-// Flatten org tree into a list for the filter dropdown
-function flattenOrgTree(nodes: OrgNode[], depth = 0): Array<{ id: string; name: string; depth: number }> {
-  const result: Array<{ id: string; name: string; depth: number }> = [];
-  for (const node of nodes) {
-    result.push({ id: node.id, name: node.name, depth });
-    if (node.children?.length) {
-      result.push(...flattenOrgTree(node.children, depth + 1));
-    }
-  }
-  return result;
-}
+import type { ScenarioStatus } from '../types';
 
 // Helper to get current quarter
 function getCurrentQuarter(): string {
