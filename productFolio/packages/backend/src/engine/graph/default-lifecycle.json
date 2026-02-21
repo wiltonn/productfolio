@@ -1,0 +1,37 @@
+{
+  "id": "default",
+  "name": "Default Lifecycle",
+  "states": ["backlog", "ready", "planned", "in_progress", "review", "done", "blocked"],
+  "transitions": [
+    { "from": "backlog", "to": "ready", "guards": [] },
+    { "from": "backlog", "to": "blocked", "guards": [] },
+
+    { "from": "ready", "to": "planned", "guards": [] },
+    { "from": "ready", "to": "blocked", "guards": [] },
+
+    { "from": "planned", "to": "in_progress", "guards": [
+      { "type": "requires_prior_state", "description": "Must have been in ready", "params": { "state": "ready" } }
+    ]},
+    { "from": "planned", "to": "blocked", "guards": [] },
+
+    { "from": "in_progress", "to": "review", "guards": [] },
+    { "from": "in_progress", "to": "blocked", "guards": [] },
+
+    { "from": "review", "to": "done", "guards": [] },
+    { "from": "review", "to": "in_progress", "guards": [] },
+    { "from": "review", "to": "blocked", "guards": [] },
+
+    { "from": "blocked", "to": "backlog", "guards": [
+      { "type": "not_blocked", "description": "Must not be blocked" }
+    ]},
+    { "from": "blocked", "to": "ready", "guards": [
+      { "type": "not_blocked", "description": "Must not be blocked" }
+    ]},
+    { "from": "blocked", "to": "planned", "guards": [
+      { "type": "not_blocked", "description": "Must not be blocked" }
+    ]},
+    { "from": "blocked", "to": "in_progress", "guards": [
+      { "type": "not_blocked", "description": "Must not be blocked" }
+    ]}
+  ]
+}
