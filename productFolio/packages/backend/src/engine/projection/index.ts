@@ -1,0 +1,36 @@
+export { ScenarioProjector } from './scenario-projector.js';
+export { TokenScenarioProjector } from './token-scenario-projector.js';
+export type {
+  WorkItem,
+  WorkItemStatus,
+  CapacityCell,
+  CapacityGrid,
+  PeriodSlot,
+  DependencyEdge,
+  OrchestrationGraph,
+  ProposedChange,
+  ScheduleChange,
+  AddItemChange,
+  RemoveItemChange,
+  ReprioritizeChange,
+  ProjectedItem,
+  ProjectedAllocation,
+  StructuralViolation,
+  Scenario,
+  CapacityGap,
+  ScenarioSummary,
+} from './types.js';
+export type {
+  InitiativeStatus,
+  TokenSupplyEntry,
+  TokenDemandEntry,
+  ProjectedScenario,
+  ProjectedLedgerEntry,
+  StatusTransition,
+  AppliedChange,
+  InitiativeDemandSnapshot,
+  WhatIfResult,
+  ScenarioValidator,
+  ScenarioDataProvider,
+  ConstraintScenario,
+} from './token-types.js';
