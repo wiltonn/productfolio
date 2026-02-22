@@ -165,18 +165,39 @@ export async function initiativesRoutes(fastify: FastifyInstance) {
   /**
    * POST /api/initiatives/:id/status
    * Transition initiative status
+   *
+   * For capacity-gated transitions (→ RESOURCING, → IN_EXECUTION), the solver
+   * engine validates token supply vs demand. On rejection, returns 422 with
+   * violation details. On success, returns the updated initiative with decision metadata.
    */
   fastify.post<{
     Params: { id: string };
     Body: typeof StatusTransitionSchema;
   }>('/api/initiatives/:id/status', { preHandler: [requireDecisionSeat] }, async (request, reply) => {
     const validatedData = StatusTransitionSchema.parse(request.body);
-    const initiative = await initiativesService.transitionStatus(
+    const result = await initiativesService.transitionStatus(
       request.params.id,
       validatedData.newStatus,
       request.user.sub
     );
-    return reply.send(initiative);
+
+    if (!result.approved) {
+      return reply.status(422).send({
+        approved: false,
+        violations: result.violations,
+        suggestion: result.suggestion,
+        decision: result.decision,
+      });
+    }
+
+    return reply.send({
+      ...result.initiative,
+      _governance: {
+        approved: true,
+        capacityChecked: result.capacityChecked,
+        decision: result.decision,
+      },
+    });
   });
 
   /**

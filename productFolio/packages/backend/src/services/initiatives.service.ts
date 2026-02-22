@@ -22,6 +22,11 @@ import type {
 } from '../types/index.js';
 import { logTransition } from './initiative-status-log.service.js';
 import { approvalEnforcementService } from './approval-enforcement.service.js';
+import {
+  requiresCapacityCheck,
+  checkTransitionCapacity,
+  type CapacityCheckResult,
+} from './solver-bridge.service.js';
 
 /**
  * List initiatives with filtering and pagination
@@ -366,10 +371,30 @@ export async function deleteInitiative(id: string) {
   return { success: true };
 }
 
+export interface TransitionResult {
+  approved: boolean;
+  initiative?: any;
+  decision?: {
+    scenario?: any;
+    warnings?: any[];
+  };
+  violations?: any[];
+  suggestion?: any;
+  capacityChecked?: boolean;
+}
+
 /**
  * Transition initiative status
+ *
+ * For capacity-gated transitions (→ RESOURCING, → IN_EXECUTION), runs the
+ * GovernanceEngine to validate that token supply can absorb the demand.
+ * Returns a rich result with violation details on rejection.
  */
-export async function transitionStatus(id: string, newStatus: InitiativeStatus, actorId?: string) {
+export async function transitionStatus(
+  id: string,
+  newStatus: InitiativeStatus,
+  actorId?: string,
+): Promise<TransitionResult> {
   const initiative = await prisma.initiative.findUnique({
     where: { id },
   });
@@ -393,13 +418,34 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus, 
     );
   }
 
-  // Validate transition
+  // Validate structural transition legality
   if (!isValidStatusTransition(initiative.status, newStatus)) {
     throw new WorkflowError(
       `Cannot transition from ${initiative.status} to ${newStatus}`,
       initiative.status,
       newStatus
     );
+  }
+
+  // L2–L3: Capacity validation for gated transitions
+  let capacityResult: CapacityCheckResult | undefined;
+  if (requiresCapacityCheck(newStatus)) {
+    capacityResult = await checkTransitionCapacity(id, newStatus);
+
+    if (!capacityResult.approved) {
+      return {
+        approved: false,
+        violations: capacityResult.violations ?? [],
+        suggestion: capacityResult.suggestion,
+        capacityChecked: capacityResult.checked,
+        decision: capacityResult.decision
+          ? {
+              scenario: capacityResult.decision.scenario,
+              warnings: capacityResult.decision.warnings,
+            }
+          : undefined,
+      };
+    }
   }
 
   const updated = await prisma.initiative.update({
@@ -417,7 +463,17 @@ export async function transitionStatus(id: string, newStatus: InitiativeStatus, 
   // Log the status transition for cycle-time analytics and Mode B forecasting
   await logTransition(id, initiative.status, newStatus, actorId);
 
-  return updated;
+  return {
+    approved: true,
+    initiative: updated,
+    capacityChecked: capacityResult?.checked ?? false,
+    decision: capacityResult?.decision
+      ? {
+          scenario: capacityResult.decision.scenario,
+          warnings: capacityResult.decision.warnings,
+        }
+      : undefined,
+  };
 }
 
 /**
